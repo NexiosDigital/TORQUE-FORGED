@@ -4,6 +4,7 @@ import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/Layout/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import DebugPanel from "./components/DebugPanel";
 import Home from "./pages/Home";
 import Formula1 from "./pages/Formula1";
 import NASCAR from "./pages/NASCAR";
@@ -181,6 +182,9 @@ function App() {
 						}
 					/>
 				</Routes>
+
+				{/* Debug Panel - Apenas em desenvolvimento */}
+				{process.env.NODE_ENV === "development" && <DebugPanel />}
 			</div>
 		</AuthProvider>
 	);
