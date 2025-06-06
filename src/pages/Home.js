@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
 	ChevronRight,
@@ -9,14 +9,50 @@ import {
 	Clock,
 	Tag,
 	Youtube,
+	Instagram,
 	Zap,
 	Play,
 	Settings,
+	Loader,
 } from "lucide-react";
-import { posts, categories } from "../data/posts";
+import { usePosts, useCategories } from "../hooks/usePosts";
 
 const Home = () => {
-	const featuredPosts = posts.slice(0, 3);
+	const { fetchFeaturedPosts, fetchPosts } = usePosts();
+	const { categories } = useCategories();
+	const [featuredPosts, setFeaturedPosts] = useState([]);
+	const [recentPosts, setRecentPosts] = useState([]);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		const loadData = async () => {
+			try {
+				setLoading(true);
+
+				// Buscar posts em destaque
+				const featured = await fetchFeaturedPosts(3);
+				setFeaturedPosts(featured);
+
+				// Buscar posts recentes
+				const recent = await fetchPosts(true);
+				setRecentPosts(recent.slice(0, 6)); // Limitar a 6 posts
+			} catch (error) {
+				console.error("Error loading home data:", error);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		loadData();
+	}, [fetchFeaturedPosts, fetchPosts]);
+
+	const formatDate = (dateString) => {
+		try {
+			return new Date(dateString).toLocaleDateString("pt-BR");
+		} catch (error) {
+			return "Data inválida";
+		}
+	};
 
 	const renderHero = () => (
 		<div className="relative min-h-screen flex items-center justify-center overflow-hidden">
@@ -107,78 +143,92 @@ const Home = () => {
 					</p>
 				</div>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-					{featuredPosts.map((post, index) => (
-						<article
-							key={post.id}
-							className="group relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl overflow-hidden shadow-2xl hover:shadow-red-500/10 transition-all duration-500 hover:scale-105"
-						>
-							<div className="relative overflow-hidden">
-								<img
-									src={post.image}
-									alt={post.title}
-									className="w-full h-56 object-cover transition-transform duration-700 group-hover:scale-110"
-								/>
-								<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+				{loading ? (
+					<div className="flex justify-center items-center py-12">
+						<Loader className="w-8 h-8 text-red-400 animate-spin" />
+						<span className="ml-3 text-gray-400">Carregando posts...</span>
+					</div>
+				) : featuredPosts.length > 0 ? (
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+						{featuredPosts.map((post) => (
+							<article
+								key={post.id}
+								className="group relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl overflow-hidden shadow-2xl hover:shadow-red-500/10 transition-all duration-500 hover:scale-105"
+							>
+								<div className="relative overflow-hidden">
+									<img
+										src={
+											post.image_url ||
+											"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800"
+										}
+										alt={post.title}
+										className="w-full h-56 object-cover transition-transform duration-700 group-hover:scale-110"
+									/>
+									<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
 
-								<div className="absolute top-4 left-4 flex items-center space-x-2">
-									<Link
-										to={`/${post.category}`}
-										className="bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-2 rounded-full text-sm font-semibold shadow-lg hover:shadow-red-500/25 transition-all duration-300"
-									>
-										{post.categoryName}
-									</Link>
-									{post.trending && (
-										<span className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1">
-											<TrendingUp className="w-3 h-3" />
-											<span>TREND</span>
-										</span>
-									)}
-								</div>
-							</div>
-
-							<div className="p-8">
-								<Link to={`/post/${post.id}`}>
-									<h3 className="text-xl font-bold text-white mb-4 group-hover:text-red-400 transition-colors duration-300 leading-tight">
-										{post.title}
-									</h3>
-								</Link>
-								<p className="text-gray-400 mb-6 leading-relaxed line-clamp-3">
-									{post.excerpt}
-								</p>
-
-								<div className="flex items-center justify-between">
-									<div className="flex items-center space-x-4 text-sm text-gray-500">
-										<div className="flex items-center space-x-2">
-											<User className="w-4 h-4" />
-											<span>{post.author}</span>
-										</div>
-										<div className="flex items-center space-x-2">
-											<Clock className="w-4 h-4" />
-											<span>{post.readTime}</span>
-										</div>
-									</div>
-									<div className="flex items-center space-x-2 text-sm text-gray-500">
-										<Calendar className="w-4 h-4" />
-										<span>
-											{new Date(post.date).toLocaleDateString("pt-BR")}
-										</span>
+									<div className="absolute top-4 left-4 flex items-center space-x-2">
+										<Link
+											to={`/${post.category}`}
+											className="bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-2 rounded-full text-sm font-semibold shadow-lg hover:shadow-red-500/25 transition-all duration-300"
+										>
+											{post.category_name}
+										</Link>
+										{post.trending && (
+											<span className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1">
+												<TrendingUp className="w-3 h-3" />
+												<span>TREND</span>
+											</span>
+										)}
 									</div>
 								</div>
 
-								<div className="mt-6 pt-6 border-t border-gray-700">
-									<Link
-										to={`/post/${post.id}`}
-										className="text-red-400 hover:text-red-300 font-semibold text-sm flex items-center space-x-2 group-hover:space-x-3 transition-all duration-300"
-									>
-										<span>Leia mais</span>
-										<ArrowRight className="w-4 h-4" />
+								<div className="p-8">
+									<Link to={`/post/${post.id}`}>
+										<h3 className="text-xl font-bold text-white mb-4 group-hover:text-red-400 transition-colors duration-300 leading-tight">
+											{post.title}
+										</h3>
 									</Link>
+									<p className="text-gray-400 mb-6 leading-relaxed line-clamp-3">
+										{post.excerpt}
+									</p>
+
+									<div className="flex items-center justify-between">
+										<div className="flex items-center space-x-4 text-sm text-gray-500">
+											<div className="flex items-center space-x-2">
+												<User className="w-4 h-4" />
+												<span>{post.author}</span>
+											</div>
+											<div className="flex items-center space-x-2">
+												<Clock className="w-4 h-4" />
+												<span>{post.read_time}</span>
+											</div>
+										</div>
+										<div className="flex items-center space-x-2 text-sm text-gray-500">
+											<Calendar className="w-4 h-4" />
+											<span>{formatDate(post.created_at)}</span>
+										</div>
+									</div>
+
+									<div className="mt-6 pt-6 border-t border-gray-700">
+										<Link
+											to={`/post/${post.id}`}
+											className="text-red-400 hover:text-red-300 font-semibold text-sm flex items-center space-x-2 group-hover:space-x-3 transition-all duration-300"
+										>
+											<span>Leia mais</span>
+											<ArrowRight className="w-4 h-4" />
+										</Link>
+									</div>
 								</div>
-							</div>
-						</article>
-					))}
-				</div>
+							</article>
+						))}
+					</div>
+				) : (
+					<div className="text-center py-12">
+						<p className="text-gray-400 text-lg">
+							Nenhum post em destaque no momento.
+						</p>
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -191,9 +241,9 @@ const Home = () => {
 					<span>Categorias</span>
 				</h3>
 				<div className="space-y-4">
-					{categories.map((category, index) => (
+					{categories.map((category) => (
 						<Link
-							key={index}
+							key={category.id}
 							to={`/${category.id}`}
 							className="group relative p-4 rounded-2xl hover:bg-gray-800/50 cursor-pointer transition-all duration-300 overflow-hidden block"
 						>
@@ -220,12 +270,7 @@ const Home = () => {
 										{category.name}
 									</span>
 								</div>
-								<div className="flex items-center space-x-2">
-									<span className="bg-gradient-to-r from-red-600 to-red-500 text-white text-sm px-3 py-1 rounded-full font-semibold">
-										{category.count}
-									</span>
-									<ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-red-400 group-hover:translate-x-1 transition-all duration-300" />
-								</div>
+								<ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-red-400 group-hover:translate-x-1 transition-all duration-300" />
 							</div>
 						</Link>
 					))}
@@ -310,80 +355,97 @@ const Home = () => {
 								</Link>
 							</div>
 
-							<div className="space-y-8">
-								{posts.map((post) => (
-									<article
-										key={post.id}
-										className="group bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 border border-gray-700/50 hover:border-red-500/30 transition-all duration-500 hover:scale-[1.02]"
-									>
-										<div className="flex flex-col md:flex-row gap-8">
-											<div className="relative overflow-hidden rounded-2xl">
-												<img
-													src={post.image}
-													alt={post.title}
-													className="w-full md:w-64 h-48 object-cover transition-transform duration-700 group-hover:scale-110"
-												/>
-												<div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-											</div>
-											<div className="flex-1 space-y-4">
-												<div className="flex items-center space-x-3">
-													<Tag className="w-4 h-4 text-red-400" />
-													<Link
-														to={`/${post.category}`}
-														className="text-red-400 text-sm font-semibold hover:text-red-300 transition-colors duration-300"
-													>
-														{post.categoryName}
-													</Link>
-													{post.trending && (
-														<>
-															<span className="text-gray-600">•</span>
-															<span className="text-orange-400 text-sm font-semibold flex items-center space-x-1">
-																<TrendingUp className="w-3 h-3" />
-																<span>Trending</span>
-															</span>
-														</>
-													)}
+							{loading ? (
+								<div className="flex justify-center items-center py-12">
+									<Loader className="w-8 h-8 text-red-400 animate-spin" />
+									<span className="ml-3 text-gray-400">
+										Carregando artigos...
+									</span>
+								</div>
+							) : recentPosts.length > 0 ? (
+								<div className="space-y-8">
+									{recentPosts.map((post) => (
+										<article
+											key={post.id}
+											className="group bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 border border-gray-700/50 hover:border-red-500/30 transition-all duration-500 hover:scale-[1.02]"
+										>
+											<div className="flex flex-col md:flex-row gap-8">
+												<div className="relative overflow-hidden rounded-2xl">
+													<img
+														src={
+															post.image_url ||
+															"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800"
+														}
+														alt={post.title}
+														className="w-full md:w-64 h-48 object-cover transition-transform duration-700 group-hover:scale-110"
+													/>
+													<div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
 												</div>
-												<Link to={`/post/${post.id}`}>
-													<h3 className="text-2xl font-bold text-white group-hover:text-red-400 transition-colors duration-300 leading-tight">
-														{post.title}
-													</h3>
-												</Link>
-												<p className="text-gray-400 leading-relaxed">
-													{post.excerpt}
-												</p>
-												<div className="flex items-center justify-between pt-4">
-													<div className="flex items-center space-x-6 text-sm text-gray-500">
-														<div className="flex items-center space-x-2">
-															<User className="w-4 h-4" />
-															<span>{post.author}</span>
-														</div>
-														<div className="flex items-center space-x-2">
-															<Clock className="w-4 h-4" />
-															<span>{post.readTime}</span>
-														</div>
-														<div className="flex items-center space-x-2">
-															<Calendar className="w-4 h-4" />
-															<span>
-																{new Date(post.date).toLocaleDateString(
-																	"pt-BR"
-																)}
-															</span>
-														</div>
+												<div className="flex-1 space-y-4">
+													<div className="flex items-center space-x-3">
+														<Tag className="w-4 h-4 text-red-400" />
+														<Link
+															to={`/${post.category}`}
+															className="text-red-400 text-sm font-semibold hover:text-red-300 transition-colors duration-300"
+														>
+															{post.category_name}
+														</Link>
+														{post.trending && (
+															<>
+																<span className="text-gray-600">•</span>
+																<span className="text-orange-400 text-sm font-semibold flex items-center space-x-1">
+																	<TrendingUp className="w-3 h-3" />
+																	<span>Trending</span>
+																</span>
+															</>
+														)}
 													</div>
-													<Link
-														to={`/post/${post.id}`}
-														className="text-red-400 hover:text-red-300 font-semibold text-sm flex items-center space-x-2 group-hover:space-x-3 transition-all duration-300"
-													>
-														<span>Leia mais</span>
-														<ArrowRight className="w-4 h-4" />
+													<Link to={`/post/${post.id}`}>
+														<h3 className="text-2xl font-bold text-white group-hover:text-red-400 transition-colors duration-300 leading-tight">
+															{post.title}
+														</h3>
 													</Link>
+													<p className="text-gray-400 leading-relaxed">
+														{post.excerpt}
+													</p>
+													<div className="flex items-center justify-between pt-4">
+														<div className="flex items-center space-x-6 text-sm text-gray-500">
+															<div className="flex items-center space-x-2">
+																<User className="w-4 h-4" />
+																<span>{post.author}</span>
+															</div>
+															<div className="flex items-center space-x-2">
+																<Clock className="w-4 h-4" />
+																<span>{post.read_time}</span>
+															</div>
+															<div className="flex items-center space-x-2">
+																<Calendar className="w-4 h-4" />
+																<span>{formatDate(post.created_at)}</span>
+															</div>
+														</div>
+														<Link
+															to={`/post/${post.id}`}
+															className="text-red-400 hover:text-red-300 font-semibold text-sm flex items-center space-x-2 group-hover:space-x-3 transition-all duration-300"
+														>
+															<span>Leia mais</span>
+															<ArrowRight className="w-4 h-4" />
+														</Link>
+													</div>
 												</div>
 											</div>
-										</div>
-									</article>
-								))}
-							</div>
+										</article>
+									))}
+								</div>
+							) : (
+								<div className="text-center py-12">
+									<p className="text-gray-400 text-lg">
+										Nenhum artigo encontrado.
+									</p>
+									<p className="text-gray-500 text-sm mt-2">
+										Volte em breve para ver novos conteúdos!
+									</p>
+								</div>
+							)}
 						</div>
 
 						<div className="lg:col-span-1">{renderSidebar()}</div>

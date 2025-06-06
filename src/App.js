@@ -15,6 +15,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import PostDetail from "./pages/PostDetail";
 import Category from "./pages/Category";
+import Profile from "./pages/Profile";
 import AdminLogin from "./pages/Admin/Login";
 import AdminDashboard from "./pages/Admin/Dashboard";
 import PostEditor from "./pages/Admin/PostEditor";
@@ -31,15 +32,20 @@ function App() {
 							background: "#1f2937",
 							color: "#ffffff",
 							border: "1px solid #374151",
+							borderRadius: "12px",
+							fontSize: "14px",
+							fontWeight: "500",
 						},
 						success: {
 							style: {
 								border: "1px solid #10b981",
+								backgroundColor: "#064e3b",
 							},
 						},
 						error: {
 							style: {
 								border: "1px solid #ef4444",
+								backgroundColor: "#7f1d1d",
 							},
 						},
 					}}
@@ -133,6 +139,18 @@ function App() {
 							<Layout>
 								<Category />
 							</Layout>
+						}
+					/>
+
+					{/* Protected User Routes */}
+					<Route
+						path="/profile"
+						element={
+							<ProtectedRoute>
+								<Layout>
+									<Profile />
+								</Layout>
+							</ProtectedRoute>
 						}
 					/>
 
