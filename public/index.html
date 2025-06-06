@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#dc2626" />
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Torque Forged Motorsport - Sua fonte definitiva para tudo sobre corridas, tuning e o mundo automotivo. Das pistas de F1 aos motores customizados, cobrimos toda a adrenalina do motorsport." />
+    <meta name="keywords" content="motorsport, fórmula 1, f1, nascar, endurance, formula drift, tuning, motores, corridas, automobilismo, carros, customização" />
+    <meta name="author" content="Torque Forged Motorsport" />
+    <meta name="robots" content="index, follow" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://torqueforged.com/" />
+    <meta property="og:title" content="Torque Forged Motorsport - Blog de Automobilismo" />
+    <meta property="og:description" content="Sua fonte definitiva para tudo sobre corridas, tuning e o mundo automotivo. Das pistas de F1 aos motores customizados." />
+    <meta property="og:image" content="%PUBLIC_URL%/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="Torque Forged Motorsport" />
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://torqueforged.com/" />
+    <meta property="twitter:title" content="Torque Forged Motorsport - Blog de Automobilismo" />
+    <meta property="twitter:description" content="Sua fonte definitiva para tudo sobre corridas, tuning e o mundo automotivo." />
+    <meta property="twitter:image" content="%PUBLIC_URL%/og-image.jpg" />
+    <meta property="twitter:creator" content="@torqueforged" />
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Torque Forged Motorsport",
+      "description": "Blog especializado em motorsport, automobilismo e cultura automotiva",
+      "url": "https://torqueforged.com",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://torqueforged.com/search?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      },
+      "sameAs": [
+        "https://www.youtube.com/@torqueforged",
+        "https://www.instagram.com/torqueforged"
+      ]
+    }
+    </script>
+    
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Preconnect to external domains for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://images.unsplash.com">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/favicon-16x16.png">
+    
+    <!-- Microsoft Tiles -->
+    <meta name="msapplication-TileColor" content="#dc2626">
+    <meta name="msapplication-config" content="%PUBLIC_URL%/browserconfig.xml">
+    
+    <!-- Performance Hints -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com">
+    <link rel="dns-prefetch" href="//images.unsplash.com">
+    
+    <!-- Title -->
+    <title>Torque Forged Motorsport - Blog de Automobilismo</title>
+    
+    <!-- Critical CSS for loading performance -->
+    <style>
+      /* Critical loading styles */
+      body {
+        margin: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background-color: #000000;
+        color: #ffffff;
+        overflow-x: hidden;
+      }
+      
+      /* Loading spinner */
+      .loading-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #000000 0%, #1f2937 50%, #000000 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      
+      .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 3px solid #374151;
+        border-top: 3px solid #dc2626;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      
+      .loading-text {
+        margin-top: 20px;
+        color: #dc2626;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      /* Hide loading when React loads */
+      #root:not(:empty) ~ .loading-container {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <div style="text-align: center; padding: 50px; background: #000; color: #fff;">
+        <h1>JavaScript Necessário</h1>
+        <p>Você precisa habilitar o JavaScript para executar este aplicativo.</p>
+        <p>Para uma melhor experiência, por favor habilite o JavaScript em seu navegador.</p>
+      </div>
+    </noscript>
+    
+    <!-- React App Mount Point -->
+    <div id="root"></div>
+    
+    <!-- Loading Screen (shown while React loads) -->
+    <div class="loading-container">
+      <div style="text-align: center;">
+        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+          <div style="width: 48px; height: 48px; background: linear-gradient(45deg, #dc2626, #ef4444); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+              <path d="M12 2v4"></path>
+              <path d="m16.2 7.8 2.9-2.9"></path>
+              <path d="M18 12h4"></path>
+              <path d="m16.2 16.2 2.9 2.9"></path>
+              <path d="M12 18v4"></path>
+              <path d="m4.9 19.1 2.9-2.9"></path>
+              <path d="M2 12h4"></path>
+              <path d="m4.9 4.9 2.9 2.9"></path>
+            </svg>
+          </div>
+          <div>
+            <h1 style="margin: 0; font-size: 24px; font-weight: 900; color: white; letter-spacing: -0.025em;">TORQUE FORGED</h1>
+            <p style="margin: 0; font-size: 12px; color: #dc2626; font-weight: 500; letter-spacing: 0.2em;">MOTORSPORT</p>
+          </div>
+        </div>
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Carregando...</p>
+      </div>
+    </div>
+    
+    <!-- Google Analytics (Opcional - adicionar seu ID) -->
+    <!-- 
+    <script async src="https://www.googletagmanager.com/gtag/js?id=GA_TRACKING_ID"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'GA_TRACKING_ID');
+    </script>
+    -->
+    
+    <!-- Service Worker Registration (PWA) -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('%PUBLIC_URL%/sw.js')
+            .then(function(registration) {
+              console.log('SW registered: ', registration);
+            }).catch(function(registrationError) {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
