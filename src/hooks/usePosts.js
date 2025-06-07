@@ -14,7 +14,7 @@ export const usePosts = () => {
 			// Evitar múltiplas chamadas simultâneas
 			if (fetchingRef.current) {
 				console.log("🔄 usePosts: Fetch já em andamento, pulando...");
-				return posts;
+				return [];
 			}
 
 			try {
@@ -51,7 +51,7 @@ export const usePosts = () => {
 				console.error("❌ usePosts: Erro em fetchPosts:", error);
 				setError(error.message);
 
-				// Fallback: usar dados estáticos se der erro
+				// Fallback: usar dados estáticos
 				const fallbackPosts = [
 					{
 						id: 1,
@@ -126,67 +126,274 @@ export const usePosts = () => {
 				fetchingRef.current = false;
 			}
 		},
-		[posts]
+		[] // Remover dependência [posts] para evitar loop infinito
 	);
 
+	// **NOVA FUNÇÃO: fetchPostsByCategory**
+	const fetchPostsByCategory = useCallback(
+		async (categoryId, published = true) => {
+			try {
+				console.log("📁 usePosts: Buscando posts da categoria:", categoryId);
+
+				let query = supabase
+					.from("posts")
+					.select("*")
+					.eq("category", categoryId)
+					.order("created_at", { ascending: false });
+
+				if (published !== null) {
+					query = query.eq("published", published);
+				}
+
+				const { data, error } = await query;
+
+				if (error) {
+					console.error(
+						"❌ usePosts: Erro ao buscar posts da categoria:",
+						error
+					);
+					throw error;
+				}
+
+				console.log(
+					`✅ usePosts: Posts da categoria '${categoryId}' encontrados:`,
+					data?.length || 0
+				);
+				return data || [];
+			} catch (error) {
+				console.error("❌ usePosts: Erro em fetchPostsByCategory:", error);
+
+				// Fallback: filtrar dos posts existentes ou usar dados estáticos
+				const categoryPosts = posts.filter((p) => p.category === categoryId);
+				if (categoryPosts.length > 0) {
+					console.log(
+						"🔄 usePosts: Usando posts existentes para categoria:",
+						categoryId
+					);
+					return categoryPosts;
+				}
+
+				// Se não tiver posts existentes, usar fallback baseado na categoria
+				const fallbackByCategoryMap = {
+					f1: [
+						{
+							id: 101,
+							title: "Hamilton vs Verstappen: A Rivalidade Continua",
+							slug: "hamilton-vs-verstappen-rivalidade",
+							category: "f1",
+							category_name: "Fórmula 1",
+							image_url:
+								"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+							excerpt:
+								"A batalha entre os dois campeões promete esquentar a temporada 2025.",
+							content:
+								"A rivalidade entre Lewis Hamilton e Max Verstappen continua...",
+							author: "F1 Team",
+							read_time: "4 min",
+							published: true,
+							trending: false,
+							tags: ["f1", "hamilton", "verstappen"],
+							created_at: new Date(
+								Date.now() - 1 * 24 * 60 * 60 * 1000
+							).toISOString(),
+						},
+					],
+					nascar: [
+						{
+							id: 201,
+							title:
+								"Talladega Superspeedway: Preparativos para a Grande Corrida",
+							slug: "talladega-superspeedway-preparativos",
+							category: "nascar",
+							category_name: "NASCAR",
+							image_url:
+								"https://images.unsplash.com/photo-1566473965997-3de9c817e938?w=800",
+							excerpt:
+								"Equipes se preparam para uma das corridas mais desafiadoras do calendário.",
+							content:
+								"Talladega Superspeedway é conhecida por suas corridas emocionantes...",
+							author: "NASCAR Team",
+							read_time: "5 min",
+							published: true,
+							trending: false,
+							tags: ["nascar", "talladega", "superspeedway"],
+							created_at: new Date(
+								Date.now() - 2 * 24 * 60 * 60 * 1000
+							).toISOString(),
+						},
+					],
+					engines: [
+						{
+							id: 301,
+							title: "Turbos vs Aspirados: Qual a Melhor Escolha?",
+							slug: "turbos-vs-aspirados-melhor-escolha",
+							category: "engines",
+							category_name: "Motores",
+							image_url:
+								"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
+							excerpt:
+								"Comparativo técnico entre motores turbo e aspirados para tuning.",
+							content:
+								"A escolha entre motores turbo e aspirados é uma das principais...",
+							author: "Engine Team",
+							read_time: "7 min",
+							published: true,
+							trending: false,
+							tags: ["motores", "turbo", "aspirado"],
+							created_at: new Date(
+								Date.now() - 3 * 24 * 60 * 60 * 1000
+							).toISOString(),
+						},
+					],
+				};
+
+				const fallbackPosts = fallbackByCategoryMap[categoryId] || [];
+				console.log(
+					"🔄 usePosts: Usando fallback para categoria:",
+					categoryId,
+					fallbackPosts.length
+				);
+				return fallbackPosts;
+			}
+		},
+		[] // Remover dependência [posts] para evitar loop infinito
+	);
+
+	// **NOVA FUNÇÃO: fetchFeaturedPosts - Sempre retorna 3 posts**
 	const fetchFeaturedPosts = useCallback(
 		async (limit = 3) => {
 			try {
 				console.log("🌟 usePosts: Buscando posts em destaque, limit:", limit);
 
-				// Se já temos posts, filtrar dos existentes
-				if (posts.length > 0) {
-					const featured = posts.filter((p) => p.trending).slice(0, limit);
-					if (featured.length > 0) {
-						console.log(
-							"✅ usePosts: Posts em destaque dos dados existentes:",
-							featured.length
-						);
-						return featured;
-					}
-				}
-
-				// Buscar do banco
+				// Primeiro: buscar posts trending
 				const { data: trendingData, error: trendingError } = await supabase
 					.from("posts")
 					.select("*")
 					.eq("published", true)
 					.eq("trending", true)
-					.order("created_at", { ascending: false })
-					.limit(limit);
+					.order("created_at", { ascending: false });
+
+				let featuredPosts = [];
 
 				if (!trendingError && trendingData && trendingData.length > 0) {
+					featuredPosts = [...trendingData];
 					console.log(
 						"✅ usePosts: Posts trending encontrados:",
-						trendingData.length
+						featuredPosts.length
 					);
-					return trendingData;
 				}
 
-				// Fallback: buscar posts mais recentes
-				const { data: recentData, error: recentError } = await supabase
-					.from("posts")
-					.select("*")
-					.eq("published", true)
-					.order("created_at", { ascending: false })
-					.limit(limit);
-
-				if (!recentError && recentData) {
+				// Se não tiver 3 posts trending, completar com posts recentes
+				if (featuredPosts.length < limit) {
+					const needed = limit - featuredPosts.length;
 					console.log(
-						"✅ usePosts: Posts recentes encontrados:",
-						recentData.length
+						`📊 usePosts: Precisamos de mais ${needed} posts para completar`
 					);
-					return recentData;
+
+					const { data: recentData, error: recentError } = await supabase
+						.from("posts")
+						.select("*")
+						.eq("published", true)
+						.order("created_at", { ascending: false })
+						.limit(limit + 5); // Buscar mais para filtrar
+
+					if (!recentError && recentData) {
+						// Filtrar posts que já não estão na lista trending
+						const trendingIds = featuredPosts.map((p) => p.id);
+						const additionalPosts = recentData
+							.filter((p) => !trendingIds.includes(p.id))
+							.slice(0, needed);
+
+						featuredPosts = [...featuredPosts, ...additionalPosts];
+						console.log(
+							"✅ usePosts: Posts adicionais encontrados:",
+							additionalPosts.length
+						);
+					}
 				}
 
-				console.log("🔄 usePosts: Usando fallback para featured posts");
-				return posts.slice(0, limit);
+				// Garantir que temos exatamente o limite solicitado
+				const finalPosts = featuredPosts.slice(0, limit);
+				console.log(
+					"✅ usePosts: Posts em destaque finais:",
+					finalPosts.length
+				);
+
+				return finalPosts;
 			} catch (error) {
 				console.error("❌ usePosts: Erro em fetchFeaturedPosts:", error);
-				return posts.filter((p) => p.trending).slice(0, limit);
+
+				// Fallback: usar posts existentes ou dados estáticos
+				if (posts.length > 0) {
+					const trending = posts.filter((p) => p.trending);
+					const recent = posts
+						.filter((p) => !p.trending)
+						.slice(0, limit - trending.length);
+					return [...trending, ...recent].slice(0, limit);
+				}
+
+				// Fallback final com dados estáticos
+				return [
+					{
+						id: 1,
+						title: "GP de Mônaco 2025: Verstappen Domina nas Ruas Principescas",
+						slug: "gp-monaco-2025-verstappen-domina",
+						category: "f1",
+						category_name: "Fórmula 1",
+						image_url:
+							"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+						excerpt:
+							"Max Verstappen conquista mais uma vitória em Mônaco com uma performance impecável.",
+						author: "Equipe TF",
+						read_time: "5 min",
+						published: true,
+						trending: true,
+						tags: ["f1", "verstappen", "monaco"],
+						created_at: new Date(
+							Date.now() - 2 * 24 * 60 * 60 * 1000
+						).toISOString(),
+					},
+					{
+						id: 2,
+						title: "Novo Motor V8 Biturbo: A Revolução dos 1000HP",
+						slug: "novo-motor-v8-biturbo-1000hp",
+						category: "engines",
+						category_name: "Motores",
+						image_url:
+							"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
+						excerpt:
+							"Análise completa do novo propulsor que está mudando o cenário do tuning.",
+						author: "Tech Team",
+						read_time: "8 min",
+						published: true,
+						trending: false,
+						tags: ["motores", "v8", "biturbo"],
+						created_at: new Date(
+							Date.now() - 3 * 24 * 60 * 60 * 1000
+						).toISOString(),
+					},
+					{
+						id: 3,
+						title: "Daytona 500: A Batalha Épica que Definiu a Temporada",
+						slug: "daytona-500-batalha-epica-temporada",
+						category: "nascar",
+						category_name: "NASCAR",
+						image_url:
+							"https://images.unsplash.com/photo-1566473965997-3de9c817e938?w=800",
+						excerpt: "Relato completo da corrida mais emocionante do ano.",
+						author: "Race Team",
+						read_time: "6 min",
+						published: true,
+						trending: true,
+						tags: ["nascar", "daytona", "500"],
+						created_at: new Date(
+							Date.now() - 1 * 24 * 60 * 60 * 1000
+						).toISOString(),
+					},
+				].slice(0, limit);
 			}
 		},
-		[posts]
+		[] // Remover dependência [posts] para evitar loop infinito
 	);
 
 	// Inicializar apenas uma vez
@@ -195,9 +402,9 @@ export const usePosts = () => {
 			console.log("🚀 usePosts: Inicializando hook...");
 			fetchPosts();
 		}
-	}, [initialized, fetchPosts]);
+	}, [initialized]); // Apenas dependência 'initialized'
 
-	// Resto das funções sem alterações, mas com melhor controle de estado
+	// Resto das funções permanecem iguais
 	const createPost = async (postData) => {
 		try {
 			setLoading(true);
@@ -306,6 +513,7 @@ export const usePosts = () => {
 		initialized,
 		fetchPosts,
 		fetchFeaturedPosts,
+		fetchPostsByCategory, // **EXPORTANDO A NOVA FUNÇÃO**
 		createPost,
 		updatePost,
 		deletePost,
@@ -313,7 +521,7 @@ export const usePosts = () => {
 	};
 };
 
-// Hook para categorias (simplificado e estável)
+// Hook para categorias (mantido igual)
 export const useCategories = () => {
 	const [categories, setCategories] = useState([]);
 	const [loading, setLoading] = useState(true);

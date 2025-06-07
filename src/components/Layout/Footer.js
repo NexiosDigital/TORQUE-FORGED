@@ -27,13 +27,17 @@ const Footer = () => {
 						</p>
 						<div className="flex space-x-6">
 							<a
-								href="#"
+								href="https://www.youtube.com/channel/UCTk9ewLwz0tx80SeKxxPpVQ"
+								target="_blank"
+								rel="noopener noreferrer"
 								className="group text-gray-400 hover:text-red-400 transition-all duration-300"
 							>
 								<Youtube className="w-8 h-8 group-hover:scale-110 transition-transform duration-300" />
 							</a>
 							<a
-								href="#"
+								href="https://instagram.com/torqueforgedmotorsport"
+								target="_blank"
+								rel="noopener noreferrer"
 								className="group text-gray-400 hover:text-red-400 transition-all duration-300"
 							>
 								<Instagram className="w-8 h-8 group-hover:scale-110 transition-transform duration-300" />

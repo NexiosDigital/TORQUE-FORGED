@@ -219,14 +219,18 @@ const Header = () => {
 						{/* Social Media - Hidden on mobile */}
 						<div className="hidden md:flex items-center space-x-3">
 							<a
-								href="#"
+								href="https://www.youtube.com/channel/UCTk9ewLwz0tx80SeKxxPpVQ"
+								target="_blank"
+								rel="noopener noreferrer"
 								className="text-gray-400 hover:text-red-400 transition-all duration-300 hover:scale-110"
 								title="YouTube"
 							>
 								<Youtube className="w-5 h-5" />
 							</a>
 							<a
-								href="#"
+								href="https://instagram.com/torqueforgedmotorsport"
+								target="_blank"
+								rel="noopener noreferrer"
 								className="text-gray-400 hover:text-red-400 transition-all duration-300 hover:scale-110"
 								title="Instagram"
 							>
@@ -305,13 +309,17 @@ const Header = () => {
 						{/* Social Media */}
 						<div className="flex items-center space-x-6 px-4 pt-4">
 							<a
-								href="#"
+								href="https://www.youtube.com/channel/UCTk9ewLwz0tx80SeKxxPpVQ"
+								target="_blank"
+								rel="noopener noreferrer"
 								className="text-gray-400 hover:text-red-400 transition-colors duration-300"
 							>
 								<Youtube className="w-6 h-6" />
 							</a>
 							<a
-								href="#"
+								href="https://instagram.com/torqueforgedmotorsport"
+								target="_blank"
+								rel="noopener noreferrer"
 								className="text-gray-400 hover:text-red-400 transition-colors duration-300"
 							>
 								<Instagram className="w-6 h-6" />
