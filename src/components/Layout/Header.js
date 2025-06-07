@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
 	Menu,
 	X,
@@ -19,7 +19,6 @@ const Header = () => {
 	const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 	const [scrollY, setScrollY] = useState(0);
 	const location = useLocation();
-	const navigate = useNavigate();
 	const { user, profile, signOut, isAdmin, getDisplayName } = useAuth();
 	const userMenuRef = useRef(null);
 

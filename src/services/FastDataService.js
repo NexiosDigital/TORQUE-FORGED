@@ -1,519 +1,523 @@
 import { supabase } from "../lib/supabase";
 
 /**
- * Sistema de dados ULTRA-RÁPIDO
- * - Timeouts reduzidos para 3-5s
- * - Cache mais agressivo (5min)
- * - Fallback instantâneo
- * - Queries otimizadas
+ * FastDataService Ultra-Otimizado
+ * - Usa funções SQL otimizadas
+ * - Cache hierárquico (memória → localStorage → fallback)
+ * - Timeouts agressivos para performance
+ * - Queries paralelas onde possível
  */
 
-const log = (type, message, data = {}) => {
-	const timestamp = new Date().toISOString().split("T")[1].split(".")[0];
-	const prefix = `${type} ${timestamp}`;
-
-	if (type === "✅") console.log(prefix, message, data);
-	else if (type === "❌") console.error(prefix, message, data);
-	else console.log(prefix, message, data);
-};
-
-// Cache ultra-rápido com TTL de 5 minutos
-class FastCache {
+// Cache multi-layer ultra-rápido
+class UltraFastCache {
 	constructor() {
-		this.store = new Map();
-		this.timestamps = new Map();
-		this.TTL = 5 * 60 * 1000; // 5 minutos
+		this.memoryCache = new Map();
+		this.memoryTTL = new Map();
+		this.maxMemoryItems = 50;
+		this.defaultTTL = {
+			memory: 2 * 60 * 1000, // 2 minutos
+			localStorage: 10 * 60 * 1000, // 10 minutos
+		};
 	}
 
-	set(key, value) {
-		this.store.set(key, value);
-		this.timestamps.set(key, Date.now());
-		log("💾", `Cache SET: ${key}`);
+	// Memória (mais rápido)
+	setMemory(key, data, ttl = this.defaultTTL.memory) {
+		if (this.memoryCache.size >= this.maxMemoryItems) {
+			const firstKey = this.memoryCache.keys().next().value;
+			this.memoryCache.delete(firstKey);
+			this.memoryTTL.delete(firstKey);
+		}
+
+		this.memoryCache.set(key, data);
+		this.memoryTTL.set(key, Date.now() + ttl);
 	}
 
-	get(key) {
-		const timestamp = this.timestamps.get(key);
-		const now = Date.now();
+	getMemory(key) {
+		if (!this.memoryCache.has(key)) return null;
 
-		if (!timestamp || now - timestamp > this.TTL) {
-			this.store.delete(key);
-			this.timestamps.delete(key);
+		const ttl = this.memoryTTL.get(key);
+		if (Date.now() > ttl) {
+			this.memoryCache.delete(key);
+			this.memoryTTL.delete(key);
 			return null;
 		}
 
-		log("💾", `Cache HIT: ${key}`);
-		return this.store.get(key);
+		return this.memoryCache.get(key);
+	}
+
+	// localStorage (persistente)
+	setLocal(key, data, ttl = this.defaultTTL.localStorage) {
+		try {
+			const item = {
+				data,
+				expires: Date.now() + ttl,
+				version: "2.0", // Para invalidar cache antigo
+			};
+			localStorage.setItem(`tf_cache_${key}`, JSON.stringify(item));
+		} catch (e) {
+			// localStorage cheio, limpar expirados
+			this.clearExpiredLocal();
+		}
+	}
+
+	getLocal(key) {
+		try {
+			const item = localStorage.getItem(`tf_cache_${key}`);
+			if (!item) return null;
+
+			const parsed = JSON.parse(item);
+			if (Date.now() > parsed.expires || parsed.version !== "2.0") {
+				localStorage.removeItem(`tf_cache_${key}`);
+				return null;
+			}
+
+			return parsed.data;
+		} catch (e) {
+			return null;
+		}
+	}
+
+	clearExpiredLocal() {
+		const keys = Object.keys(localStorage);
+		keys.forEach((key) => {
+			if (key.startsWith("tf_cache_")) {
+				try {
+					const item = JSON.parse(localStorage.getItem(key));
+					if (Date.now() > item.expires) {
+						localStorage.removeItem(key);
+					}
+				} catch (e) {
+					localStorage.removeItem(key);
+				}
+			}
+		});
+	}
+
+	get(key) {
+		// 1. Tentar memória primeiro
+		const memoryData = this.getMemory(key);
+		if (memoryData) return memoryData;
+
+		// 2. Tentar localStorage
+		const localData = this.getLocal(key);
+		if (localData) {
+			// Promover para memória
+			this.setMemory(key, localData);
+			return localData;
+		}
+
+		return null;
+	}
+
+	set(key, data, ttl) {
+		this.setMemory(key, data, ttl);
+		this.setLocal(key, data, ttl);
 	}
 
 	clear() {
-		this.store.clear();
-		this.timestamps.clear();
-		log("💾", "Cache CLEARED");
+		this.memoryCache.clear();
+		this.memoryTTL.clear();
+		// Limpar apenas nossos caches do localStorage
+		const keys = Object.keys(localStorage);
+		keys.forEach((key) => {
+			if (key.startsWith("tf_cache_")) {
+				localStorage.removeItem(key);
+			}
+		});
+	}
+
+	getStats() {
+		return {
+			memorySize: this.memoryCache.size,
+			localStorageKeys: Object.keys(localStorage).filter((k) =>
+				k.startsWith("tf_cache_")
+			).length,
+		};
 	}
 }
 
-const cache = new FastCache();
+const cache = new UltraFastCache();
 
-// Timeout MUITO mais rápido - 3-5s máximo
-const withFastTimeout = (promise, timeoutMs = 4000) => {
-	return new Promise((resolve, reject) => {
-		const timer = setTimeout(() => {
-			reject(new Error(`Timeout após ${timeoutMs}ms`));
-		}, timeoutMs);
-
-		promise
-			.then((result) => {
-				clearTimeout(timer);
-				resolve(result);
-			})
-			.catch((error) => {
-				clearTimeout(timer);
-				reject(error);
-			});
-	});
+// Logger otimizado
+const log = (level, message, data = {}) => {
+	if (process.env.NODE_ENV === "development") {
+		const timestamp = new Date().toISOString().split("T")[1].substring(0, 8);
+		console[level === "error" ? "error" : "log"](
+			`[${timestamp}] FastData ${level}: ${message}`,
+			data
+		);
+	}
 };
 
-// Dados fallback compactos para máxima velocidade
-const FAST_FALLBACK = {
-	posts: [
-		{
-			id: 1,
-			title: "GP de Mônaco 2025: Verstappen Domina nas Ruas Principescas",
-			slug: "gp-monaco-2025-verstappen-domina",
-			category: "f1",
-			category_name: "Fórmula 1",
-			image_url:
-				"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
-			excerpt:
-				"Max Verstappen conquista mais uma vitória em Mônaco com uma performance impecável que deixou os fãs extasiados.",
-			content:
-				"Max Verstappen mais uma vez demonstrou sua maestria nas ruas estreitas de Monte Carlo, conquistando uma vitória dominante no GP de Mônaco 2025. O piloto holandês, largando da pole position, controlou a corrida do início ao fim.",
-			author: "Equipe TF",
-			read_time: "5 min",
-			published: true,
-			trending: true,
-			tags: ["f1", "verstappen", "monaco"],
-			created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-		},
-		{
-			id: 2,
-			title: "Daytona 500: A Batalha Épica que Definiu a Temporada",
-			slug: "daytona-500-batalha-epica-temporada",
-			category: "nascar",
-			category_name: "NASCAR",
-			image_url:
-				"https://images.unsplash.com/photo-1566473965997-3de9c817e938?w=800",
-			excerpt:
-				"Relato completo da corrida mais emocionante do ano com ultrapassagens incríveis e estratégias audaciosas.",
-			content:
-				"A Daytona 500 de 2025 entrou para a história como uma das corridas mais emocionantes já disputadas no autódromo mais famoso da NASCAR.",
-			author: "Race Team",
-			read_time: "6 min",
-			published: true,
-			trending: true,
-			tags: ["nascar", "daytona", "500"],
-			created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-		},
-		{
-			id: 3,
-			title: "Novo Motor V8 Biturbo: A Revolução dos 1000HP",
-			slug: "novo-motor-v8-biturbo-1000hp",
-			category: "engines",
-			category_name: "Motores",
-			image_url:
-				"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
-			excerpt:
-				"Análise completa do novo propulsor que está mudando o cenário do tuning com tecnologia de ponta.",
-			content:
-				"A indústria automotiva testemunha mais uma revolução com o lançamento do novo motor V8 biturbo que promete entregar incríveis 1000 cavalos de potência.",
-			author: "Tech Team",
-			read_time: "8 min",
-			published: true,
-			trending: false,
-			tags: ["motores", "v8", "biturbo"],
-			created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-		},
-	],
+// Timeout agressivo para performance
+const withTimeout = (promise, ms = 2000) => {
+	return Promise.race([
+		promise,
+		new Promise((_, reject) =>
+			setTimeout(() => reject(new Error(`Timeout ${ms}ms`)), ms)
+		),
+	]);
+};
 
-	byCategory: {
-		f1: [
-			{
-				id: 101,
-				title: "Hamilton vs Verstappen: A Rivalidade Continua em 2025",
-				category: "f1",
-				category_name: "Fórmula 1",
-				image_url:
-					"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
-				excerpt:
-					"A batalha entre os dois campeões mundiais promete esquentar ainda mais a temporada 2025.",
-				content:
-					"A rivalidade entre Lewis Hamilton e Max Verstappen continua sendo um dos principais atrativos da F1.",
-				author: "F1 Team",
-				read_time: "4 min",
-				published: true,
-				trending: true,
-				tags: ["f1", "hamilton", "verstappen"],
-				created_at: new Date(
-					Date.now() - 1 * 24 * 60 * 60 * 1000
-				).toISOString(),
-			},
-		],
-		nascar: [
-			{
-				id: 201,
-				title: "Talladega Superspeedway: A Pista Mais Desafiadora",
-				category: "nascar",
-				category_name: "NASCAR",
-				image_url:
-					"https://images.unsplash.com/photo-1566473965997-3de9c817e938?w=800",
-				excerpt:
-					"Por que Talladega é considerada uma das pistas mais perigosas e emocionantes da NASCAR.",
-				content:
-					"Talladega Superspeedway é famosa por suas corridas imprevisíveis e emocionantes.",
-				author: "NASCAR Team",
-				read_time: "5 min",
-				published: true,
-				trending: false,
-				tags: ["nascar", "talladega"],
-				created_at: new Date(
-					Date.now() - 1 * 24 * 60 * 60 * 1000
-				).toISOString(),
-			},
-		],
-		engines: [
-			{
-				id: 301,
-				title: "V8 vs V6 Turbo: Qual Motor Escolher",
-				category: "engines",
-				category_name: "Motores",
-				image_url:
-					"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
-				excerpt:
-					"Comparativo técnico entre motores V8 aspirados e V6 turbo para projetos de tuning.",
-				content:
-					"A escolha entre um V8 aspirado e um V6 turbo depende de vários fatores.",
-				author: "Engine Team",
-				read_time: "8 min",
-				published: true,
-				trending: false,
-				tags: ["motores", "v8", "v6"],
-				created_at: new Date(
-					Date.now() - 1 * 24 * 60 * 60 * 1000
-				).toISOString(),
-			},
-		],
-		endurance: [
-			{
-				id: 401,
-				title: "Le Mans 2025: Prévia das 24 Horas",
-				category: "endurance",
-				category_name: "Endurance",
-				image_url:
-					"https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=800",
-				excerpt:
-					"Tudo sobre a maior corrida de resistência do mundo e os favoritos para 2025.",
-				content:
-					"As 24 Horas de Le Mans são a prova máxima de resistência no automobilismo.",
-				author: "Endurance Team",
-				read_time: "6 min",
-				published: true,
-				trending: false,
-				tags: ["endurance", "le mans"],
-				created_at: new Date(
-					Date.now() - 1 * 24 * 60 * 60 * 1000
-				).toISOString(),
-			},
-		],
-		drift: [
-			{
-				id: 501,
-				title: "Formula Drift: Técnicas Essenciais",
-				category: "drift",
-				category_name: "Formula Drift",
-				image_url:
-					"https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=800",
-				excerpt:
-					"Aprenda as técnicas básicas do drift e como começar neste esporte emocionante.",
-				content:
-					"O drift é uma das modalidades mais espetaculares do automobilismo.",
-				author: "Drift Team",
-				read_time: "7 min",
-				published: true,
-				trending: false,
-				tags: ["drift", "tecnicas"],
-				created_at: new Date(
-					Date.now() - 1 * 24 * 60 * 60 * 1000
-				).toISOString(),
-			},
-		],
-		tuning: [
-			{
-				id: 601,
-				title: "Suspensão Fixa vs Roscada",
-				category: "tuning",
-				category_name: "Tuning & Custom",
-				image_url:
-					"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
-				excerpt:
-					"Comparativo entre sistemas de suspensão fixa e roscada para carros preparados.",
-				content:
-					"A escolha da suspensão é fundamental para o comportamento do carro.",
-				author: "Tuning Team",
-				read_time: "6 min",
-				published: true,
-				trending: false,
-				tags: ["tuning", "suspensao"],
-				created_at: new Date(
-					Date.now() - 1 * 24 * 60 * 60 * 1000
-				).toISOString(),
-			},
-		],
+// Fallback posts para carregamento instantâneo
+const FALLBACK_POSTS = [
+	{
+		id: 1,
+		title: "GP de Mônaco 2025: Verstappen Domina nas Ruas Principescas",
+		slug: "gp-monaco-2025-verstappen-domina",
+		category: "f1",
+		category_name: "Fórmula 1",
+		image_url:
+			"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+		excerpt:
+			"Max Verstappen conquista mais uma vitória em Mônaco com uma performance impecável que deixou os fãs extasiados.",
+		content:
+			"Max Verstappen mais uma vez demonstrou sua maestria nas ruas estreitas de Monte Carlo...",
+		author: "Equipe TF",
+		read_time: "5 min",
+		published: true,
+		trending: true,
+		tags: ["f1", "verstappen", "monaco"],
+		created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+		updated_at: new Date().toISOString(),
 	},
-};
+	{
+		id: 2,
+		title: "Daytona 500: A Batalha Épica que Definiu a Temporada",
+		slug: "daytona-500-batalha-epica-temporada",
+		category: "nascar",
+		category_name: "NASCAR",
+		image_url:
+			"https://images.unsplash.com/photo-1566473965997-3de9c817e938?w=800",
+		excerpt:
+			"Relato completo da corrida mais emocionante do ano com ultrapassagens incríveis.",
+		content: "A Daytona 500 de 2025 entrou para a história...",
+		author: "Race Team",
+		read_time: "6 min",
+		published: true,
+		trending: true,
+		tags: ["nascar", "daytona", "500"],
+		created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+		updated_at: new Date().toISOString(),
+	},
+	{
+		id: 3,
+		title: "Novo Motor V8 Biturbo: A Revolução dos 1000HP",
+		slug: "novo-motor-v8-biturbo-1000hp",
+		category: "engines",
+		category_name: "Motores",
+		image_url:
+			"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
+		excerpt:
+			"Análise completa do novo propulsor que está mudando o cenário do tuning.",
+		content: "A indústria automotiva testemunha mais uma revolução...",
+		author: "Tech Team",
+		read_time: "8 min",
+		published: true,
+		trending: false,
+		tags: ["motores", "v8", "biturbo"],
+		created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+		updated_at: new Date().toISOString(),
+	},
+];
 
-// Função de fetch SUPER otimizada
-const fastFetch = async (queryFn, operation = "fetch", timeout = 3000) => {
+// Função helper para queries otimizadas
+const executeQuery = async (queryFn, operation, timeout = 2000) => {
+	const startTime = Date.now();
+	log("info", `Starting ${operation}`);
+
 	try {
-		log("🚀", `FAST fetch: ${operation}`);
-		const startTime = Date.now();
-
-		const result = await withFastTimeout(queryFn(), timeout);
-
-		const duration = Date.now() - startTime;
+		const result = await withTimeout(queryFn(), timeout);
 
 		if (result.error) {
-			throw new Error(`Supabase: ${result.error.message}`);
+			throw new Error(`Supabase error: ${result.error.message}`);
 		}
 
+		const duration = Date.now() - startTime;
 		const data = result.data || [];
-		log("✅", `FAST fetch OK: ${operation}`, {
+
+		log("success", `${operation} completed`, {
 			duration: `${duration}ms`,
 			records: Array.isArray(data) ? data.length : 1,
 		});
 
 		return data;
 	} catch (error) {
-		log("❌", `FAST fetch failed: ${operation}`, { error: error.message });
+		const duration = Date.now() - startTime;
+		log("error", `${operation} failed`, {
+			duration: `${duration}ms`,
+			error: error.message,
+		});
 		throw error;
 	}
 };
 
-/**
- * API ULTRA-RÁPIDA
- */
 export const FastDataService = {
 	/**
-	 * Featured posts - SEMPRE 3 posts em ≤2s
+	 * Posts em destaque - ULTRA RÁPIDO com função SQL otimizada
 	 */
 	async getFeaturedPosts() {
-		const cacheKey = "featured-posts";
+		const cacheKey = "featured_posts_v2";
 
 		try {
-			// 1. Cache instantâneo
+			// 1. Cache hit instantâneo
 			const cached = cache.get(cacheKey);
 			if (cached) {
-				log("⚡", "Featured posts: CACHE HIT", { count: cached.length });
-				return cached;
-			}
-
-			// 2. Promise race: fetch vs fallback em 2s
-			const fetchPromise = (async () => {
-				const trending = await fastFetch(
-					() =>
-						supabase
-							.from("posts")
-							.select(
-								"id, title, slug, category, category_name, image_url, excerpt, content, author, read_time, published, trending, tags, created_at"
-							)
-							.eq("published", true)
-							.eq("trending", true)
-							.order("created_at", { ascending: false })
-							.limit(3),
-					"trending",
-					2000
-				);
-
-				if (trending.length >= 3) {
-					return trending.slice(0, 3);
-				}
-
-				// Se precisar de mais, buscar recentes rapidamente
-				const recent = await fastFetch(
-					() =>
-						supabase
-							.from("posts")
-							.select(
-								"id, title, slug, category, category_name, image_url, excerpt, content, author, read_time, published, trending, tags, created_at"
-							)
-							.eq("published", true)
-							.order("created_at", { ascending: false })
-							.limit(5),
-					"recent",
-					2000
-				);
-
-				const trendingIds = trending.map((p) => p.id);
-				const additional = recent
-					.filter((p) => !trendingIds.includes(p.id))
-					.slice(0, 3 - trending.length);
-
-				return [...trending, ...additional].slice(0, 3);
-			})();
-
-			const fallbackPromise = new Promise((resolve) => {
-				setTimeout(() => {
-					log("⚡", "Featured posts: FALLBACK após 2s");
-					resolve(FAST_FALLBACK.posts.slice(0, 3));
-				}, 2000);
-			});
-
-			// Race: o que chegar primeiro em 2s
-			const result = await Promise.race([fetchPromise, fallbackPromise]);
-
-			// Cache o resultado
-			cache.set(cacheKey, result);
-
-			// Se fetch real chegar depois, atualizar cache em background
-			fetchPromise
-				.then((realData) => {
-					if (realData !== result) {
-						cache.set(cacheKey, realData);
-						log("🔄", "Featured posts: cache atualizado em background");
-					}
-				})
-				.catch(() => {}); // Silenciar erros de background
-
-			return result;
-		} catch (error) {
-			log("❌", "Featured posts: ERRO GERAL, usando fallback", error);
-			return FAST_FALLBACK.posts.slice(0, 3);
-		}
-	},
-
-	/**
-	 * Todos os posts - máximo 3s
-	 */
-	async getAllPosts() {
-		const cacheKey = "all-posts";
-
-		try {
-			// Cache primeiro
-			const cached = cache.get(cacheKey);
-			if (cached) {
-				log("⚡", "All posts: CACHE HIT", { count: cached.length });
-				return cached;
-			}
-
-			// Fetch rápido com select otimizado
-			const posts = await fastFetch(
-				() =>
-					supabase
-						.from("posts")
-						.select(
-							"id, title, slug, category, category_name, image_url, excerpt, content, author, read_time, published, trending, tags, created_at"
-						)
-						.eq("published", true)
-						.order("created_at", { ascending: false })
-						.limit(20), // Limitar para 20 posts mais recentes
-				"all-posts",
-				3000
-			);
-
-			cache.set(cacheKey, posts);
-			return posts;
-		} catch (error) {
-			log("❌", "All posts: ERRO, usando fallback", error);
-			const fallback = [...FAST_FALLBACK.posts];
-			cache.set(cacheKey, fallback);
-			return fallback;
-		}
-	},
-
-	/**
-	 * Posts por categoria - máximo 3s
-	 */
-	async getPostsByCategory(categoryId) {
-		const cacheKey = `category-${categoryId}`;
-
-		try {
-			// Cache primeiro
-			const cached = cache.get(cacheKey);
-			if (cached) {
-				log("⚡", `Category ${categoryId}: CACHE HIT`, {
+				log("success", "Featured posts cache HIT", {
 					count: cached.length,
 				});
 				return cached;
 			}
 
-			// Fetch rápido
-			const posts = await fastFetch(
+			// 2. Promise race: SQL function vs fallback
+			const sqlPromise = executeQuery(
+				() => supabase.rpc("get_featured_posts", { limit_count: 3 }),
+				"featured-posts-sql",
+				1500
+			);
+
+			const fallbackPromise = new Promise((resolve) => {
+				setTimeout(() => {
+					log("info", "Using fallback for featured posts");
+					resolve(FALLBACK_POSTS.slice(0, 3));
+				}, 1500);
+			});
+
+			const result = await Promise.race([sqlPromise, fallbackPromise]);
+
+			// Cache resultado
+			cache.set(cacheKey, result, 5 * 60 * 1000); // 5 minutos
+
+			// Se SQL real completar depois, atualizar cache em background
+			if (result === FALLBACK_POSTS.slice(0, 3)) {
+				sqlPromise
+					.then((realData) => {
+						if (realData && realData.length > 0) {
+							cache.set(cacheKey, realData);
+							log("info", "Featured posts cache updated in background");
+						}
+					})
+					.catch(() => {}); // Silenciar erros de background
+			}
+
+			return result;
+		} catch (error) {
+			log("error", "Featured posts fallback", { error: error.message });
+			const fallback = FALLBACK_POSTS.slice(0, 3);
+			cache.set(cacheKey, fallback, 2 * 60 * 1000); // Cache fallback por menos tempo
+			return fallback;
+		}
+	},
+
+	/**
+	 * Todos os posts publicados - usando índices otimizados
+	 */
+	async getAllPosts() {
+		const cacheKey = "all_posts_v2";
+
+		try {
+			const cached = cache.get(cacheKey);
+			if (cached) {
+				log("success", "All posts cache HIT", { count: cached.length });
+				return cached;
+			}
+
+			// Query otimizada usando índice composto
+			const posts = await executeQuery(
 				() =>
 					supabase
 						.from("posts")
 						.select(
-							"id, title, slug, category, category_name, image_url, excerpt, content, author, read_time, published, trending, tags, created_at"
+							`id, title, slug, category, category_name, image_url, 
+             excerpt, content, author, read_time, trending, tags, 
+             published, created_at, updated_at`
 						)
-						.eq("category", categoryId)
 						.eq("published", true)
 						.order("created_at", { ascending: false })
-						.limit(12), // Limitar a 12 posts por categoria
-				`category-${categoryId}`,
-				3000
+						.limit(20),
+				"all-posts",
+				2500
 			);
 
-			if (posts.length > 0) {
-				cache.set(cacheKey, posts);
+			cache.set(cacheKey, posts, 8 * 60 * 1000); // 8 minutos
+			return posts;
+		} catch (error) {
+			log("error", "All posts fallback", { error: error.message });
+			const fallback = [...FALLBACK_POSTS];
+			cache.set(cacheKey, fallback, 3 * 60 * 1000);
+			return fallback;
+		}
+	},
+
+	/**
+	 * Posts por categoria - usando função SQL otimizada
+	 */
+	async getPostsByCategory(categoryId) {
+		const cacheKey = `category_${categoryId}_v2`;
+
+		try {
+			const cached = cache.get(cacheKey);
+			if (cached) {
+				log("success", `Category ${categoryId} cache HIT`, {
+					count: cached.length,
+				});
+				return cached;
+			}
+
+			// Usar função SQL otimizada
+			const posts = await executeQuery(
+				() =>
+					supabase.rpc("get_posts_by_category", {
+						category_slug: categoryId,
+						limit_count: 12,
+						offset_count: 0,
+					}),
+				`category-${categoryId}`,
+				2000
+			);
+
+			if (posts && posts.length > 0) {
+				cache.set(cacheKey, posts, 10 * 60 * 1000); // 10 minutos
 				return posts;
 			}
 
-			// Se não encontrou, usar fallback
-			const fallback = FAST_FALLBACK.byCategory[categoryId] || [];
-			cache.set(cacheKey, fallback);
+			// Fallback para categoria específica
+			const fallback = FALLBACK_POSTS.filter((p) => p.category === categoryId);
+			cache.set(cacheKey, fallback, 5 * 60 * 1000);
 			return fallback;
 		} catch (error) {
-			log("❌", `Category ${categoryId}: ERRO, usando fallback`, error);
-			const fallback = FAST_FALLBACK.byCategory[categoryId] || [];
-			cache.set(cacheKey, fallback);
+			log("error", `Category ${categoryId} fallback`, {
+				error: error.message,
+			});
+			const fallback = FALLBACK_POSTS.filter((p) => p.category === categoryId);
+			cache.set(cacheKey, fallback, 3 * 60 * 1000);
 			return fallback;
 		}
 	},
 
 	/**
-	 * Post por ID - máximo 4s
+	 * Post individual por ID
 	 */
 	async getPostById(id) {
+		const cacheKey = `post_${id}_v2`;
+
 		try {
+			const cached = cache.get(cacheKey);
+			if (cached) {
+				log("success", `Post ${id} cache HIT`);
+				return cached;
+			}
+
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
-			const post = await fastFetch(
-				() => supabase.from("posts").select("*").eq("id", postId).single(),
+			const post = await executeQuery(
+				() =>
+					supabase
+						.from("posts")
+						.select("*")
+						.eq("id", postId)
+						.eq("published", true)
+						.single(),
 				`post-${postId}`,
-				4000
+				3000
 			);
 
-			return post;
+			if (post) {
+				cache.set(cacheKey, post, 15 * 60 * 1000); // 15 minutos
+				return post;
+			}
+
+			return null;
 		} catch (error) {
-			log("❌", `Post ${id}: ERRO, tentando fallback`, error);
+			log("error", `Post ${id} not found`, { error: error.message });
 
-			// Tentar encontrar nos fallbacks
+			// Tentar fallback
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-			const allFallbackPosts = [
-				...FAST_FALLBACK.posts,
-				...Object.values(FAST_FALLBACK.byCategory).flat(),
-			];
+			const fallbackPost = FALLBACK_POSTS.find((p) => p.id === postId);
 
-			return allFallbackPosts.find((p) => p.id === postId) || null;
+			if (fallbackPost) {
+				cache.set(cacheKey, fallbackPost, 5 * 60 * 1000);
+				return fallbackPost;
+			}
+
+			return null;
 		}
 	},
 
 	/**
-	 * Funções administrativas - com timeouts maiores
+	 * Posts populares da view materializada
+	 */
+	async getPopularPosts(limit = 5) {
+		const cacheKey = `popular_posts_${limit}_v2`;
+
+		try {
+			const cached = cache.get(cacheKey);
+			if (cached) {
+				log("success", "Popular posts cache HIT", { count: cached.length });
+				return cached;
+			}
+
+			// Usar view materializada
+			const posts = await executeQuery(
+				() =>
+					supabase
+						.from("mv_popular_posts")
+						.select("*")
+						.limit(limit)
+						.order("total_views", { ascending: false }),
+				"popular-posts",
+				2000
+			);
+
+			cache.set(cacheKey, posts, 30 * 60 * 1000); // 30 minutos
+			return posts;
+		} catch (error) {
+			log("error", "Popular posts fallback", { error: error.message });
+			const fallback = FALLBACK_POSTS.slice(0, limit);
+			cache.set(cacheKey, fallback, 5 * 60 * 1000);
+			return fallback;
+		}
+	},
+
+	/**
+	 * Busca rápida (para implementar futuramente)
+	 */
+	async searchPosts(query, limit = 10) {
+		const cacheKey = `search_${query}_${limit}_v2`;
+
+		try {
+			const cached = cache.get(cacheKey);
+			if (cached) return cached;
+
+			// Busca usando full-text search
+			const results = await executeQuery(
+				() =>
+					supabase
+						.from("posts")
+						.select(
+							"id, title, slug, category, category_name, excerpt, created_at"
+						)
+						.textSearch("title", query)
+						.eq("published", true)
+						.limit(limit),
+				"search",
+				2000
+			);
+
+			cache.set(cacheKey, results, 5 * 60 * 1000); // 5 minutos
+			return results;
+		} catch (error) {
+			log("error", "Search failed", { error: error.message });
+			return [];
+		}
+	},
+
+	/**
+	 * CRUD Operations para Admin (com timeout maior)
 	 */
 	async createPost(postData) {
 		try {
-			log("📝", "Criando post", { title: postData.title });
-
-			const result = await fastFetch(
+			const result = await executeQuery(
 				() =>
 					supabase
 						.from("posts")
@@ -527,14 +531,15 @@ export const FastDataService = {
 						.select()
 						.single(),
 				"create-post",
-				6000
-			); // 6s para operações admin
+				5000
+			);
 
-			cache.clear(); // Limpar cache após modificação
+			// Invalidar caches relacionados
+			this.clearRelatedCaches();
 
 			return { data: result, error: null };
 		} catch (error) {
-			log("❌", "Erro ao criar post", error);
+			log("error", "Create post failed", { error: error.message });
 			return { data: null, error };
 		}
 	},
@@ -543,7 +548,7 @@ export const FastDataService = {
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
-			const result = await fastFetch(
+			const result = await executeQuery(
 				() =>
 					supabase
 						.from("posts")
@@ -555,14 +560,15 @@ export const FastDataService = {
 						.select()
 						.single(),
 				"update-post",
-				6000
+				5000
 			);
 
-			cache.clear(); // Limpar cache após modificação
+			// Invalidar caches relacionados
+			this.clearRelatedCaches();
 
 			return { data: result, error: null };
 		} catch (error) {
-			log("❌", "Erro ao atualizar post", error);
+			log("error", "Update post failed", { error: error.message });
 			return { data: null, error };
 		}
 	},
@@ -571,34 +577,94 @@ export const FastDataService = {
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
-			await fastFetch(
+			await executeQuery(
 				() => supabase.from("posts").delete().eq("id", postId),
 				"delete-post",
-				6000
+				5000
 			);
 
-			cache.clear(); // Limpar cache após modificação
+			// Invalidar caches relacionados
+			this.clearRelatedCaches();
 
 			return { error: null };
 		} catch (error) {
-			log("❌", "Erro ao deletar post", error);
+			log("error", "Delete post failed", { error: error.message });
 			return { error };
 		}
 	},
 
 	/**
-	 * Utilitários
+	 * Utility methods
 	 */
 	clearCache() {
 		cache.clear();
+		log("info", "Cache cleared");
+	},
+
+	clearRelatedCaches() {
+		// Invalidar apenas caches relacionados aos posts
+		const keys = [
+			"featured_posts_v2",
+			"all_posts_v2",
+			"popular_posts_5_v2",
+			"popular_posts_3_v2",
+		];
+
+		keys.forEach((key) => {
+			cache.memoryCache.delete(key);
+			cache.memoryTTL.delete(key);
+		});
+
+		// Limpar caches de categoria do localStorage
+		Object.keys(localStorage)
+			.filter((key) => key.startsWith("tf_cache_category_"))
+			.forEach((key) => localStorage.removeItem(key));
+
+		log("info", "Related caches cleared");
 	},
 
 	getCacheStats() {
-		return {
-			entries: cache.store.size,
-			keys: Array.from(cache.store.keys()),
-		};
+		return cache.getStats();
+	},
+
+	/**
+	 * Prefetch para melhorar UX
+	 */
+	async prefetchCategory(categoryId) {
+		// Prefetch em background sem bloquear
+		setTimeout(() => {
+			this.getPostsByCategory(categoryId).catch(() => {});
+		}, 100);
+	},
+
+	async prefetchPost(id) {
+		setTimeout(() => {
+			this.getPostById(id).catch(() => {});
+		}, 100);
+	},
+
+	/**
+	 * Warmup cache - chama isso no app startup
+	 */
+	async warmupCache() {
+		log("info", "Starting cache warmup");
+
+		// Prefetch dados críticos em paralelo
+		const promises = [
+			this.getFeaturedPosts(),
+			this.getAllPosts(),
+			this.getPopularPosts(5),
+		];
+
+		// Prefetch categorias principais
+		const mainCategories = ["f1", "nascar", "engines"];
+		mainCategories.forEach((cat) => promises.push(this.prefetchCategory(cat)));
+
+		try {
+			await Promise.allSettled(promises);
+			log("info", "Cache warmup completed");
+		} catch (error) {
+			log("error", "Cache warmup failed", { error: error.message });
+		}
 	},
 };
-
-export default FastDataService;
