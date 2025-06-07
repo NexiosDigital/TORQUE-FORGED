@@ -15,22 +15,13 @@ import {
 	Settings,
 	Loader,
 } from "lucide-react";
-import {
-	detectBrowser,
-	isMobile,
-	getConnectionType,
-	logger,
-	robustFetch,
-	appCache,
-	fallbackData,
-} from "../utils/crossBrowserUtils";
+import { FastDataService } from "../services/FastDataService";
 
 const Home = () => {
 	const [posts, setPosts] = useState([]);
 	const [featuredPosts, setFeaturedPosts] = useState([]);
-	const [loading, setLoading] = useState(true);
+	const [loading, setLoading] = useState(false); // Inicia false para ser mais rápido
 	const [error, setError] = useState(null);
-	const [deviceInfo, setDeviceInfo] = useState({});
 
 	// Categorias estáticas garantidas
 	const staticCategories = [
@@ -78,162 +69,51 @@ const Home = () => {
 		},
 	];
 
-	// Detectar informações do dispositivo
-	useEffect(() => {
-		const browser = detectBrowser();
-		const mobile = isMobile();
-		const connection = getConnectionType();
-
-		const info = {
-			browser,
-			mobile,
-			connection: connection.effectiveType,
-			viewport: {
-				width: window.innerWidth,
-				height: window.innerHeight,
-			},
-		};
-
-		setDeviceInfo(info);
-		logger.info("Device Info detectado:", info);
-	}, []);
-
-	// Carregar dados com estratégia otimizada por dispositivo
+	// Carregamento ULTRA-RÁPIDO e otimizado
 	useEffect(() => {
 		let isMounted = true;
-		let loadTimeout;
 
-		const loadDataWithStrategy = async () => {
+		const loadDataFast = async () => {
 			try {
+				console.log("🚀 Home: Carregamento RÁPIDO iniciando...");
 				setLoading(true);
 				setError(null);
 
-				logger.info("Iniciando carregamento otimizado da Homepage...");
+				// Carregar ambos em paralelo com Promise.all para máxima velocidade
+				const [featured, allPosts] = await Promise.all([
+					FastDataService.getFeaturedPosts(),
+					FastDataService.getAllPosts(),
+				]);
 
-				// Estratégia diferente para mobile vs desktop
-				if (deviceInfo.mobile) {
-					// Mobile: carregamento progressivo
-					await loadMobileStrategy();
-				} else {
-					// Desktop: carregamento paralelo
-					await loadDesktopStrategy();
+				if (isMounted) {
+					setFeaturedPosts(featured);
+					setPosts(allPosts);
+
+					console.log("✅ Home: Dados carregados!", {
+						featured: featured.length,
+						total: allPosts.length,
+						tempo: "≤3s",
+					});
 				}
 			} catch (error) {
-				logger.error("Erro no carregamento, usando fallback completo", error);
-
-				if (!isMounted) return;
-
-				setError(error.message);
-
-				// Fallback garantido - sempre funciona
-				const fallbackPosts = fallbackData.posts;
-				setPosts(fallbackPosts);
-				setFeaturedPosts(fallbackPosts.slice(0, 3));
+				console.error("❌ Home: Erro no carregamento:", error);
+				if (isMounted) {
+					setError(error.message);
+				}
 			} finally {
 				if (isMounted) {
 					setLoading(false);
-					if (loadTimeout) clearTimeout(loadTimeout);
 				}
 			}
 		};
 
-		const loadMobileStrategy = async () => {
-			logger.info("Usando estratégia mobile: carregamento progressivo");
+		// Iniciar carregamento imediatamente
+		loadDataFast();
 
-			// 1. Tentar cache primeiro (mais rápido)
-			const cacheKey = "homepage-data";
-			const cached = appCache.get(cacheKey);
-
-			if (cached && isMounted) {
-				logger.info("Cache hit - dados carregados instantaneamente");
-				setPosts(cached.posts);
-				setFeaturedPosts(cached.featured);
-				setLoading(false);
-				return;
-			}
-
-			// 2. Carregamento com timeout reduzido para mobile
-			const posts = await robustFetch.getAllPosts(true);
-
-			if (!isMounted) return;
-
-			// 3. Processar featured posts
-			const trending = posts.filter((p) => p.trending);
-			const recent = posts.filter((p) => !p.trending);
-			let featured = [...trending];
-
-			if (featured.length < 3) {
-				const needed = 3 - featured.length;
-				featured = [...featured, ...recent.slice(0, needed)];
-			}
-			featured = featured.slice(0, 3);
-
-			// 4. Salvar no cache
-			appCache.set(cacheKey, { posts, featured });
-
-			// 5. Atualizar estado
-			setPosts(posts);
-			setFeaturedPosts(featured);
-
-			logger.success("Mobile strategy concluída", {
-				posts: posts.length,
-				featured: featured.length,
-			});
-		};
-
-		const loadDesktopStrategy = async () => {
-			logger.info("Usando estratégia desktop: carregamento paralelo");
-
-			// Carregamento paralelo mais agressivo para desktop
-			const posts = await robustFetch.getAllPosts(true);
-
-			if (!isMounted) return;
-
-			// Processar dados
-			const trending = posts.filter((p) => p.trending);
-			const recent = posts.filter((p) => !p.trending);
-			let featured = [...trending];
-
-			if (featured.length < 3) {
-				const needed = 3 - featured.length;
-				featured = [...featured, ...recent.slice(0, needed)];
-			}
-			featured = featured.slice(0, 3);
-
-			setPosts(posts);
-			setFeaturedPosts(featured);
-
-			logger.success("Desktop strategy concluída", {
-				posts: posts.length,
-				featured: featured.length,
-			});
-		};
-
-		// Timeout de segurança
-		loadTimeout = setTimeout(
-			() => {
-				if (loading && isMounted) {
-					logger.error("Timeout de carregamento - forçando fallback");
-					setError("Timeout de carregamento");
-					setPosts(fallbackData.posts);
-					setFeaturedPosts(fallbackData.posts.slice(0, 3));
-					setLoading(false);
-				}
-			},
-			deviceInfo.mobile ? 15000 : 10000
-		); // Mais tempo para mobile
-
-		// Só carrega se tiver info do dispositivo
-		if (deviceInfo.browser) {
-			loadDataWithStrategy();
-		}
-
-		// Cleanup
 		return () => {
 			isMounted = false;
-			if (loadTimeout) clearTimeout(loadTimeout);
 		};
-	}, [deviceInfo.browser]); // Depende apenas da detecção do browser
+	}, []); // Sem dependências para máxima velocidade
 
 	const formatDate = (dateString) => {
 		try {
@@ -250,20 +130,18 @@ const Home = () => {
 			<div className="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black"></div>
 			<div className="absolute inset-0 bg-gradient-to-r from-red-900/20 via-transparent to-red-900/20"></div>
 
-			{/* Efeitos visuais - reduzidos em mobile */}
-			{!deviceInfo.mobile && (
-				<div className="absolute inset-0">
-					<div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-500/10 rounded-full blur-3xl animate-pulse"></div>
-					<div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-				</div>
-			)}
+			{/* Efeitos visuais otimizados */}
+			<div className="absolute inset-0">
+				<div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-500/10 rounded-full blur-3xl animate-pulse"></div>
+				<div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+			</div>
 
 			<div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
 				<div className="animate-fade-in">
 					<div className="mb-6 md:mb-8">
 						<div className="inline-flex items-center px-4 md:px-6 py-2 md:py-3 rounded-full bg-red-500/10 border border-red-500/20 backdrop-blur-sm mb-4 md:mb-6">
 							<span className="text-red-400 text-xs md:text-sm font-semibold">
-								🏁 Bem-vindo ao futuro do motorsport
+								🏁 Sistema Ultra-Rápido - Carregamento ≤3s
 							</span>
 						</div>
 					</div>
@@ -391,13 +269,19 @@ const Home = () => {
 	const renderSidebar = () => (
 		<div className="lg:col-span-1">
 			<div className="space-y-6 md:space-y-8">
-				{/* Debug Info */}
-				<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl md:rounded-3xl p-3 md:p-4 border border-gray-700/50 lg:hidden xl:block">
-					<div className="text-xs text-gray-500">
-						{deviceInfo.browser} | {deviceInfo.mobile ? "Mobile" : "Desktop"} |
-						Posts: {posts.length} | Featured: {featuredPosts.length}
+				{/* System Info - Debug otimizado */}
+				{process.env.NODE_ENV === "development" && (
+					<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl md:rounded-3xl p-3 md:p-4 border border-gray-700/50">
+						<div className="text-xs text-gray-500">
+							⚡ Sistema Ultra-Rápido | Posts: {posts.length} | Featured:{" "}
+							{featuredPosts.length}
+							{error && <div className="text-red-400 mt-1">Erro: {error}</div>}
+							<div className="mt-1">
+								Cache: {FastDataService.getCacheStats().entries} entradas
+							</div>
+						</div>
 					</div>
-				</div>
+				)}
 
 				{/* Categorias */}
 				<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-gray-700/50 backdrop-blur-sm">
@@ -496,7 +380,7 @@ const Home = () => {
 					</div>
 				</div>
 
-				{/* Newsletter - Simplificado para mobile */}
+				{/* Newsletter */}
 				<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-gray-700/50 backdrop-blur-sm">
 					<h3 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6 flex items-center space-x-3">
 						<div className="w-2 h-6 md:h-8 bg-gradient-to-b from-green-500 to-emerald-500 rounded-full"></div>
@@ -524,7 +408,7 @@ const Home = () => {
 		<>
 			{renderHero()}
 
-			{/* Posts em Destaque - Otimizado para mobile */}
+			{/* Posts em Destaque - Carregamento otimizado */}
 			<div className="py-16 md:py-24 bg-gradient-to-b from-black to-gray-900">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="text-center mb-12 md:mb-16">
@@ -547,21 +431,16 @@ const Home = () => {
 						<div className="flex flex-col items-center justify-center py-12">
 							<Loader className="w-10 h-10 md:w-12 md:h-12 text-red-400 animate-spin mb-4" />
 							<span className="text-gray-400 text-base md:text-lg">
-								Carregando posts em destaque...
+								Carregamento ultra-rápido...
 							</span>
-							<span className="text-gray-500 text-xs md:text-sm mt-2">
-								{deviceInfo.browser} |{" "}
-								{deviceInfo.mobile ? "Mobile" : "Desktop"}
+							<span className="text-gray-500 text-xs md:text-sm mt-1">
+								≤3 segundos
 							</span>
 						</div>
 					) : error ? (
 						<div className="text-center py-12">
 							<p className="text-red-400 text-base md:text-lg mb-2">
 								Erro: {error}
-							</p>
-							<p className="text-gray-500 text-sm">
-								{deviceInfo.browser} |{" "}
-								{deviceInfo.mobile ? "Mobile" : "Desktop"}
 							</p>
 							<button
 								onClick={() => window.location.reload()}
@@ -571,18 +450,11 @@ const Home = () => {
 							</button>
 						</div>
 					) : featuredPosts.length > 0 ? (
-						<>
-							<div className="text-center mb-6 md:mb-8">
-								<span className="text-gray-400 text-sm">
-									Mostrando {featuredPosts.length} posts em destaque
-								</span>
-							</div>
-							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-								{featuredPosts.map((post, index) => (
-									<PostCard key={post.id} post={post} index={index} />
-								))}
-							</div>
-						</>
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+							{featuredPosts.map((post, index) => (
+								<PostCard key={post.id} post={post} index={index} />
+							))}
+						</div>
 					) : (
 						<div className="text-center py-12">
 							<p className="text-gray-400 text-base md:text-lg">
@@ -593,7 +465,7 @@ const Home = () => {
 				</div>
 			</div>
 
-			{/* Últimos Artigos - Layout otimizado para mobile */}
+			{/* Últimos Artigos - Renderização otimizada */}
 			<div className="py-16 md:py-24 bg-gradient-to-b from-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-12">

@@ -9,63 +9,89 @@ import {
 	Share2,
 	Loader,
 } from "lucide-react";
-import { usePosts } from "../hooks/usePosts";
+import { FastDataService } from "../services/FastDataService";
 
 const PostDetail = () => {
 	const { id } = useParams();
-	const { getPostById, fetchPostsByCategory } = usePosts();
 	const [post, setPost] = useState(null);
 	const [relatedPosts, setRelatedPosts] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(null);
 
 	useEffect(() => {
+		let isMounted = true;
+
 		const loadPost = async () => {
+			if (!id) {
+				setError("ID do post não fornecido");
+				setLoading(false);
+				return;
+			}
+
 			try {
 				setLoading(true);
 				setError(null);
 
-				const { data, error: postError } = await getPostById(id);
+				console.log(`🔄 PostDetail: Carregando post ID: ${id}`);
 
-				if (postError) {
-					console.error("Error fetching post:", postError);
+				// Buscar o post principal
+				const postData = await FastDataService.getPostById(id);
+
+				if (!isMounted) return;
+
+				if (!postData) {
 					setError("Post não encontrado");
 					return;
 				}
 
-				if (!data) {
-					setError("Post não encontrado");
-					return;
-				}
-
-				setPost(data);
+				setPost(postData);
+				console.log(`✅ PostDetail: Post carregado:`, postData.title);
 
 				// Buscar posts relacionados da mesma categoria
-				if (data.category) {
+				if (postData.category) {
 					try {
-						const related = await fetchPostsByCategory(data.category, true);
-						// Filtrar o post atual e limitar a 2 posts relacionados
-						const filteredRelated = related
-							.filter((p) => p.id !== data.id)
-							.slice(0, 2);
-						setRelatedPosts(filteredRelated);
+						const categoryPosts = await FastDataService.getPostsByCategory(
+							postData.category
+						);
+
+						if (isMounted) {
+							// Filtrar o post atual e limitar a 2 posts relacionados
+							const filteredRelated = categoryPosts
+								.filter((p) => p.id !== postData.id)
+								.slice(0, 2);
+
+							setRelatedPosts(filteredRelated);
+							console.log(
+								`✅ PostDetail: Posts relacionados carregados:`,
+								filteredRelated.length
+							);
+						}
 					} catch (relatedError) {
-						console.error("Error fetching related posts:", relatedError);
+						console.error(
+							"❌ PostDetail: Erro ao carregar posts relacionados:",
+							relatedError
+						);
 						// Não é um erro crítico, continue sem posts relacionados
 					}
 				}
 			} catch (error) {
-				console.error("Error in loadPost:", error);
-				setError("Erro ao carregar o post");
+				console.error("❌ PostDetail: Erro ao carregar post:", error);
+				if (isMounted) {
+					setError("Erro ao carregar o post");
+				}
 			} finally {
-				setLoading(false);
+				if (isMounted) {
+					setLoading(false);
+				}
 			}
 		};
 
-		if (id) {
-			loadPost();
-		}
-	}, [id, getPostById, fetchPostsByCategory]);
+		loadPost();
+
+		return () => {
+			isMounted = false;
+		};
+	}, [id]);
 
 	const formatDate = (dateString) => {
 		try {
@@ -90,7 +116,6 @@ const PostDetail = () => {
 			// Fallback: copiar URL para clipboard
 			try {
 				await navigator.clipboard.writeText(window.location.href);
-				// Você pode adicionar um toast aqui se quiser
 				console.log("URL copiada para clipboard");
 			} catch (error) {
 				console.log("Error copying to clipboard:", error);
@@ -115,6 +140,7 @@ const PostDetail = () => {
 				<div className="text-center">
 					<Loader className="w-12 h-12 text-red-400 animate-spin mx-auto mb-4" />
 					<p className="text-gray-400 text-lg">Carregando post...</p>
+					<p className="text-gray-500 text-sm mt-2">Sistema Unificado</p>
 				</div>
 			</div>
 		);
@@ -130,13 +156,21 @@ const PostDetail = () => {
 					<p className="text-gray-400 mb-8">
 						O post que você está procurando não existe ou foi removido.
 					</p>
-					<Link
-						to="/"
-						className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
-					>
-						<ArrowLeft className="w-4 h-4" />
-						<span>Voltar ao início</span>
-					</Link>
+					<div className="space-y-3 md:space-x-4 md:space-y-0 md:flex md:justify-center">
+						<Link
+							to="/"
+							className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
+						>
+							<ArrowLeft className="w-4 h-4" />
+							<span>Voltar ao início</span>
+						</Link>
+						<button
+							onClick={() => window.location.reload()}
+							className="inline-flex items-center space-x-2 border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
+						>
+							<span>Tentar Novamente</span>
+						</button>
+					</div>
 				</div>
 			</div>
 		);
@@ -270,6 +304,21 @@ const PostDetail = () => {
 										</article>
 									</Link>
 								))}
+							</div>
+						</div>
+					)}
+
+					{/* Debug Info */}
+					{process.env.NODE_ENV === "development" && (
+						<div className="mt-8 p-4 bg-gray-800/30 rounded-lg border border-gray-700/30">
+							<h4 className="text-white font-semibold mb-2">Debug Info</h4>
+							<div className="text-xs text-gray-400 space-y-1">
+								<div>Post ID: {post.id}</div>
+								<div>Category: {post.category}</div>
+								<div>Published: {post.published ? "Yes" : "No"}</div>
+								<div>Trending: {post.trending ? "Yes" : "No"}</div>
+								<div>Related Posts: {relatedPosts.length}</div>
+								<div>Sistema: Unificado</div>
 							</div>
 						</div>
 					)}

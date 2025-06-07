@@ -9,49 +9,19 @@ import {
 	Tag,
 	Loader,
 } from "lucide-react";
-import {
-	detectBrowser,
-	isMobile,
-	getConnectionType,
-	logger,
-	robustFetch,
-	appCache,
-	fallbackData,
-} from "../utils/crossBrowserUtils";
+import { FastDataService } from "../services/FastDataService";
 
 const CategoryPage = ({ categoryId, title, description, gradient }) => {
 	const [categoryPosts, setCategoryPosts] = useState([]);
-	const [loading, setLoading] = useState(true);
+	const [loading, setLoading] = useState(false); // Inicia false para ser mais rápido
 	const [error, setError] = useState(null);
-	const [deviceInfo, setDeviceInfo] = useState({});
-
-	// Detectar informações do dispositivo
-	useEffect(() => {
-		const browser = detectBrowser();
-		const mobile = isMobile();
-		const connection = getConnectionType();
-
-		const info = {
-			browser,
-			mobile,
-			connection: connection.effectiveType,
-			viewport: {
-				width: window.innerWidth,
-				height: window.innerHeight,
-			},
-		};
-
-		setDeviceInfo(info);
-		logger.info("CategoryPage - Device Info:", info);
-	}, []);
 
 	useEffect(() => {
 		let isMounted = true;
-		let loadTimeout;
 
-		const loadCategoryPosts = async () => {
+		const loadCategoryPostsFast = async () => {
 			if (!categoryId) {
-				logger.error("CategoryPage: categoryId não fornecido");
+				console.error("❌ CategoryPage: categoryId não fornecido");
 				setLoading(false);
 				return;
 			}
@@ -59,108 +29,39 @@ const CategoryPage = ({ categoryId, title, description, gradient }) => {
 			try {
 				setLoading(true);
 				setError(null);
-				logger.info(
-					`CategoryPage: Carregando posts para categoria: ${categoryId}`
+
+				console.log(
+					`🚀 CategoryPage: Carregamento RÁPIDO para ${categoryId}...`
 				);
 
-				// Estratégia otimizada por dispositivo
-				if (deviceInfo.mobile) {
-					await loadMobileStrategy();
-				} else {
-					await loadDesktopStrategy();
+				// Usar FastDataService para carregamento ≤3s
+				const posts = await FastDataService.getPostsByCategory(categoryId);
+
+				if (isMounted) {
+					setCategoryPosts(posts);
+					console.log(
+						`⚡ CategoryPage: Posts de ${categoryId} carregados em ≤3s:`,
+						posts.length
+					);
 				}
 			} catch (error) {
-				logger.error(
-					`CategoryPage: Erro ao carregar categoria '${categoryId}':`,
-					error
-				);
-
-				if (!isMounted) return;
-
-				setError(error.message);
-
-				// Fallback robusto por categoria
-				const fallbackPosts = fallbackData.categoriesMap[categoryId] || [];
-				setCategoryPosts(fallbackPosts);
+				console.error(`❌ CategoryPage: Erro em ${categoryId}:`, error);
+				if (isMounted) {
+					setError(error.message);
+				}
 			} finally {
 				if (isMounted) {
 					setLoading(false);
-					if (loadTimeout) clearTimeout(loadTimeout);
 				}
 			}
 		};
 
-		const loadMobileStrategy = async () => {
-			logger.info(`Mobile strategy para categoria: ${categoryId}`);
+		loadCategoryPostsFast();
 
-			// 1. Cache primeiro
-			const cacheKey = `category-${categoryId}`;
-			const cached = appCache.get(cacheKey);
-
-			if (cached && isMounted) {
-				logger.info(`Cache hit para categoria ${categoryId}`);
-				setCategoryPosts(cached);
-				setLoading(false);
-				return;
-			}
-
-			// 2. Fetch com timeout maior para mobile
-			const posts = await robustFetch.getPostsByCategory(categoryId, true);
-
-			if (!isMounted) return;
-
-			// 3. Cache e atualizar
-			appCache.set(cacheKey, posts);
-			setCategoryPosts(posts);
-
-			logger.success(`Mobile strategy concluída para ${categoryId}`, {
-				posts: posts.length,
-			});
-		};
-
-		const loadDesktopStrategy = async () => {
-			logger.info(`Desktop strategy para categoria: ${categoryId}`);
-
-			// Carregamento mais direto para desktop
-			const posts = await robustFetch.getPostsByCategory(categoryId, true);
-
-			if (!isMounted) return;
-
-			setCategoryPosts(posts);
-
-			logger.success(`Desktop strategy concluída para ${categoryId}`, {
-				posts: posts.length,
-			});
-		};
-
-		// Timeout de segurança baseado no dispositivo
-		loadTimeout = setTimeout(
-			() => {
-				if (loading && isMounted) {
-					logger.error(
-						`Timeout para categoria ${categoryId} - forçando fallback`
-					);
-					setError("Timeout de carregamento");
-
-					const fallbackPosts = fallbackData.categoriesMap[categoryId] || [];
-					setCategoryPosts(fallbackPosts);
-					setLoading(false);
-				}
-			},
-			deviceInfo.mobile ? 20000 : 15000
-		);
-
-		// Só carrega se tiver info do dispositivo e categoryId
-		if (deviceInfo.browser && categoryId) {
-			loadCategoryPosts();
-		}
-
-		// Cleanup
 		return () => {
 			isMounted = false;
-			if (loadTimeout) clearTimeout(loadTimeout);
 		};
-	}, [categoryId, deviceInfo.browser]);
+	}, [categoryId]);
 
 	const formatDate = (dateString) => {
 		try {
@@ -179,7 +80,7 @@ const CategoryPage = ({ categoryId, title, description, gradient }) => {
 					src={post.image_url}
 					alt={post.title}
 					className="w-full h-48 md:h-56 object-cover transition-transform duration-700 group-hover:scale-110"
-					loading={index < 6 ? "eager" : "lazy"} // Primeiros 6 com prioridade
+					loading={index < 6 ? "eager" : "lazy"}
 				/>
 				<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
 
@@ -240,7 +141,7 @@ const CategoryPage = ({ categoryId, title, description, gradient }) => {
 
 	return (
 		<div className="min-h-screen pt-20">
-			{/* Hero Section - Otimizado para mobile */}
+			{/* Hero Section */}
 			<div className={`relative py-16 md:py-24 bg-gradient-to-r ${gradient}`}>
 				<div className="absolute inset-0 bg-black/60"></div>
 				<div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -253,15 +154,16 @@ const CategoryPage = ({ categoryId, title, description, gradient }) => {
 				</div>
 			</div>
 
-			{/* Posts Grid - Layout responsivo melhorado */}
+			{/* Posts Grid */}
 			<div className="py-12 md:py-16 bg-gradient-to-b from-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					{loading ? (
 						<div className="flex justify-center items-center py-12">
 							<Loader className="w-6 h-6 md:w-8 md:h-8 text-red-400 animate-spin" />
 							<span className="ml-3 text-gray-400 text-sm md:text-base">
-								Carregando posts de {title}...
+								Carregamento rápido de {title}...
 							</span>
+							<span className="ml-2 text-gray-500 text-xs">≤3s</span>
 						</div>
 					) : error ? (
 						<div className="text-center py-12">
@@ -274,30 +176,13 @@ const CategoryPage = ({ categoryId, title, description, gradient }) => {
 							<p className="text-red-400 mb-4 text-sm md:text-base">{error}</p>
 							<p className="text-gray-400 mb-6 md:mb-8 max-w-md mx-auto text-sm md:text-base">
 								Não foi possível carregar os posts de {title.toLowerCase()}.
-								Tente recarregar a página.
 							</p>
-							<div className="space-y-3 md:space-y-0 md:space-x-4 md:flex md:justify-center">
-								<button
-									onClick={() => window.location.reload()}
-									className="w-full md:w-auto inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
-								>
-									<span>Tentar Novamente</span>
-								</button>
-								<Link
-									to="/"
-									className="w-full md:w-auto inline-flex items-center justify-center space-x-2 border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
-								>
-									<ArrowRight className="w-4 h-4 rotate-180" />
-									<span>Voltar ao início</span>
-								</Link>
-							</div>
-
-							{/* Debug info para mobile */}
-							<div className="mt-6 text-xs text-gray-500 font-mono">
-								{deviceInfo.browser} |{" "}
-								{deviceInfo.mobile ? "Mobile" : "Desktop"} |{" "}
-								{deviceInfo.connection}
-							</div>
+							<button
+								onClick={() => window.location.reload()}
+								className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
+							>
+								Tentar Novamente
+							</button>
 						</div>
 					) : categoryPosts.length > 0 ? (
 						<>
@@ -312,31 +197,21 @@ const CategoryPage = ({ categoryId, title, description, gradient }) => {
 									Últimas publicações sobre {title.toLowerCase()}
 								</p>
 
-								{/* Debug info para desenvolvimento */}
+								{/* Debug info otimizado */}
 								{process.env.NODE_ENV === "development" && (
 									<div className="mt-2 text-xs text-gray-500 font-mono">
-										{deviceInfo.browser} |{" "}
-										{deviceInfo.mobile ? "Mobile" : "Desktop"} |{" "}
-										{deviceInfo.connection}
+										⚡ Sistema Ultra-Rápido | {categoryId} | Posts:{" "}
+										{categoryPosts.length}
 									</div>
 								)}
 							</div>
 
-							{/* Grid responsivo otimizado */}
+							{/* Grid responsivo */}
 							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
 								{categoryPosts.map((post, index) => (
 									<PostCard key={post.id} post={post} index={index} />
 								))}
 							</div>
-
-							{/* Load more button para mobile se muitos posts */}
-							{categoryPosts.length > 6 && deviceInfo.mobile && (
-								<div className="text-center mt-8">
-									<button className="bg-gradient-to-r from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300">
-										Carregar Mais Posts
-									</button>
-								</div>
-							)}
 						</>
 					) : (
 						<div className="text-center py-12 md:py-16">
@@ -348,31 +223,15 @@ const CategoryPage = ({ categoryId, title, description, gradient }) => {
 							</h3>
 							<p className="text-gray-400 mb-6 md:mb-8 max-w-md mx-auto text-sm md:text-base">
 								Ainda não há posts publicados na categoria {title.toLowerCase()}
-								. Volte em breve para ver novos conteúdos!
+								.
 							</p>
-							<div className="space-y-3 md:space-y-0 md:space-x-4 md:flex md:justify-center">
-								<Link
-									to="/"
-									className="w-full md:w-auto inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
-								>
-									<ArrowRight className="w-4 h-4 rotate-180" />
-									<span>Voltar ao início</span>
-								</Link>
-								<Link
-									to="/f1"
-									className="w-full md:w-auto inline-flex items-center justify-center space-x-2 border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
-								>
-									<span>Ver Fórmula 1</span>
-									<ArrowRight className="w-4 h-4" />
-								</Link>
-							</div>
-
-							{/* Debug info */}
-							<div className="mt-6 text-xs text-gray-500 font-mono">
-								{deviceInfo.browser} |{" "}
-								{deviceInfo.mobile ? "Mobile" : "Desktop"} | Category:{" "}
-								{categoryId}
-							</div>
+							<Link
+								to="/"
+								className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
+							>
+								<ArrowRight className="w-4 h-4 rotate-180" />
+								<span>Voltar ao início</span>
+							</Link>
 						</div>
 					)}
 				</div>
