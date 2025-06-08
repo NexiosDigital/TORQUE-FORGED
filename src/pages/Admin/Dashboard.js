@@ -18,7 +18,7 @@ import {
 	useUpdatePost,
 	useDeletePost,
 	useCacheStats,
-} from "../../hooks/useUltraFastPosts";
+} from "../../hooks/usePostsQuery";
 import { ErrorBoundary } from "react-error-boundary";
 
 /**

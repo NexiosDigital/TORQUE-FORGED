@@ -2,7 +2,7 @@ import React, { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./contexts/AuthContext";
-import { OptimizedQueryProvider } from "./providers/QueryClientProvider";
+import { ModernQueryProvider } from "./providers/QueryProvider";
 import Layout from "./components/Layout/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "react-error-boundary";
@@ -68,38 +68,59 @@ const PostEditor = lazy(() =>
 	import(/* webpackChunkName: "admin" */ "./pages/Admin/PostEditor")
 );
 
-// Componente de loading unificado
-const PageLoader = ({ page = "página" }) => (
-	<div className="min-h-screen bg-black flex items-center justify-center">
+// Componente de loading MODERNO
+const ModernPageLoader = ({ page = "página" }) => (
+	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 		<div className="text-center">
-			<div className="w-16 h-16 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-				<svg
-					className="w-8 h-8 text-white animate-spin"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth={2}
-						d="M12 2v4m0 0l2.5-2.5M12 6l-2.5-2.5M18 12h-4m0 0l2.5 2.5M14 12l2.5-2.5M12 18v-4m0 0l-2.5 2.5M12 14l2.5 2.5M6 12h4m0 0L7.5 9.5M10 12L7.5 14.5"
-					/>
-				</svg>
+			{/* Logo animado */}
+			<div className="relative mb-8">
+				<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl flex items-center justify-center mx-auto shadow-2xl">
+					<svg
+						className="w-10 h-10 text-white animate-spin"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+							d="M12 2v4m0 0l2.5-2.5M12 6l-2.5-2.5M18 12h-4m0 0l2.5 2.5M14 12l2.5-2.5M12 18v-4m0 0l-2.5 2.5M12 14l2.5 2.5M6 12h4m0 0L7.5 9.5M10 12L7.5 14.5"
+						/>
+					</svg>
+				</div>
+
+				{/* Efeito de pulso */}
+				<div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl mx-auto animate-ping opacity-20"></div>
 			</div>
-			<p className="text-gray-400 text-lg">Carregando {page}...</p>
-			<p className="text-gray-500 text-sm mt-1">⚡ Sistema Ultra-Rápido</p>
+
+			{/* Texto de carregamento */}
+			<h2 className="text-2xl font-bold text-white mb-2">Carregando {page}</h2>
+			<p className="text-gray-400 mb-4">Sistema ultrarrápido carregando...</p>
+
+			{/* Barra de progresso animada */}
+			<div className="w-64 h-2 bg-gray-800 rounded-full mx-auto overflow-hidden">
+				<div className="h-full bg-gradient-to-r from-red-600 to-red-500 rounded-full animate-pulse"></div>
+			</div>
+
+			{/* Info técnica em desenvolvimento */}
+			{process.env.NODE_ENV === "development" && (
+				<p className="text-xs text-gray-500 mt-4 font-mono">
+					🚀 React Query + Supabase Realtime
+				</p>
+			)}
 		</div>
 	</div>
 );
 
-// Error boundary global
+// Error boundary MELHORADO
 const AppErrorBoundary = ({ error, resetErrorBoundary }) => (
-	<div className="min-h-screen bg-black flex items-center justify-center">
-		<div className="text-center p-8 max-w-md mx-auto">
-			<div className="w-20 h-20 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
+		<div className="text-center p-8 max-w-lg mx-auto">
+			{/* Ícone de erro */}
+			<div className="w-24 h-24 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
 				<svg
-					className="w-10 h-10 text-white"
+					className="w-12 h-12 text-white"
 					fill="none"
 					stroke="currentColor"
 					viewBox="0 0 24 24"
@@ -112,48 +133,60 @@ const AppErrorBoundary = ({ error, resetErrorBoundary }) => (
 					/>
 				</svg>
 			</div>
-			<h1 className="text-3xl font-bold text-white mb-4">
+
+			{/* Título e descrição */}
+			<h1 className="text-4xl font-black text-white mb-4">
 				Ops! Algo deu errado
 			</h1>
-			<p className="text-gray-400 mb-6 leading-relaxed">
+			<p className="text-gray-400 mb-8 leading-relaxed text-lg">
 				Ocorreu um erro inesperado na aplicação. Nossa equipe foi notificada e
 				está trabalhando para resolver.
 			</p>
-			<div className="space-y-3">
+
+			{/* Ações */}
+			<div className="space-y-4">
 				<button
 					onClick={resetErrorBoundary}
-					className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
+					className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
 				>
 					Tentar Novamente
 				</button>
+
 				<button
 					onClick={() => (window.location.href = "/")}
-					className="w-full border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
+					className="w-full border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300"
 				>
 					Voltar ao Início
 				</button>
 			</div>
 
+			{/* Debug em desenvolvimento */}
 			{process.env.NODE_ENV === "development" && error && (
-				<details className="mt-6 text-left">
-					<summary className="text-red-400 cursor-pointer mb-2 text-sm">
-						Detalhes do erro (desenvolvimento)
+				<details className="mt-8 text-left">
+					<summary className="text-red-400 cursor-pointer mb-4 text-sm font-semibold">
+						🔧 Detalhes do erro (desenvolvimento)
 					</summary>
-					<pre className="bg-gray-900 p-3 rounded-lg text-xs text-gray-300 overflow-auto max-h-40">
-						{error.stack}
-					</pre>
+					<div className="bg-gray-900 p-4 rounded-xl border border-gray-700">
+						<p className="text-red-300 text-sm mb-2 font-mono">
+							{error.message}
+						</p>
+						<pre className="text-gray-400 text-xs overflow-auto max-h-40 font-mono">
+							{error.stack}
+						</pre>
+					</div>
 				</details>
 			)}
 		</div>
 	</div>
 );
 
+// Componente principal da aplicação
 function App() {
 	return (
 		<ErrorBoundary
 			FallbackComponent={AppErrorBoundary}
 			onError={(error, errorInfo) => {
-				console.error("App Error Boundary:", error, errorInfo);
+				console.error("🔴 App Error Boundary:", error, errorInfo);
 
 				// Log para serviços de monitoramento em produção
 				if (process.env.NODE_ENV === "production") {
@@ -166,31 +199,38 @@ function App() {
 			}}
 			onReset={() => {
 				// Limpar estados/cache se necessário
+				if (window.cacheUtils) {
+					window.cacheUtils.clear();
+				}
 				window.location.reload();
 			}}
 		>
 			<AuthProvider>
-				<OptimizedQueryProvider>
+				<ModernQueryProvider>
 					<div className="App">
-						{/* Toast notifications otimizadas */}
+						{/* Toast notifications MODERNAS */}
 						<Toaster
 							position="top-right"
+							gutter={8}
 							toastOptions={{
 								duration: 4000,
 								style: {
-									background: "#1f2937",
+									background:
+										"linear-gradient(135deg, #1f2937 0%, #111827 100%)",
 									color: "#ffffff",
 									border: "1px solid #374151",
-									borderRadius: "12px",
+									borderRadius: "16px",
 									fontSize: "14px",
 									fontWeight: "500",
 									boxShadow:
-										"0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+										"0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)",
+									backdropFilter: "blur(8px)",
 								},
 								success: {
 									style: {
 										border: "1px solid #10b981",
-										backgroundColor: "#064e3b",
+										background:
+											"linear-gradient(135deg, #064e3b 0%, #022c22 100%)",
 									},
 									iconTheme: {
 										primary: "#10b981",
@@ -200,7 +240,8 @@ function App() {
 								error: {
 									style: {
 										border: "1px solid #ef4444",
-										backgroundColor: "#7f1d1d",
+										background:
+											"linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)",
 									},
 									iconTheme: {
 										primary: "#ef4444",
@@ -210,19 +251,25 @@ function App() {
 								loading: {
 									style: {
 										border: "1px solid #3b82f6",
-										backgroundColor: "#1e3a8a",
+										background:
+											"linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)",
+									},
+									iconTheme: {
+										primary: "#3b82f6",
+										secondary: "#ffffff",
 									},
 								},
 							}}
 						/>
 
+						{/* Rotas da aplicação */}
 						<Routes>
-							{/* Public Routes com Suspense otimizado */}
+							{/* Public Routes */}
 							<Route
 								path="/"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="homepage" />}>
+										<Suspense fallback={<ModernPageLoader page="homepage" />}>
 											<Home />
 										</Suspense>
 									</Layout>
@@ -233,7 +280,7 @@ function App() {
 								path="/f1"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="Fórmula 1" />}>
+										<Suspense fallback={<ModernPageLoader page="Fórmula 1" />}>
 											<Formula1 />
 										</Suspense>
 									</Layout>
@@ -244,7 +291,7 @@ function App() {
 								path="/nascar"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="NASCAR" />}>
+										<Suspense fallback={<ModernPageLoader page="NASCAR" />}>
 											<NASCAR />
 										</Suspense>
 									</Layout>
@@ -255,7 +302,7 @@ function App() {
 								path="/endurance"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="Endurance" />}>
+										<Suspense fallback={<ModernPageLoader page="Endurance" />}>
 											<Endurance />
 										</Suspense>
 									</Layout>
@@ -266,7 +313,9 @@ function App() {
 								path="/drift"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="Formula Drift" />}>
+										<Suspense
+											fallback={<ModernPageLoader page="Formula Drift" />}
+										>
 											<Drift />
 										</Suspense>
 									</Layout>
@@ -277,7 +326,7 @@ function App() {
 								path="/tuning"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="Tuning" />}>
+										<Suspense fallback={<ModernPageLoader page="Tuning" />}>
 											<Tuning />
 										</Suspense>
 									</Layout>
@@ -288,7 +337,7 @@ function App() {
 								path="/engines"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="Motores" />}>
+										<Suspense fallback={<ModernPageLoader page="Motores" />}>
 											<Engines />
 										</Suspense>
 									</Layout>
@@ -299,7 +348,7 @@ function App() {
 								path="/about"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="sobre nós" />}>
+										<Suspense fallback={<ModernPageLoader page="sobre nós" />}>
 											<About />
 										</Suspense>
 									</Layout>
@@ -310,7 +359,7 @@ function App() {
 								path="/contact"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="contato" />}>
+										<Suspense fallback={<ModernPageLoader page="contato" />}>
 											<Contact />
 										</Suspense>
 									</Layout>
@@ -321,7 +370,7 @@ function App() {
 								path="/post/:id"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="post" />}>
+										<Suspense fallback={<ModernPageLoader page="post" />}>
 											<PostDetail />
 										</Suspense>
 									</Layout>
@@ -332,7 +381,7 @@ function App() {
 								path="/category/:category"
 								element={
 									<Layout>
-										<Suspense fallback={<PageLoader page="categoria" />}>
+										<Suspense fallback={<ModernPageLoader page="categoria" />}>
 											<Category />
 										</Suspense>
 									</Layout>
@@ -345,7 +394,7 @@ function App() {
 								element={
 									<ProtectedRoute>
 										<Layout>
-											<Suspense fallback={<PageLoader page="perfil" />}>
+											<Suspense fallback={<ModernPageLoader page="perfil" />}>
 												<Profile />
 											</Suspense>
 										</Layout>
@@ -357,7 +406,7 @@ function App() {
 							<Route
 								path="/admin/login"
 								element={
-									<Suspense fallback={<PageLoader page="login admin" />}>
+									<Suspense fallback={<ModernPageLoader page="login admin" />}>
 										<AdminLogin />
 									</Suspense>
 								}
@@ -367,7 +416,9 @@ function App() {
 								path="/admin/dashboard"
 								element={
 									<ProtectedRoute>
-										<Suspense fallback={<PageLoader page="dashboard admin" />}>
+										<Suspense
+											fallback={<ModernPageLoader page="dashboard admin" />}
+										>
 											<AdminDashboard />
 										</Suspense>
 									</ProtectedRoute>
@@ -378,7 +429,9 @@ function App() {
 								path="/admin/posts/new"
 								element={
 									<ProtectedRoute>
-										<Suspense fallback={<PageLoader page="editor de post" />}>
+										<Suspense
+											fallback={<ModernPageLoader page="editor de post" />}
+										>
 											<PostEditor />
 										</Suspense>
 									</ProtectedRoute>
@@ -389,23 +442,25 @@ function App() {
 								path="/admin/posts/edit/:id"
 								element={
 									<ProtectedRoute>
-										<Suspense fallback={<PageLoader page="editor de post" />}>
+										<Suspense
+											fallback={<ModernPageLoader page="editor de post" />}
+										>
 											<PostEditor />
 										</Suspense>
 									</ProtectedRoute>
 								}
 							/>
 
-							{/* 404 Route */}
+							{/* 404 Route MODERNA */}
 							<Route
 								path="*"
 								element={
 									<Layout>
 										<div className="min-h-screen pt-20 flex items-center justify-center">
-											<div className="text-center">
-												<div className="w-20 h-20 bg-gradient-to-r from-gray-600 to-gray-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+											<div className="text-center p-8 max-w-md mx-auto">
+												<div className="w-24 h-24 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
 													<svg
-														className="w-10 h-10 text-white"
+														className="w-12 h-12 text-white"
 														fill="none"
 														stroke="currentColor"
 														viewBox="0 0 24 24"
@@ -418,23 +473,23 @@ function App() {
 														/>
 													</svg>
 												</div>
-												<h1 className="text-4xl font-bold text-white mb-4">
+												<h1 className="text-4xl font-black text-white mb-4">
 													Página não encontrada
 												</h1>
-												<p className="text-gray-400 mb-8 max-w-md mx-auto">
+												<p className="text-gray-400 mb-8 leading-relaxed">
 													A página que você está procurando não existe ou foi
 													removida.
 												</p>
-												<div className="space-y-3 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
+												<div className="space-y-4">
 													<button
 														onClick={() => window.history.back()}
-														className="w-full sm:w-auto border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
+														className="w-full border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300"
 													>
 														Voltar
 													</button>
 													<button
 														onClick={() => (window.location.href = "/")}
-														className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
+														className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
 													>
 														Ir para Home
 													</button>
@@ -446,7 +501,7 @@ function App() {
 							/>
 						</Routes>
 					</div>
-				</OptimizedQueryProvider>
+				</ModernQueryProvider>
 			</AuthProvider>
 		</ErrorBoundary>
 	);

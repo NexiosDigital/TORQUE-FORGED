@@ -1,46 +1,40 @@
 import React, { Suspense, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Calendar, User, Clock, ArrowLeft, Tag, Share2 } from "lucide-react";
+import {
+	Calendar,
+	User,
+	Clock,
+	ArrowLeft,
+	Tag,
+	Share2,
+	AlertCircle,
+} from "lucide-react";
 import {
 	usePostByIdSuspense,
 	usePostsByCategory,
 	usePrefetch,
-} from "../hooks/useUltraFastPosts";
+} from "../hooks/usePostsQuery";
+import { useRealtimePost } from "../hooks/useRealtimeSync";
 import { ErrorBoundary } from "react-error-boundary";
 
-// Validador de post rigoroso
-const isValidPost = (post) => {
-	return (
-		post &&
-		typeof post === "object" &&
-		post.id &&
-		post.title &&
-		typeof post.title === "string" &&
-		post.title.length > 0 &&
-		post.content &&
-		typeof post.content === "string" &&
-		post.excerpt &&
-		typeof post.excerpt === "string" &&
-		post.image_url &&
-		typeof post.image_url === "string" &&
-		post.category &&
-		post.category_name &&
-		post.author &&
-		post.read_time &&
-		post.created_at
-	);
-};
+/**
+ * OptimizedPostDetail - 100% Dinâmico do Banco
+ * - SEM fallbacks estáticos
+ * - Realtime sync para atualizações ao vivo
+ * - Error handling robusto
+ * - Cache persistence automático
+ */
 
 // Loading skeleton para post
 const PostDetailSkeleton = () => (
 	<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 		{/* Hero skeleton */}
-		<div className="relative h-96 md:h-[60vh] bg-gray-800 animate-pulse">
+		<div className="relative h-96 md:h-[60vh] bg-gradient-to-br from-gray-800 to-gray-700 animate-pulse">
 			<div className="absolute bottom-8 left-0 right-0">
 				<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="w-32 h-6 bg-gray-700 rounded-full mb-4"></div>
-					<div className="w-3/4 h-12 bg-gray-700 rounded mb-2"></div>
-					<div className="w-1/2 h-8 bg-gray-700 rounded"></div>
+					<div className="w-32 h-6 bg-gray-600 rounded-full mb-4"></div>
+					<div className="w-3/4 h-12 bg-gray-600 rounded-2xl mb-2"></div>
+					<div className="w-1/2 h-8 bg-gray-600 rounded-xl"></div>
 				</div>
 			</div>
 		</div>
@@ -48,15 +42,15 @@ const PostDetailSkeleton = () => (
 		{/* Content skeleton */}
 		<div className="py-16">
 			<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-				<div className="w-20 h-4 bg-gray-700 rounded mb-8"></div>
+				<div className="w-20 h-4 bg-gray-700 rounded-full mb-8"></div>
 
-				<div className="bg-gray-800 rounded-2xl p-6 mb-12 animate-pulse">
+				<div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-6 mb-12 animate-pulse border border-gray-700/50">
 					<div className="flex justify-between items-center">
 						<div className="flex space-x-6">
-							<div className="w-24 h-4 bg-gray-700 rounded"></div>
-							<div className="w-24 h-4 bg-gray-700 rounded"></div>
+							<div className="w-24 h-4 bg-gray-700 rounded-full"></div>
+							<div className="w-24 h-4 bg-gray-700 rounded-full"></div>
 						</div>
-						<div className="w-24 h-8 bg-gray-700 rounded"></div>
+						<div className="w-32 h-10 bg-gray-700 rounded-2xl"></div>
 					</div>
 				</div>
 
@@ -64,7 +58,7 @@ const PostDetailSkeleton = () => (
 					{Array.from({ length: 8 }).map((_, i) => (
 						<div
 							key={`skeleton-${i}`}
-							className="w-full h-4 bg-gray-700 rounded"
+							className="w-full h-4 bg-gray-700 rounded-full"
 						></div>
 					))}
 				</div>
@@ -74,35 +68,42 @@ const PostDetailSkeleton = () => (
 );
 
 // Error fallback para post não encontrado
-const PostNotFoundFallback = ({ error, resetErrorBoundary }) => (
+const PostNotFoundFallback = ({ error, resetErrorBoundary, postId }) => (
 	<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
-		<div className="text-center p-8 max-w-md mx-auto">
-			<div className="w-20 h-20 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-				<Tag className="w-10 h-10 text-white" />
+		<div className="text-center p-8 max-w-lg mx-auto">
+			<div className="w-24 h-24 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
+				<AlertCircle className="w-12 h-12 text-white" />
 			</div>
-			<h1 className="text-3xl font-bold text-white mb-4">
+			<h1 className="text-4xl font-black text-white mb-4">
 				Post não encontrado
 			</h1>
-			<p className="text-gray-400 mb-6 leading-relaxed">
-				{error?.message === "Post not found" ||
+			<p className="text-gray-400 mb-2">
+				{error?.message === "Post não encontrado" ||
 				error?.message?.includes("não encontrado")
 					? "O post que você está procurando não existe ou foi removido."
 					: "Ocorreu um erro ao carregar o post."}
 			</p>
+			<p className="text-gray-500 text-sm mb-8">
+				Verifique se o link está correto ou escolha outro post para ler.
+			</p>
+
 			{process.env.NODE_ENV === "development" && (
-				<p className="text-xs text-gray-500 mb-6">Erro: {error?.message}</p>
+				<p className="text-xs text-gray-600 mb-6 font-mono">
+					Post ID: {postId} | Erro: {error?.message}
+				</p>
 			)}
-			<div className="space-y-3 sm:space-y-0 sm:space-x-4 sm:flex">
+
+			<div className="space-y-4">
 				<Link
 					to="/"
-					className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
+					className="w-full inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
 				>
 					<ArrowLeft className="w-4 h-4" />
 					<span>Voltar ao início</span>
 				</Link>
 				<button
 					onClick={resetErrorBoundary}
-					className="w-full sm:w-auto border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
+					className="w-full border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300"
 				>
 					Tentar Novamente
 				</button>
@@ -111,15 +112,10 @@ const PostNotFoundFallback = ({ error, resetErrorBoundary }) => (
 	</div>
 );
 
-// Componente de compartilhamento SEGURO
+// Componente de compartilhamento
 const ShareButton = React.memo(({ post }) => {
-	if (!isValidPost(post)) {
-		return null;
-	}
-
 	const handleShare = async () => {
 		try {
-			// Verificar se o navegador suporta Web Share API
 			if (navigator.share) {
 				await navigator.share({
 					title: post.title,
@@ -127,10 +123,9 @@ const ShareButton = React.memo(({ post }) => {
 					url: window.location.href,
 				});
 			} else {
-				// Fallback: copiar URL para clipboard
 				await navigator.clipboard.writeText(window.location.href);
 
-				// Feedback visual
+				// Feedback visual simples
 				const button = document.querySelector("[data-share-button]");
 				if (button) {
 					const originalText = button.textContent;
@@ -142,7 +137,6 @@ const ShareButton = React.memo(({ post }) => {
 			}
 		} catch (error) {
 			console.warn("Share failed:", error);
-			// Fallback manual se tudo falhar
 			try {
 				const textArea = document.createElement("textarea");
 				textArea.value = window.location.href;
@@ -150,8 +144,6 @@ const ShareButton = React.memo(({ post }) => {
 				textArea.select();
 				document.execCommand("copy");
 				document.body.removeChild(textArea);
-
-				// Mostrar feedback
 				alert("URL copiada para a área de transferência!");
 			} catch (fallbackError) {
 				console.error("All share methods failed:", fallbackError);
@@ -163,7 +155,7 @@ const ShareButton = React.memo(({ post }) => {
 		<button
 			onClick={handleShare}
 			data-share-button
-			className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-300 text-sm md:text-base"
+			className="flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
 		>
 			<Share2 className="w-4 h-4" />
 			<span>Compartilhar</span>
@@ -171,15 +163,13 @@ const ShareButton = React.memo(({ post }) => {
 	);
 });
 
-// Componente de conteúdo renderizado PROTEGIDO
+// Componente de conteúdo renderizado
 const PostContent = React.memo(({ content }) => {
-	// ✅ HOOKS SEMPRE NO TOP LEVEL
 	const renderedContent = useMemo(() => {
 		if (!content || typeof content !== "string") {
 			return <p className="text-gray-400 italic">Conteúdo não disponível.</p>;
 		}
 
-		// Dividir o conteúdo em parágrafos e renderizar
 		const paragraphs = content.split("\n\n").filter((p) => p.trim());
 
 		if (paragraphs.length === 0) {
@@ -203,50 +193,39 @@ const PostContent = React.memo(({ content }) => {
 	);
 });
 
-// Componente de posts relacionados PROTEGIDO - HOOKS CORRIGIDOS
+// Componente de posts relacionados
 const RelatedPosts = React.memo(({ currentPost }) => {
 	const { data: relatedPosts = [] } = usePostsByCategory(currentPost?.category);
 	const { prefetchPost } = usePrefetch();
 
-	// ✅ HOOKS SEMPRE NO TOP LEVEL
 	const filteredRelated = useMemo(() => {
-		if (!isValidPost(currentPost)) {
-			return [];
-		}
-
-		if (!Array.isArray(relatedPosts)) {
+		if (!currentPost || !Array.isArray(relatedPosts)) {
 			return [];
 		}
 
 		return relatedPosts
-			.filter((post) => isValidPost(post) && post.id !== currentPost.id)
+			.filter((post) => post && post.id !== currentPost.id)
 			.slice(0, 2);
 	}, [relatedPosts, currentPost]);
 
 	const formatDate = (dateString) => {
 		try {
 			if (!dateString) return "Data não disponível";
-			const date = new Date(dateString);
-			return isNaN(date.getTime())
-				? "Data inválida"
-				: date.toLocaleDateString("pt-BR");
+			return new Date(dateString).toLocaleDateString("pt-BR");
 		} catch (error) {
 			return "Data não disponível";
 		}
 	};
 
-	// VALIDAÇÃO APÓS HOOKS
-	if (!isValidPost(currentPost)) {
-		return null;
-	}
-
-	if (filteredRelated.length === 0) {
+	if (!currentPost || filteredRelated.length === 0) {
 		return null;
 	}
 
 	return (
 		<div className="mt-16">
-			<h3 className="text-2xl font-bold text-white mb-8">Posts Relacionados</h3>
+			<h3 className="text-3xl font-black text-white mb-8 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+				Posts Relacionados
+			</h3>
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 				{filteredRelated.map((relatedPost, index) => (
 					<Link
@@ -255,7 +234,7 @@ const RelatedPosts = React.memo(({ currentPost }) => {
 						onMouseEnter={() => prefetchPost(relatedPost.id)}
 						className="group"
 					>
-						<article className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl overflow-hidden hover:scale-105 transition-all duration-300 border border-gray-700/50">
+						<article className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl overflow-hidden hover:scale-105 transition-all duration-300 border border-gray-700/50 shadow-xl hover:shadow-red-500/10">
 							<img
 								src={relatedPost.image_url}
 								alt={relatedPost.title}
@@ -286,74 +265,31 @@ const RelatedPosts = React.memo(({ currentPost }) => {
 	);
 });
 
-// Componente principal do post PROTEGIDO - HOOKS CORRIGIDOS
+// Componente principal do post
 const PostDetailContent = () => {
 	const { id } = useParams();
-
-	// ✅ HOOKS SEMPRE NO TOP LEVEL
 	const { data: post } = usePostByIdSuspense(id);
+	const { isLive } = useRealtimePost(id);
 
 	const formatDate = useMemo(() => {
-		if (!post || !post.created_at) return "Data não disponível";
+		if (!post?.created_at) return "Data não disponível";
 		try {
-			const date = new Date(post.created_at);
-			return isNaN(date.getTime())
-				? "Data não disponível"
-				: date.toLocaleDateString("pt-BR");
+			return new Date(post.created_at).toLocaleDateString("pt-BR");
 		} catch (error) {
 			return "Data não disponível";
 		}
 	}, [post]);
 
-	const safePost = useMemo(() => {
-		if (!post) return null;
-
-		return {
-			id: post.id || 0,
-			title: post.title || "Título não disponível",
-			content: post.content || "Conteúdo não disponível",
-			excerpt: post.excerpt || "Descrição não disponível",
-			image_url:
-				post.image_url ||
-				"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
-			category: post.category || "geral",
-			category_name: post.category_name || "Geral",
-			author: post.author || "Equipe TF",
-			read_time: post.read_time || "5 min",
-			trending: post.trending || false,
-			published: post.published !== false,
-			tags: Array.isArray(post.tags) ? post.tags : [],
-			created_at: post.created_at || new Date().toISOString(),
-		};
-	}, [post]);
-
-	// VALIDAÇÃO APÓS HOOKS
-	if (!id) {
-		throw new Error("ID do post não fornecido");
-	}
-
-	if (!isValidPost(post)) {
-		console.error("PostDetailContent: Post inválido recebido", post);
-		throw new Error("Dados do post inválidos");
-	}
-
 	// SEO optimization - definir meta tags dinamicamente
 	React.useEffect(() => {
-		if (safePost?.title && safePost?.excerpt) {
-			// Título da página
-			document.title = `${safePost.title} | Torque Forged Motorsport`;
+		if (post?.title && post?.excerpt) {
+			document.title = `${post.title} | Torque Forged Motorsport`;
 
-			// Meta description
 			const metaDescription = document.querySelector(
 				'meta[name="description"]'
 			);
 			if (metaDescription) {
-				metaDescription.setAttribute("content", safePost.excerpt);
-			} else {
-				const newMeta = document.createElement("meta");
-				newMeta.name = "description";
-				newMeta.content = safePost.excerpt;
-				document.head.appendChild(newMeta);
+				metaDescription.setAttribute("content", post.excerpt);
 			}
 
 			// Open Graph tags
@@ -367,26 +303,35 @@ const PostDetailContent = () => {
 				tag.setAttribute("content", content);
 			};
 
-			setOrCreateMetaTag("og:title", safePost.title);
-			setOrCreateMetaTag("og:description", safePost.excerpt);
-			setOrCreateMetaTag("og:image", safePost.image_url);
+			setOrCreateMetaTag("og:title", post.title);
+			setOrCreateMetaTag("og:description", post.excerpt);
+			setOrCreateMetaTag("og:image", post.image_url);
 			setOrCreateMetaTag("og:url", window.location.href);
-			setOrCreateMetaTag("og:type", "article");
 		}
 
-		// Cleanup ao desmontar
 		return () => {
 			document.title = "Torque Forged Motorsport";
 		};
-	}, [safePost]);
+	}, [post]);
+
+	if (!post) {
+		throw new Error("Post não encontrado");
+	}
 
 	return (
 		<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
+			{/* Live update indicator */}
+			{isLive && (
+				<div className="fixed top-24 right-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-xl animate-pulse z-50">
+					🔴 Atualizado ao vivo
+				</div>
+			)}
+
 			{/* Hero Image */}
 			<div className="relative h-96 md:h-[60vh] overflow-hidden">
 				<img
-					src={safePost.image_url}
-					alt={safePost.title}
+					src={post.image_url}
+					alt={post.title}
 					className="w-full h-full object-cover"
 					loading="eager"
 					onError={(e) => {
@@ -399,14 +344,14 @@ const PostDetailContent = () => {
 				<div className="absolute bottom-8 left-0 right-0">
 					<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
 						<Link
-							to={`/${safePost.category}`}
-							className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-red-600 to-red-500 text-white text-sm font-semibold mb-4 hover:shadow-lg transition-all duration-300"
+							to={`/${post.category}`}
+							className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-red-600 to-red-500 text-white text-sm font-bold mb-4 hover:shadow-xl transition-all duration-300 hover:scale-105"
 						>
 							<Tag className="w-4 h-4 mr-2" />
-							{safePost.category_name}
+							{post.category_name}
 						</Link>
 						<h1 className="text-3xl md:text-5xl font-black text-white leading-tight">
-							{safePost.title}
+							{post.title}
 						</h1>
 					</div>
 				</div>
@@ -418,18 +363,18 @@ const PostDetailContent = () => {
 					{/* Back Button */}
 					<Link
 						to="/"
-						className="inline-flex items-center text-red-400 hover:text-red-300 mb-8 transition-colors duration-300"
+						className="inline-flex items-center text-red-400 hover:text-red-300 mb-8 transition-colors duration-300 font-semibold"
 					>
 						<ArrowLeft className="w-4 h-4 mr-2" />
 						Voltar
 					</Link>
 
 					{/* Article Meta */}
-					<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-12 p-6 bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl border border-gray-700/50">
+					<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-12 p-8 bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl border border-gray-700/50 shadow-xl">
 						<div className="flex flex-wrap items-center space-x-6 text-gray-400 mb-4 sm:mb-0">
 							<div className="flex items-center space-x-2">
 								<User className="w-5 h-5" />
-								<span className="font-medium">{safePost.author}</span>
+								<span className="font-medium">{post.author}</span>
 							</div>
 							<div className="flex items-center space-x-2">
 								<Calendar className="w-5 h-5" />
@@ -437,24 +382,24 @@ const PostDetailContent = () => {
 							</div>
 							<div className="flex items-center space-x-2">
 								<Clock className="w-5 h-5" />
-								<span>{safePost.read_time} de leitura</span>
+								<span>{post.read_time} de leitura</span>
 							</div>
 						</div>
-						<ShareButton post={safePost} />
+						<ShareButton post={post} />
 					</div>
 
 					{/* Article Body */}
-					<PostContent content={safePost.content} />
+					<PostContent content={post.content} />
 
 					{/* Tags */}
-					{safePost.tags.length > 0 && (
+					{post.tags && post.tags.length > 0 && (
 						<div className="mt-12 pt-8 border-t border-gray-700">
-							<h3 className="text-white font-bold mb-4">Tags:</h3>
+							<h3 className="text-white font-bold mb-4 text-lg">Tags:</h3>
 							<div className="flex flex-wrap gap-3">
-								{safePost.tags.map((tag, index) => (
+								{post.tags.map((tag, index) => (
 									<span
 										key={`tag-${index}-${tag}`}
-										className="bg-gray-800 text-gray-300 px-4 py-2 rounded-full text-sm hover:bg-gray-700 transition-colors duration-300"
+										className="bg-gradient-to-r from-gray-800 to-gray-700 text-gray-300 px-4 py-2 rounded-full text-sm hover:from-gray-700 hover:to-gray-600 transition-all duration-300 border border-gray-600/50"
 									>
 										#{tag}
 									</span>
@@ -467,19 +412,19 @@ const PostDetailContent = () => {
 					<Suspense
 						fallback={
 							<div className="mt-16">
-								<h3 className="text-2xl font-bold text-white mb-8">
+								<h3 className="text-3xl font-black text-white mb-8">
 									Posts Relacionados
 								</h3>
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 									{[1, 2].map((i) => (
 										<div
 											key={`related-skeleton-${i}`}
-											className="bg-gray-800 rounded-2xl overflow-hidden animate-pulse"
+											className="bg-gray-800 rounded-3xl overflow-hidden animate-pulse"
 										>
 											<div className="h-48 bg-gray-700"></div>
 											<div className="p-6">
-												<div className="h-4 bg-gray-700 rounded mb-2"></div>
-												<div className="h-4 bg-gray-700 rounded w-3/4"></div>
+												<div className="h-4 bg-gray-700 rounded-full mb-2"></div>
+												<div className="h-4 bg-gray-700 rounded-full w-3/4"></div>
 											</div>
 										</div>
 									))}
@@ -488,26 +433,26 @@ const PostDetailContent = () => {
 						}
 					>
 						<ErrorBoundary
-							FallbackComponent={() => null} // Silenciar erros dos posts relacionados
+							FallbackComponent={() => null}
 							onError={(error) => {
 								console.warn("Related posts error (non-critical):", error);
 							}}
 						>
-							<RelatedPosts currentPost={safePost} />
+							<RelatedPosts currentPost={post} />
 						</ErrorBoundary>
 					</Suspense>
 
-					{/* Debug Info - apenas desenvolvimento */}
+					{/* Debug Info */}
 					{process.env.NODE_ENV === "development" && (
-						<div className="mt-8 p-4 bg-gray-800/30 rounded-lg border border-gray-700/30">
-							<h4 className="text-white font-semibold mb-2">Debug Info</h4>
-							<div className="text-xs text-gray-400 space-y-1">
-								<div>Post ID: {safePost.id}</div>
-								<div>Category: {safePost.category}</div>
-								<div>Published: {safePost.published ? "Yes" : "No"}</div>
-								<div>Trending: {safePost.trending ? "Yes" : "No"}</div>
-								<div>Valid: {isValidPost(post) ? "Yes" : "No"}</div>
-								<div>Sistema: TanStack Query + Suspense HOOKS CORRIGIDOS</div>
+						<div className="mt-12 p-6 bg-gray-900/50 rounded-2xl border border-gray-700/30">
+							<h4 className="text-white font-bold mb-4">Debug Info</h4>
+							<div className="text-xs text-gray-400 space-y-1 font-mono">
+								<div>Post ID: {post.id}</div>
+								<div>Category: {post.category}</div>
+								<div>Published: {post.published ? "Yes" : "No"}</div>
+								<div>Trending: {post.trending ? "Yes" : "No"}</div>
+								<div>Realtime: {isLive ? "Live update!" : "Stable"}</div>
+								<div>Sistema: React Query + Supabase Realtime</div>
 							</div>
 						</div>
 					)}
@@ -517,18 +462,22 @@ const PostDetailContent = () => {
 	);
 };
 
-// Componente principal com Error Boundary ROBUSTO
+// Componente principal com Error Boundary
 const OptimizedPostDetail = () => {
+	const { id } = useParams();
+
 	return (
 		<ErrorBoundary
-			FallbackComponent={PostNotFoundFallback}
+			FallbackComponent={(props) => (
+				<PostNotFoundFallback {...props} postId={id} />
+			)}
 			onReset={() => {
-				// Tentar recarregar a página
 				window.location.reload();
 			}}
 			onError={(error, errorInfo) => {
-				console.error("PostDetail Error Boundary:", error, errorInfo);
+				console.error("🔴 PostDetail Error Boundary:", error, errorInfo);
 			}}
+			resetKeys={[id]}
 		>
 			<Suspense fallback={<PostDetailSkeleton />}>
 				<PostDetailContent />
