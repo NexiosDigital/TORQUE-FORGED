@@ -25,11 +25,6 @@ export const AuthProvider = ({ children }) => {
 					data: { session },
 				} = await supabase.auth.getSession();
 
-				console.log(
-					"Initial session check:",
-					session?.user?.email || "No user"
-				);
-
 				if (session?.user) {
 					setUser(session.user);
 					await fetchUserProfile(session.user.id);
@@ -47,14 +42,7 @@ export const AuthProvider = ({ children }) => {
 		const {
 			data: { subscription },
 		} = supabase.auth.onAuthStateChange(async (event, session) => {
-			console.log(
-				"Auth state changed:",
-				event,
-				session?.user?.email || "No user"
-			);
-
 			if (event === "SIGNED_OUT") {
-				console.log("User signed out, clearing state");
 				setUser(null);
 				setProfile(null);
 				setLoading(false);
@@ -72,15 +60,12 @@ export const AuthProvider = ({ children }) => {
 		});
 
 		return () => {
-			console.log("Unsubscribing from auth changes");
 			subscription?.unsubscribe();
 		};
 	}, []);
 
 	const fetchUserProfile = async (userId) => {
 		try {
-			console.log("Fetching profile for user:", userId);
-
 			const { data, error } = await supabase
 				.from("user_profiles")
 				.select("*")
@@ -93,10 +78,8 @@ export const AuthProvider = ({ children }) => {
 			}
 
 			if (data) {
-				console.log("Profile found:", data.email, "Role:", data.role);
 				setProfile(data);
 			} else {
-				console.log("No profile found, creating new one");
 				// Criar perfil se não existir
 				const userEmail = user?.email || "";
 				const userName = userEmail.split("@")[0];
@@ -116,21 +99,16 @@ export const AuthProvider = ({ children }) => {
 					.single();
 
 				if (!createError && newProfile) {
-					console.log("Profile created:", newProfile.email);
 					setProfile(newProfile);
 				} else {
-					console.error("Error creating profile:", createError);
 				}
 			}
-		} catch (error) {
-			console.error("Error in fetchUserProfile:", error);
-		}
+		} catch (error) {}
 	};
 
 	const signIn = async (email, password) => {
 		try {
 			setLoading(true);
-			console.log("Attempting to sign in:", email);
 
 			const { data, error } = await supabase.auth.signInWithPassword({
 				email,
@@ -138,15 +116,12 @@ export const AuthProvider = ({ children }) => {
 			});
 
 			if (error) {
-				console.error("Sign in error:", error);
 				throw error;
 			}
 
-			console.log("Sign in successful:", data.user?.email);
 			toast.success("Login realizado com sucesso!");
 			return { data, error: null };
 		} catch (error) {
-			console.error("Sign in error:", error);
 			toast.error(error.message || "Erro ao fazer login");
 			return { data: null, error };
 		} finally {
@@ -157,7 +132,6 @@ export const AuthProvider = ({ children }) => {
 	const signOut = async () => {
 		try {
 			setLoading(true);
-			console.log("Attempting to sign out...");
 
 			// Primeiro, chamar o signOut do Supabase
 			const { error } = await supabase.auth.signOut();
@@ -166,8 +140,6 @@ export const AuthProvider = ({ children }) => {
 				console.error("Supabase signOut error:", error);
 				throw error;
 			}
-
-			console.log("Supabase signOut successful");
 
 			// Limpar estado local imediatamente
 			setUser(null);
@@ -194,7 +166,6 @@ export const AuthProvider = ({ children }) => {
 	const signUp = async (email, password, userData = {}) => {
 		try {
 			setLoading(true);
-			console.log("Attempting to sign up:", email);
 
 			const { data, error } = await supabase.auth.signUp({
 				email,
@@ -206,7 +177,6 @@ export const AuthProvider = ({ children }) => {
 
 			if (error) throw error;
 
-			console.log("Sign up successful:", data.user?.email);
 			toast.success("Usuário criado com sucesso!");
 			return { data, error: null };
 		} catch (error) {
@@ -221,7 +191,6 @@ export const AuthProvider = ({ children }) => {
 	const updateProfile = async (updates) => {
 		try {
 			setLoading(true);
-			console.log("Updating profile:", updates);
 
 			const { error } = await supabase.from("user_profiles").upsert({
 				id: user.id,
@@ -249,7 +218,6 @@ export const AuthProvider = ({ children }) => {
 	const updatePassword = async (newPassword) => {
 		try {
 			setLoading(true);
-			console.log("Updating password");
 
 			const { error } = await supabase.auth.updateUser({
 				password: newPassword,
@@ -295,15 +263,6 @@ export const AuthProvider = ({ children }) => {
 		isAdmin: profile?.role === "admin",
 		isAuthenticated: !!user,
 	};
-
-	console.log("AuthContext state:", {
-		hasUser: !!user,
-		userEmail: user?.email,
-		hasProfile: !!profile,
-		profileRole: profile?.role,
-		isAdmin: profile?.role === "admin",
-		loading,
-	});
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

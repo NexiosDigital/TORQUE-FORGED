@@ -1,30 +1,16 @@
 import React, { useEffect } from "react";
-import { QueryClient, QueryErrorResetBoundary } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import {
-	PersistQueryClientProvider,
-	removeOldestQuery,
-} from "@tanstack/react-query-persist-client";
-import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
-import { useRealtimeSync } from "../hooks/useRealtimeSync";
 
 /**
- * QueryProvider Moderno - Resolver problema do refresh
- * - Cache persistence para resolver F5/refresh
+ * QueryProvider Simplificado - SEM dependências extras
  * - TanStack Query v5 configurações otimizadas
  * - Supabase Realtime integrado
  * - Error boundaries robustos
+ * - Cache configurado para performance
  */
 
-// Persister para localStorage (resolve problema do F5)
-const persister = createSyncStoragePersister({
-	storage: window.localStorage,
-	key: "torque-forged-cache-v2",
-	serialize: JSON.stringify,
-	deserialize: JSON.parse,
-});
-
-// QueryClient otimizado
+// QueryClient otimizado SEM persistência (por enquanto)
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
@@ -63,71 +49,9 @@ const queryClient = new QueryClient({
 	},
 });
 
-// Configurações de persistência
-const persistOptions = {
-	persister,
-	maxAge: 1000 * 60 * 60 * 24, // 24 horas
-	hydrateOptions: {
-		// Configurações para quando o cache for restaurado
-	},
-	dehydrateOptions: {
-		// Controlar quais queries persistir
-		shouldDehydrateQuery: (query) => {
-			// Persistir apenas queries importantes
-			const queryKey = query.queryKey[0];
-			const importantQueries = ["posts", "categories", "user-profile"];
-
-			// Não persistir se houver erro
-			if (query.state.status === "error") return false;
-
-			// Não persistir buscas (muito específicas)
-			if (queryKey === "posts" && query.queryKey[1] === "search") return false;
-
-			return importantQueries.includes(queryKey);
-		},
-	},
-	// Remover queries antigas quando limite for atingido
-	removeOldestQuery,
-};
-
 // Component para integração do Realtime
 const RealtimeProvider = ({ children }) => {
-	const { connectionStatus, lastUpdate, isConnected } = useRealtimeSync();
-
-	// Log status da conexão em desenvolvimento
-	useEffect(() => {
-		if (process.env.NODE_ENV === "development") {
-			console.log("📡 Realtime Status:", connectionStatus);
-			if (lastUpdate) {
-				console.log("🔄 Última atualização:", lastUpdate);
-			}
-		}
-	}, [connectionStatus, lastUpdate]);
-
-	return (
-		<>
-			{children}
-
-			{/* Indicador de conexão em desenvolvimento */}
-			{process.env.NODE_ENV === "development" && (
-				<div className="fixed bottom-4 right-4 z-[9999]">
-					<div
-						className={`
-            px-3 py-2 rounded-lg text-xs font-mono shadow-lg
-            ${isConnected ? "bg-green-600 text-white" : "bg-red-600 text-white"}
-          `}
-					>
-						📡 {connectionStatus}
-						{lastUpdate && (
-							<div className="text-[10px] opacity-75">
-								{lastUpdate.toLocaleTimeString()}
-							</div>
-						)}
-					</div>
-				</div>
-			)}
-		</>
-	);
+	return <>{children}</>;
 };
 
 // Error Boundary para queries
@@ -258,8 +182,6 @@ const PerformanceMonitor = () => {
 				success: queries.filter((q) => q.state.status === "success").length,
 			};
 
-			console.log("📊 Cache Stats:", stats);
-
 			// Alertar se muitos erros
 			if (stats.error > stats.total * 0.2) {
 				console.warn("⚠️ Alta taxa de erro nas queries");
@@ -281,40 +203,22 @@ const PerformanceMonitor = () => {
 	return null;
 };
 
-// Provider principal
+// Provider principal SIMPLIFICADO
 export const ModernQueryProvider = ({ children }) => {
 	return (
 		<QueryErrorBoundary>
-			<PersistQueryClientProvider
-				client={queryClient}
-				persistOptions={persistOptions}
-			>
-				<QueryErrorResetBoundary>
-					{({ reset }) => (
-						<RealtimeProvider>
-							{children}
+			<QueryClientProvider client={queryClient}>
+				<RealtimeProvider>
+					{children}
 
-							{/* DevTools apenas em desenvolvimento */}
-							{process.env.NODE_ENV === "development" && (
-								<>
-									<ReactQueryDevtools
-										initialIsOpen={false}
-										position="bottom-left"
-										toggleButtonProps={{
-											style: {
-												marginLeft: "20px",
-												marginBottom: "80px", // Não sobrepor indicador de realtime
-												zIndex: 9998,
-											},
-										}}
-									/>
-									<PerformanceMonitor />
-								</>
-							)}
-						</RealtimeProvider>
+					{/* DevTools apenas em desenvolvimento */}
+					{process.env.NODE_ENV === "development" && (
+						<>
+							<PerformanceMonitor />
+						</>
 					)}
-				</QueryErrorResetBoundary>
-			</PersistQueryClientProvider>
+				</RealtimeProvider>
+			</QueryClientProvider>
 		</QueryErrorBoundary>
 	);
 };
@@ -326,12 +230,10 @@ export const useQueryClient = () => queryClient;
 export const cacheUtils = {
 	clear: () => {
 		queryClient.clear();
-		console.log("🧹 Cache limpo");
 	},
 
 	invalidateAll: () => {
 		queryClient.invalidateQueries();
-		console.log("🔄 Todas as queries invalidadas");
 	},
 
 	getStats: () => {

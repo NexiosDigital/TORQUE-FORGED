@@ -140,13 +140,6 @@ const HeroSection = React.memo(() => {
 			<div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
 				<div className="animate-fade-in">
 					{/* Badge */}
-					<div className="mb-8">
-						<div className="inline-flex items-center px-6 py-3 rounded-full bg-red-500/10 border border-red-500/20 backdrop-blur-sm mb-6">
-							<span className="text-red-400 text-sm font-bold">
-								🚀 Sistema 100% Dinâmico - Sem Dados Estáticos
-							</span>
-						</div>
-					</div>
 
 					{/* Main title */}
 					<h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black text-white mb-8 leading-none">
@@ -538,15 +531,6 @@ const Sidebar = React.memo(() => {
 	return (
 		<div className="lg:col-span-1">
 			<div className="space-y-8">
-				{/* Debug info apenas em desenvolvimento */}
-				{process.env.NODE_ENV === "development" && (
-					<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-4 border border-gray-700/50">
-						<div className="text-xs text-green-400 font-mono">
-							✅ Sistema 100% Dinâmico | Cache Persistence Ativo
-						</div>
-					</div>
-				)}
-
 				{/* Categorias dinâmicas */}
 				<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 border border-gray-700/50 backdrop-blur-sm">
 					<h3 className="text-2xl font-bold text-white mb-6 flex items-center space-x-3">

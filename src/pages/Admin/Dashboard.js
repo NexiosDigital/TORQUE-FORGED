@@ -17,9 +17,11 @@ import {
 	useAllPosts,
 	useUpdatePost,
 	useDeletePost,
-	useCacheStats,
+	useCacheUtils, // CORRIGIDO: era useCacheStats
 } from "../../hooks/usePostsQuery";
 import { ErrorBoundary } from "react-error-boundary";
+import { supabase } from "../../lib/supabase";
+const { data } = await supabase.from("user_profiles").select("full_name");
 
 /**
  * Dashboard Admin Ultra-Otimizado
@@ -113,7 +115,7 @@ const RealTimeStats = React.memo(({ posts }) => {
 		};
 	}, [posts]);
 
-	const { getStats: getCacheStats } = useCacheStats();
+	const { getCacheStats } = useCacheUtils(); // CORRIGIDO: usar useCacheUtils
 	const cacheStats = getCacheStats();
 
 	const statCards = [
@@ -368,7 +370,7 @@ const PostsTable = React.memo(({ posts, filter }) => {
 
 // Componente principal do dashboard
 const DashboardContent = () => {
-	const { user, signOut, isAdmin } = useAuth();
+	const { signOut, isAdmin } = useAuth();
 	const { data: posts = [], isLoading, error, refetch } = useAllPosts();
 	const [filter, setFilter] = React.useState("all");
 
@@ -406,16 +408,10 @@ const DashboardContent = () => {
 						</h1>
 						<p className="text-gray-400">
 							Bem-vindo,{" "}
-							<span className="text-red-400 font-medium">{user?.email}</span>
+							<span className="text-red-400 font-medium">
+								{data[0].full_name}
+							</span>
 						</p>
-
-						{/* Performance info em desenvolvimento */}
-						{process.env.NODE_ENV === "development" && (
-							<div className="mt-2 text-xs text-gray-500 space-y-1">
-								<div>⚡ TanStack Query | Updates Otimistas Ativados</div>
-								<div>Performance: Carregamento instantâneo | CRUD ≤1s</div>
-							</div>
-						)}
 					</div>
 
 					<div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">

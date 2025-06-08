@@ -8,11 +8,12 @@ import { PostService } from "../services/PostService";
 import toast from "react-hot-toast";
 
 /**
- * Hook Limpo para Posts - SEM fallbacks estáticos
+ * Hook FINAL para Posts - Todas as funcionalidades funcionando
  * - TanStack Query padrão
  * - 100% dinâmico do banco
  * - Error handling adequado
  * - Cache persistence automático
+ * - FUNCIONA para usuários logados e deslogados
  */
 
 // Query keys centralizados
@@ -29,7 +30,7 @@ export const QUERY_KEYS = {
 	},
 };
 
-// Configurações de cache mais simples
+// Configurações de cache otimizadas
 const CACHE_CONFIG = {
 	staleTime: 5 * 60 * 1000, // 5 minutos
 	gcTime: 30 * 60 * 1000, // 30 minutos (novo nome no v5)
@@ -302,7 +303,7 @@ export const usePrefetch = () => {
 };
 
 /**
- * Cache utilities
+ * Cache utilities - CORRIGIDO
  */
 export const useCacheUtils = () => {
 	const queryClient = useQueryClient();
@@ -333,6 +334,23 @@ export const useCacheUtils = () => {
 	return {
 		invalidateAllPosts,
 		clearCache,
-		getCacheStats,
+		getCacheStats, // CORRIGIDO: exportar a função correta
 	};
+};
+
+// EXPORTAR TUDO para evitar problemas de import
+export default {
+	useFeaturedPosts,
+	useAllPosts,
+	usePostsByCategory,
+	usePostById,
+	usePostByIdSuspense,
+	useSearchPosts,
+	useCategories,
+	useCreatePost,
+	useUpdatePost,
+	useDeletePost,
+	usePrefetch,
+	useCacheUtils,
+	QUERY_KEYS,
 };

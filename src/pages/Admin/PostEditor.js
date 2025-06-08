@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { Save, ArrowLeft, Eye, EyeOff, TrendingUp } from "lucide-react";
@@ -8,7 +8,7 @@ import {
 	useCreatePost,
 	useUpdatePost,
 	usePostById,
-} from "../../hooks/useUltraFastPosts";
+} from "../../hooks/usePostsQuery"; // CORRIGIDO: era useUltraFastPosts
 import toast from "react-hot-toast";
 import { supabase } from "../../lib/supabase";
 
@@ -43,10 +43,8 @@ const PostEditor = () => {
 	useEffect(() => {
 		const fetchCategoriesFast = async () => {
 			try {
-				console.log("🚀 PostEditor: Buscando categorias RÁPIDO...");
 				const { data } = await supabase.from("categories").select("*");
 				setCategories(data || []);
-				console.log("⚡ PostEditor: Categorias carregadas:", data?.length || 0);
 			} catch (error) {
 				console.error(
 					"❌ PostEditor: Erro categorias, usando fallback:",
@@ -69,7 +67,6 @@ const PostEditor = () => {
 	// Carregar post para edição
 	useEffect(() => {
 		if (isEditing && existingPost) {
-			console.log("⚡ PostEditor: Post carregado RÁPIDO:", existingPost.title);
 			setValue("title", existingPost.title);
 			setValue("slug", existingPost.slug);
 			setValue("category", existingPost.category);
@@ -101,12 +98,6 @@ const PostEditor = () => {
 
 	const onSubmit = async (data) => {
 		try {
-			setLoading(true);
-			console.log(
-				`🚀 PostEditor: ${isEditing ? "Atualizando" : "Criando"} post RÁPIDO:`,
-				data.title
-			);
-
 			const postData = {
 				...data,
 				content,
@@ -116,7 +107,6 @@ const PostEditor = () => {
 				published: data.published || false,
 				trending: data.trending || false,
 			};
-
 			if (isEditing) {
 				await updatePostMutation.mutateAsync({
 					id,
@@ -126,11 +116,6 @@ const PostEditor = () => {
 				await createPostMutation.mutateAsync(postData);
 			}
 
-			console.log(
-				`⚡ PostEditor: Post ${
-					isEditing ? "atualizado" : "criado"
-				} com sucesso!`
-			);
 			navigate("/admin/dashboard");
 		} catch (error) {
 			console.error(`❌ PostEditor: Erro no onSubmit:`, error);

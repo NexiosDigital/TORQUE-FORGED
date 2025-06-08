@@ -16,8 +16,6 @@ export const useRealtimeSync = () => {
 	const [lastUpdate, setLastUpdate] = useState(null);
 
 	useEffect(() => {
-		console.log("🔄 RealtimeSync: Iniciando conexão...");
-
 		// Canal para posts
 		const postsChannel = supabase
 			.channel("posts_realtime")
@@ -29,8 +27,6 @@ export const useRealtimeSync = () => {
 					table: "posts",
 				},
 				(payload) => {
-					console.log("📡 RealtimeSync: Mudança detectada:", payload);
-
 					const { eventType, new: newRecord, old: oldRecord } = payload;
 					setLastUpdate(new Date());
 
@@ -48,7 +44,6 @@ export const useRealtimeSync = () => {
 				}
 			)
 			.subscribe((status, err) => {
-				console.log("📡 RealtimeSync: Status mudou para:", status);
 				setConnectionStatus(status);
 
 				if (err) {
@@ -67,8 +62,6 @@ export const useRealtimeSync = () => {
 					table: "categories",
 				},
 				(payload) => {
-					console.log("📡 RealtimeSync: Categoria modificada:", payload);
-
 					// Invalidar cache de categorias
 					queryClient.invalidateQueries({
 						queryKey: QUERY_KEYS.categories.all,
@@ -79,7 +72,6 @@ export const useRealtimeSync = () => {
 
 		// Cleanup na desmontagem
 		return () => {
-			console.log("🔌 RealtimeSync: Desconectando...");
 			postsChannel.unsubscribe();
 			categoriesChannel.unsubscribe();
 		};
@@ -87,8 +79,6 @@ export const useRealtimeSync = () => {
 
 	// Handler para inserção de post
 	const handlePostInsert = (newPost) => {
-		console.log("➕ RealtimeSync: Post inserido:", newPost.title);
-
 		// Só processar se for publicado
 		if (!newPost.published) return;
 
@@ -113,8 +103,6 @@ export const useRealtimeSync = () => {
 
 	// Handler para atualização de post
 	const handlePostUpdate = (newPost, oldPost) => {
-		console.log("✏️ RealtimeSync: Post atualizado:", newPost.title);
-
 		// Update direto no cache do post individual
 		queryClient.setQueryData(
 			QUERY_KEYS.posts.byId(newPost.id),
@@ -148,8 +136,6 @@ export const useRealtimeSync = () => {
 
 	// Handler para deleção de post
 	const handlePostDelete = (deletedPost) => {
-		console.log("🗑️ RealtimeSync: Post deletado:", deletedPost.title);
-
 		// Remover do cache individual
 		queryClient.removeQueries({
 			queryKey: QUERY_KEYS.posts.byId(deletedPost.id),
@@ -246,8 +232,6 @@ export const useRealtimePost = (postId) => {
 	useEffect(() => {
 		if (!postId) return;
 
-		console.log(`🔄 RealtimePost: Monitorando post ${postId}...`);
-
 		const channel = supabase
 			.channel(`post_${postId}`)
 			.on(
@@ -259,8 +243,6 @@ export const useRealtimePost = (postId) => {
 					filter: `id=eq.${postId}`,
 				},
 				(payload) => {
-					console.log(`📡 RealtimePost: Post ${postId} atualizado:`, payload);
-
 					// Update direto no cache
 					queryClient.setQueryData(QUERY_KEYS.posts.byId(postId), payload.new);
 
@@ -272,7 +254,6 @@ export const useRealtimePost = (postId) => {
 			.subscribe();
 
 		return () => {
-			console.log(`🔌 RealtimePost: Parando monitoramento do post ${postId}`);
 			channel.unsubscribe();
 		};
 	}, [postId, queryClient]);

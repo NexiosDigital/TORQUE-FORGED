@@ -54,7 +54,6 @@ const Header = () => {
 	];
 
 	const handleSignOut = async () => {
-		console.log("Sign out button clicked");
 		setIsUserMenuOpen(false);
 		await signOut();
 		// O redirecionamento será feito pelo AuthContext
