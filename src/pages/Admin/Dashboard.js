@@ -8,7 +8,6 @@ import {
 	EyeOff,
 	TrendingUp,
 	FileText,
-	Users,
 	Shield,
 	RefreshCw,
 	BarChart3,
@@ -16,7 +15,6 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import {
 	useAllPosts,
-	useCreatePost,
 	useUpdatePost,
 	useDeletePost,
 	useCacheStats,
@@ -72,7 +70,7 @@ const DashboardSkeleton = () => (
 );
 
 // Error fallback para dashboard
-const DashboardErrorFallback = ({ error, resetErrorBoundary }) => (
+const DashboardErrorFallback = ({ resetErrorBoundary }) => (
 	<div className="min-h-screen bg-black flex items-center justify-center">
 		<div className="text-center p-8 max-w-md mx-auto">
 			<div className="w-20 h-20 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">

@@ -4,7 +4,12 @@ import { useForm } from "react-hook-form";
 import { Save, ArrowLeft, Eye, EyeOff, TrendingUp } from "lucide-react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
-import { useFastPosts } from "../../hooks/useFastPosts";
+import {
+	useCreatePost,
+	useUpdatePost,
+	usePostById,
+} from "../../hooks/useUltraFastPosts";
+import toast from "react-hot-toast";
 import { supabase } from "../../lib/supabase";
 
 const PostEditor = () => {
@@ -12,7 +17,12 @@ const PostEditor = () => {
 	const { id } = useParams();
 	const isEditing = !!id;
 
-	const { createPost, updatePost, getPostById } = useFastPosts();
+	const createPostMutation = useCreatePost();
+	const updatePostMutation = useUpdatePost();
+	const { data: existingPost, isLoading: loadingPost } = usePostById(id, {
+		enabled: isEditing,
+	});
+
 	const {
 		register,
 		handleSubmit,
@@ -24,7 +34,6 @@ const PostEditor = () => {
 	const [content, setContent] = useState("");
 	const [categories, setCategories] = useState([]);
 	const [loading, setLoading] = useState(false);
-	const [loadingPost, setLoadingPost] = useState(isEditing);
 
 	const watchTitle = watch("title");
 	const watchPublished = watch("published");
@@ -57,44 +66,23 @@ const PostEditor = () => {
 		fetchCategoriesFast();
 	}, []);
 
-	// Buscar post para edição com carregamento ultra-rápido
+	// Carregar post para edição
 	useEffect(() => {
-		if (isEditing) {
-			const fetchPostFast = async () => {
-				try {
-					setLoadingPost(true);
-					console.log(`🚀 PostEditor: Carregamento RÁPIDO para edição: ${id}`);
-
-					const { data, error } = await getPostById(id);
-
-					if (error) {
-						console.error("❌ PostEditor: Erro ao carregar post:", error);
-						throw error;
-					}
-
-					if (data) {
-						console.log("⚡ PostEditor: Post carregado RÁPIDO:", data.title);
-						setValue("title", data.title);
-						setValue("slug", data.slug);
-						setValue("category", data.category);
-						setValue("image_url", data.image_url);
-						setValue("excerpt", data.excerpt);
-						setValue("author", data.author);
-						setValue("read_time", data.read_time);
-						setValue("published", data.published);
-						setValue("trending", data.trending);
-						setValue("tags", data.tags?.join(", ") || "");
-						setContent(data.content);
-					}
-				} catch (error) {
-					console.error("❌ PostEditor: Erro no carregamento:", error);
-				} finally {
-					setLoadingPost(false);
-				}
-			};
-			fetchPostFast();
+		if (isEditing && existingPost) {
+			console.log("⚡ PostEditor: Post carregado RÁPIDO:", existingPost.title);
+			setValue("title", existingPost.title);
+			setValue("slug", existingPost.slug);
+			setValue("category", existingPost.category);
+			setValue("image_url", existingPost.image_url);
+			setValue("excerpt", existingPost.excerpt);
+			setValue("author", existingPost.author);
+			setValue("read_time", existingPost.read_time);
+			setValue("published", existingPost.published);
+			setValue("trending", existingPost.trending);
+			setValue("tags", existingPost.tags?.join(", ") || "");
+			setContent(existingPost.content);
 		}
-	}, [id, isEditing, getPostById, setValue]);
+	}, [existingPost, isEditing, setValue]);
 
 	// Gerar slug automaticamente (otimizado)
 	useEffect(() => {
@@ -129,22 +117,26 @@ const PostEditor = () => {
 				trending: data.trending || false,
 			};
 
-			const result = isEditing
-				? await updatePost(id, postData)
-				: await createPost(postData);
-
-			if (!result.error) {
-				console.log(
-					`⚡ PostEditor: Post ${
-						isEditing ? "atualizado" : "criado"
-					} com sucesso!`
-				);
-				navigate("/admin/dashboard");
+			if (isEditing) {
+				await updatePostMutation.mutateAsync({
+					id,
+					...postData,
+				});
 			} else {
-				console.error(`❌ PostEditor: Erro:`, result.error);
+				await createPostMutation.mutateAsync(postData);
 			}
+
+			console.log(
+				`⚡ PostEditor: Post ${
+					isEditing ? "atualizado" : "criado"
+				} com sucesso!`
+			);
+			navigate("/admin/dashboard");
 		} catch (error) {
 			console.error(`❌ PostEditor: Erro no onSubmit:`, error);
+			toast.error(
+				`Erro ao ${isEditing ? "atualizar" : "criar"} post: ${error.message}`
+			);
 		} finally {
 			setLoading(false);
 		}
@@ -424,10 +416,16 @@ const PostEditor = () => {
 							{/* Save Button Ultra-rápido */}
 							<button
 								type="submit"
-								disabled={loading}
+								disabled={
+									loading ||
+									createPostMutation.isLoading ||
+									updatePostMutation.isLoading
+								}
 								className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white py-4 rounded-2xl font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3"
 							>
-								{loading ? (
+								{loading ||
+								createPostMutation.isLoading ||
+								updatePostMutation.isLoading ? (
 									<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
 								) : (
 									<>

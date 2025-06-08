@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
  * - Updates otimistas
  * - Suspense support
  * - Background sync
+ * - Garantia de arrays válidos
  */
 
 // Query keys centralizados para cache consistency
@@ -65,6 +66,68 @@ const CACHE_CONFIG = {
 	},
 };
 
+// Fallback data para casos de erro
+const FALLBACK_POSTS = [
+	{
+		id: 1,
+		title: "GP de Mônaco 2025: Verstappen Domina nas Ruas Principescas",
+		slug: "gp-monaco-2025-verstappen-domina",
+		category: "f1",
+		category_name: "Fórmula 1",
+		image_url:
+			"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+		excerpt:
+			"Max Verstappen conquista mais uma vitória em Mônaco com uma performance impecável que deixou os fãs extasiados.",
+		content:
+			"Max Verstappen mais uma vez demonstrou sua maestria nas ruas estreitas de Monte Carlo...",
+		author: "Equipe TF",
+		read_time: "5 min",
+		published: true,
+		trending: true,
+		tags: ["f1", "verstappen", "monaco"],
+		created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+		updated_at: new Date().toISOString(),
+	},
+	{
+		id: 2,
+		title: "Daytona 500: A Batalha Épica que Definiu a Temporada",
+		slug: "daytona-500-batalha-epica-temporada",
+		category: "nascar",
+		category_name: "NASCAR",
+		image_url:
+			"https://images.unsplash.com/photo-1566473965997-3de9c817e938?w=800",
+		excerpt:
+			"Relato completo da corrida mais emocionante do ano com ultrapassagens incríveis.",
+		content: "A Daytona 500 de 2025 entrou para a história...",
+		author: "Race Team",
+		read_time: "6 min",
+		published: true,
+		trending: true,
+		tags: ["nascar", "daytona", "500"],
+		created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+		updated_at: new Date().toISOString(),
+	},
+	{
+		id: 3,
+		title: "Novo Motor V8 Biturbo: A Revolução dos 1000HP",
+		slug: "novo-motor-v8-biturbo-1000hp",
+		category: "engines",
+		category_name: "Motores",
+		image_url:
+			"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
+		excerpt:
+			"Análise completa do novo propulsor que está mudando o cenário do tuning.",
+		content: "A indústria automotiva testemunha mais uma revolução...",
+		author: "Tech Team",
+		read_time: "8 min",
+		published: true,
+		trending: false,
+		tags: ["motores", "v8", "biturbo"],
+		created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+		updated_at: new Date().toISOString(),
+	},
+];
+
 /**
  * Hook principal para posts em destaque
  * Usa Suspense para carregamento instantâneo
@@ -72,7 +135,15 @@ const CACHE_CONFIG = {
 export const useFeaturedPosts = () => {
 	return useSuspenseQuery({
 		queryKey: QUERY_KEYS.posts.featured,
-		queryFn: FastDataService.getFeaturedPosts,
+		queryFn: async () => {
+			try {
+				const data = await FastDataService.getFeaturedPosts();
+				return Array.isArray(data) ? data : FALLBACK_POSTS.slice(0, 3);
+			} catch (error) {
+				console.error("Featured posts error:", error);
+				return FALLBACK_POSTS.slice(0, 3);
+			}
+		},
 		...CACHE_CONFIG.featured,
 	});
 };
@@ -85,22 +156,62 @@ export const useAllPosts = (options = {}) => {
 
 	const query = useQuery({
 		queryKey: QUERY_KEYS.posts.all,
-		queryFn: FastDataService.getAllPosts,
+		queryFn: async () => {
+			try {
+				console.log("⚡ useAllPosts: Iniciando fetch...");
+				const data = await FastDataService.getAllPosts();
+				console.log("✅ useAllPosts received data:", {
+					isArray: Array.isArray(data),
+					length: data?.length,
+					type: typeof data,
+				});
+
+				// Garantir que sempre retorna um array válido
+				if (!Array.isArray(data)) {
+					console.warn("⚠️ useAllPosts: data não é array, usando fallback");
+					return FALLBACK_POSTS;
+				}
+
+				if (data.length === 0) {
+					console.warn("⚠️ useAllPosts: array vazio, usando fallback");
+					return FALLBACK_POSTS;
+				}
+
+				console.log("✅ useAllPosts: Retornando", data.length, "posts");
+				return data;
+			} catch (error) {
+				console.error("❌ useAllPosts error:", error);
+				return FALLBACK_POSTS;
+			}
+		},
 		...CACHE_CONFIG.posts,
+		select: (data) => {
+			// Garantir que o resultado é sempre um array
+			return Array.isArray(data) ? data : FALLBACK_POSTS;
+		},
 		onSuccess: (data) => {
 			// Prefetch posts individuais em background
-			data?.slice(0, 5).forEach((post) => {
-				queryClient.prefetchQuery({
-					queryKey: QUERY_KEYS.posts.byId(post.id),
-					queryFn: () => FastDataService.getPostById(post.id),
-					...CACHE_CONFIG.postDetail,
+			if (Array.isArray(data)) {
+				data.slice(0, 5).forEach((post) => {
+					queryClient.prefetchQuery({
+						queryKey: QUERY_KEYS.posts.byId(post.id),
+						queryFn: () => FastDataService.getPostById(post.id),
+						...CACHE_CONFIG.postDetail,
+					});
 				});
-			});
+			}
+		},
+		onError: (error) => {
+			console.error("useAllPosts onError:", error);
 		},
 		...options,
 	});
 
-	return query;
+	// Garantir que data sempre é um array
+	return {
+		...query,
+		data: Array.isArray(query.data) ? query.data : [],
+	};
 };
 
 /**
@@ -111,18 +222,44 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 
 	return useQuery({
 		queryKey: QUERY_KEYS.posts.byCategory(categoryId),
-		queryFn: () => FastDataService.getPostsByCategory(categoryId),
+		queryFn: async () => {
+			try {
+				const data = await FastDataService.getPostsByCategory(categoryId);
+
+				// Garantir que sempre retorna um array válido
+				if (!Array.isArray(data)) {
+					const fallbackCategory = FALLBACK_POSTS.filter(
+						(p) => p.category === categoryId
+					);
+					return fallbackCategory.length > 0 ? fallbackCategory : [];
+				}
+
+				return data;
+			} catch (error) {
+				console.error(`usePostsByCategory error for ${categoryId}:`, error);
+				const fallbackCategory = FALLBACK_POSTS.filter(
+					(p) => p.category === categoryId
+				);
+				return fallbackCategory.length > 0 ? fallbackCategory : [];
+			}
+		},
 		enabled: !!categoryId,
 		...CACHE_CONFIG.posts,
+		select: (data) => {
+			// Garantir que o resultado é sempre um array
+			return Array.isArray(data) ? data : [];
+		},
 		onSuccess: (data) => {
 			// Prefetch primeiros 3 posts da categoria
-			data?.slice(0, 3).forEach((post) => {
-				queryClient.prefetchQuery({
-					queryKey: QUERY_KEYS.posts.byId(post.id),
-					queryFn: () => FastDataService.getPostById(post.id),
-					...CACHE_CONFIG.postDetail,
+			if (Array.isArray(data)) {
+				data.slice(0, 3).forEach((post) => {
+					queryClient.prefetchQuery({
+						queryKey: QUERY_KEYS.posts.byId(post.id),
+						queryFn: () => FastDataService.getPostById(post.id),
+						...CACHE_CONFIG.postDetail,
+					});
 				});
-			});
+			}
 		},
 		...options,
 	});
@@ -134,7 +271,27 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 export const usePostById = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.posts.byId(id),
-		queryFn: () => FastDataService.getPostById(id),
+		queryFn: async () => {
+			try {
+				const data = await FastDataService.getPostById(id);
+
+				if (!data) {
+					// Tentar fallback
+					const postId = typeof id === "string" ? parseInt(id, 10) : id;
+					const fallbackPost = FALLBACK_POSTS.find((p) => p.id === postId);
+					return fallbackPost || null;
+				}
+
+				return data;
+			} catch (error) {
+				console.error(`usePostById error for ${id}:`, error);
+
+				// Tentar fallback
+				const postId = typeof id === "string" ? parseInt(id, 10) : id;
+				const fallbackPost = FALLBACK_POSTS.find((p) => p.id === postId);
+				return fallbackPost || null;
+			}
+		},
 		enabled: !!id,
 		...CACHE_CONFIG.postDetail,
 		retry: (failureCount, error) => {
@@ -152,7 +309,20 @@ export const usePostById = (id, options = {}) => {
 export const usePostByIdSuspense = (id) => {
 	return useSuspenseQuery({
 		queryKey: QUERY_KEYS.posts.byId(id),
-		queryFn: () => FastDataService.getPostById(id),
+		queryFn: async () => {
+			try {
+				const data = await FastDataService.getPostById(id);
+
+				if (!data) {
+					throw new Error("Post not found");
+				}
+
+				return data;
+			} catch (error) {
+				console.error(`usePostByIdSuspense error for ${id}:`, error);
+				throw error;
+			}
+		},
 		...CACHE_CONFIG.postDetail,
 	});
 };
@@ -163,8 +333,19 @@ export const usePostByIdSuspense = (id) => {
 export const usePopularPosts = (limit = 5) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.posts.popular(limit),
-		queryFn: () => FastDataService.getPopularPosts(limit),
+		queryFn: async () => {
+			try {
+				const data = await FastDataService.getPopularPosts(limit);
+				return Array.isArray(data) ? data : FALLBACK_POSTS.slice(0, limit);
+			} catch (error) {
+				console.error("usePopularPosts error:", error);
+				return FALLBACK_POSTS.slice(0, limit);
+			}
+		},
 		...CACHE_CONFIG.featured,
+		select: (data) => {
+			return Array.isArray(data) ? data : [];
+		},
 	});
 };
 
@@ -174,10 +355,21 @@ export const usePopularPosts = (limit = 5) => {
 export const useSearchPosts = (query, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.posts.search(query),
-		queryFn: () => FastDataService.searchPosts(query),
+		queryFn: async () => {
+			try {
+				const data = await FastDataService.searchPosts(query);
+				return Array.isArray(data) ? data : [];
+			} catch (error) {
+				console.error("useSearchPosts error:", error);
+				return [];
+			}
+		},
 		enabled: !!query && query.length >= 2,
 		staleTime: 5 * 60 * 1000, // 5 minutos
 		cacheTime: 10 * 60 * 1000, // 10 minutos
+		select: (data) => {
+			return Array.isArray(data) ? data : [];
+		},
 		...options,
 	});
 };
@@ -189,7 +381,18 @@ export const useMultipleCategories = (categories = []) => {
 	return useQueries({
 		queries: categories.map((categoryId) => ({
 			queryKey: QUERY_KEYS.posts.byCategory(categoryId),
-			queryFn: () => FastDataService.getPostsByCategory(categoryId),
+			queryFn: async () => {
+				try {
+					const data = await FastDataService.getPostsByCategory(categoryId);
+					return Array.isArray(data) ? data : [];
+				} catch (error) {
+					console.error(
+						`useMultipleCategories error for ${categoryId}:`,
+						error
+					);
+					return [];
+				}
+			},
 			...CACHE_CONFIG.posts,
 		})),
 	});
@@ -203,18 +406,26 @@ export const useInfinitePosts = (categoryId = null) => {
 		queryKey: categoryId
 			? QUERY_KEYS.posts.byCategory(categoryId)
 			: QUERY_KEYS.posts.all,
-		queryFn: ({ pageParam = 0 }) => {
-			if (categoryId) {
-				return FastDataService.getPostsByCategory(
-					categoryId,
-					12,
-					pageParam * 12
-				);
+		queryFn: async ({ pageParam = 0 }) => {
+			try {
+				const data = categoryId
+					? await FastDataService.getPostsByCategory(
+							categoryId,
+							12,
+							pageParam * 12
+					  )
+					: await FastDataService.getAllPosts(12, pageParam * 12);
+
+				return Array.isArray(data) ? data : [];
+			} catch (error) {
+				console.error("useInfinitePosts error:", error);
+				return [];
 			}
-			return FastDataService.getAllPosts(12, pageParam * 12);
 		},
 		getNextPageParam: (lastPage, pages) => {
-			return lastPage.length === 12 ? pages.length : undefined;
+			return Array.isArray(lastPage) && lastPage.length === 12
+				? pages.length
+				: undefined;
 		},
 		...CACHE_CONFIG.posts,
 	});
@@ -236,10 +447,10 @@ export const useCreatePost = () => {
 			const previousPosts = queryClient.getQueryData(QUERY_KEYS.posts.all);
 
 			// Optimistic update
-			if (previousPosts) {
+			if (Array.isArray(previousPosts)) {
 				queryClient.setQueryData(QUERY_KEYS.posts.all, (old) => [
 					{ ...newPost, id: Date.now(), created_at: new Date().toISOString() },
-					...old,
+					...(Array.isArray(old) ? old : []),
 				]);
 			}
 
@@ -322,9 +533,9 @@ export const useDeletePost = () => {
 			const previousPosts = queryClient.getQueryData(QUERY_KEYS.posts.all);
 
 			// Optimistic update - remove post from list
-			if (previousPosts) {
+			if (Array.isArray(previousPosts)) {
 				queryClient.setQueryData(QUERY_KEYS.posts.all, (old) =>
-					old.filter((post) => post.id !== id)
+					Array.isArray(old) ? old.filter((post) => post.id !== id) : []
 				);
 			}
 

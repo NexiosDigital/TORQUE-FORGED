@@ -256,7 +256,7 @@ const PostCard = React.memo(({ post, index }) => {
 
 // Componente de posts em destaque com Suspense
 const FeaturedPostsSection = () => {
-	const { data: featuredPosts } = useFeaturedPosts();
+	const { data: featuredPosts = [] } = useFeaturedPosts();
 
 	return (
 		<div className="py-16 md:py-24 bg-gradient-to-b from-black to-gray-900">
@@ -288,7 +288,7 @@ const FeaturedPostsSection = () => {
 
 // Componente de lista de posts com Suspense
 const PostListSection = () => {
-	const { data: allPosts } = useAllPosts();
+	const { data: allPosts = [], isLoading, error } = useAllPosts();
 	const { prefetchPost } = usePrefetch();
 
 	const formatDate = (dateString) => {
@@ -298,6 +298,47 @@ const PostListSection = () => {
 			return "Data inválida";
 		}
 	};
+
+	// Loading state
+	if (isLoading) {
+		return <PostListSkeleton />;
+	}
+
+	// Error state
+	if (error) {
+		return (
+			<div className="lg:col-span-2">
+				<ErrorFallback
+					error={error}
+					resetErrorBoundary={() => window.location.reload()}
+					section="últimos artigos"
+				/>
+			</div>
+		);
+	}
+
+	// Empty state
+	if (!allPosts || allPosts.length === 0) {
+		return (
+			<div className="lg:col-span-2 text-center py-12">
+				<div className="w-16 h-16 bg-gray-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+					<Zap className="w-8 h-8 text-gray-400" />
+				</div>
+				<h3 className="text-xl font-bold text-white mb-2">
+					Nenhum post encontrado
+				</h3>
+				<p className="text-gray-400 mb-6">
+					Não foi possível carregar os posts no momento.
+				</p>
+				<button
+					onClick={() => window.location.reload()}
+					className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+				>
+					Tentar Novamente
+				</button>
+			</div>
+		);
+	}
 
 	return (
 		<div className="lg:col-span-2 space-y-6 md:space-y-8">
@@ -612,16 +653,14 @@ const OptimizedHome = () => {
 			<div className="py-16 md:py-24 bg-gradient-to-b from-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-12">
-						{/* Lista de Posts com Suspense */}
+						{/* Lista de Posts com Error Boundary próprio */}
 						<ErrorBoundary
 							FallbackComponent={(props) => (
 								<ErrorFallback {...props} section="últimos artigos" />
 							)}
 							onReset={() => window.location.reload()}
 						>
-							<Suspense fallback={<PostListSkeleton />}>
-								<PostListSection />
-							</Suspense>
+							<PostListSection />
 						</ErrorBoundary>
 
 						{/* Sidebar */}
