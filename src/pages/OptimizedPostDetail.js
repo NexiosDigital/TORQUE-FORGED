@@ -8,14 +8,28 @@ import {
 } from "../hooks/useUltraFastPosts";
 import { ErrorBoundary } from "react-error-boundary";
 
-/**
- * PostDetail Ultra-Otimizado
- * - Usa Suspense Query para carregamento instantâneo
- * - Posts relacionados com prefetching
- * - Sharing nativo otimizado
- * - SEO otimizado
- * - Error boundaries granulares
- */
+// Validador de post rigoroso
+const isValidPost = (post) => {
+	return (
+		post &&
+		typeof post === "object" &&
+		post.id &&
+		post.title &&
+		typeof post.title === "string" &&
+		post.title.length > 0 &&
+		post.content &&
+		typeof post.content === "string" &&
+		post.excerpt &&
+		typeof post.excerpt === "string" &&
+		post.image_url &&
+		typeof post.image_url === "string" &&
+		post.category &&
+		post.category_name &&
+		post.author &&
+		post.read_time &&
+		post.created_at
+	);
+};
 
 // Loading skeleton para post
 const PostDetailSkeleton = () => (
@@ -36,7 +50,7 @@ const PostDetailSkeleton = () => (
 			<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
 				<div className="w-20 h-4 bg-gray-700 rounded mb-8"></div>
 
-				<div className="bg-gray-800 rounded-2xl p-6 mb-12">
+				<div className="bg-gray-800 rounded-2xl p-6 mb-12 animate-pulse">
 					<div className="flex justify-between items-center">
 						<div className="flex space-x-6">
 							<div className="w-24 h-4 bg-gray-700 rounded"></div>
@@ -48,7 +62,10 @@ const PostDetailSkeleton = () => (
 
 				<div className="space-y-4">
 					{Array.from({ length: 8 }).map((_, i) => (
-						<div key={i} className="w-full h-4 bg-gray-700 rounded"></div>
+						<div
+							key={`skeleton-${i}`}
+							className="w-full h-4 bg-gray-700 rounded"
+						></div>
 					))}
 				</div>
 			</div>
@@ -67,10 +84,14 @@ const PostNotFoundFallback = ({ error, resetErrorBoundary }) => (
 				Post não encontrado
 			</h1>
 			<p className="text-gray-400 mb-6 leading-relaxed">
-				{error?.message === "Post not found"
+				{error?.message === "Post not found" ||
+				error?.message?.includes("não encontrado")
 					? "O post que você está procurando não existe ou foi removido."
 					: "Ocorreu um erro ao carregar o post."}
 			</p>
+			{process.env.NODE_ENV === "development" && (
+				<p className="text-xs text-gray-500 mb-6">Erro: {error?.message}</p>
+			)}
 			<div className="space-y-3 sm:space-y-0 sm:space-x-4 sm:flex">
 				<Link
 					to="/"
@@ -90,36 +111,50 @@ const PostNotFoundFallback = ({ error, resetErrorBoundary }) => (
 	</div>
 );
 
-// Componente de compartilhamento otimizado
+// Componente de compartilhamento SEGURO
 const ShareButton = React.memo(({ post }) => {
+	if (!isValidPost(post)) {
+		return null;
+	}
+
 	const handleShare = async () => {
-		// Verificar se o navegador suporta Web Share API
-		if (navigator.share) {
-			try {
+		try {
+			// Verificar se o navegador suporta Web Share API
+			if (navigator.share) {
 				await navigator.share({
 					title: post.title,
 					text: post.excerpt,
 					url: window.location.href,
 				});
-			} catch (error) {
-				// Usuário cancelou ou erro - silenciar
-				console.log("Share cancelled or failed:", error);
-			}
-		} else {
-			// Fallback: copiar URL para clipboard
-			try {
+			} else {
+				// Fallback: copiar URL para clipboard
 				await navigator.clipboard.writeText(window.location.href);
-				// Mostrar feedback visual temporário
+
+				// Feedback visual
 				const button = document.querySelector("[data-share-button]");
-				const originalText = button?.textContent;
 				if (button) {
+					const originalText = button.textContent;
 					button.textContent = "URL Copiada!";
 					setTimeout(() => {
 						button.textContent = originalText;
 					}, 2000);
 				}
-			} catch (error) {
-				console.error("Failed to copy URL:", error);
+			}
+		} catch (error) {
+			console.warn("Share failed:", error);
+			// Fallback manual se tudo falhar
+			try {
+				const textArea = document.createElement("textarea");
+				textArea.value = window.location.href;
+				document.body.appendChild(textArea);
+				textArea.select();
+				document.execCommand("copy");
+				document.body.removeChild(textArea);
+
+				// Mostrar feedback
+				alert("URL copiada para a área de transferência!");
+			} catch (fallbackError) {
+				console.error("All share methods failed:", fallbackError);
 			}
 		}
 	};
@@ -136,14 +171,26 @@ const ShareButton = React.memo(({ post }) => {
 	);
 });
 
-// Componente de conteúdo renderizado otimizado
+// Componente de conteúdo renderizado PROTEGIDO
 const PostContent = React.memo(({ content }) => {
+	// ✅ HOOKS SEMPRE NO TOP LEVEL
 	const renderedContent = useMemo(() => {
+		if (!content || typeof content !== "string") {
+			return <p className="text-gray-400 italic">Conteúdo não disponível.</p>;
+		}
+
 		// Dividir o conteúdo em parágrafos e renderizar
 		const paragraphs = content.split("\n\n").filter((p) => p.trim());
 
+		if (paragraphs.length === 0) {
+			return <p className="text-gray-400 italic">Conteúdo vazio.</p>;
+		}
+
 		return paragraphs.map((paragraph, index) => (
-			<p key={index} className="text-lg leading-relaxed mb-6 text-gray-300">
+			<p
+				key={`paragraph-${index}`}
+				className="text-lg leading-relaxed mb-6 text-gray-300"
+			>
 				{paragraph}
 			</p>
 		));
@@ -156,25 +203,42 @@ const PostContent = React.memo(({ content }) => {
 	);
 });
 
-// Componente de posts relacionados
+// Componente de posts relacionados PROTEGIDO - HOOKS CORRIGIDOS
 const RelatedPosts = React.memo(({ currentPost }) => {
-	const { data: relatedPosts = [] } = usePostsByCategory(currentPost.category);
+	const { data: relatedPosts = [] } = usePostsByCategory(currentPost?.category);
 	const { prefetchPost } = usePrefetch();
 
-	// Filtrar post atual e limitar a 2 posts
+	// ✅ HOOKS SEMPRE NO TOP LEVEL
 	const filteredRelated = useMemo(() => {
+		if (!isValidPost(currentPost)) {
+			return [];
+		}
+
+		if (!Array.isArray(relatedPosts)) {
+			return [];
+		}
+
 		return relatedPosts
-			.filter((post) => post.id !== currentPost.id)
+			.filter((post) => isValidPost(post) && post.id !== currentPost.id)
 			.slice(0, 2);
-	}, [relatedPosts, currentPost.id]);
+	}, [relatedPosts, currentPost]);
 
 	const formatDate = (dateString) => {
 		try {
-			return new Date(dateString).toLocaleDateString("pt-BR");
+			if (!dateString) return "Data não disponível";
+			const date = new Date(dateString);
+			return isNaN(date.getTime())
+				? "Data inválida"
+				: date.toLocaleDateString("pt-BR");
 		} catch (error) {
-			return "Data inválida";
+			return "Data não disponível";
 		}
 	};
+
+	// VALIDAÇÃO APÓS HOOKS
+	if (!isValidPost(currentPost)) {
+		return null;
+	}
 
 	if (filteredRelated.length === 0) {
 		return null;
@@ -184,9 +248,9 @@ const RelatedPosts = React.memo(({ currentPost }) => {
 		<div className="mt-16">
 			<h3 className="text-2xl font-bold text-white mb-8">Posts Relacionados</h3>
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-				{filteredRelated.map((relatedPost) => (
+				{filteredRelated.map((relatedPost, index) => (
 					<Link
-						key={relatedPost.id}
+						key={`related-${relatedPost.id}-${index}`}
 						to={`/post/${relatedPost.id}`}
 						onMouseEnter={() => prefetchPost(relatedPost.id)}
 						className="group"
@@ -197,6 +261,10 @@ const RelatedPosts = React.memo(({ currentPost }) => {
 								alt={relatedPost.title}
 								className="w-full h-48 object-cover transition-transform duration-700 group-hover:scale-110"
 								loading="lazy"
+								onError={(e) => {
+									e.target.src =
+										"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
+								}}
 							/>
 							<div className="p-6">
 								<h4 className="text-lg font-bold text-white group-hover:text-red-400 transition-colors duration-300 mb-2 line-clamp-2">
@@ -218,76 +286,127 @@ const RelatedPosts = React.memo(({ currentPost }) => {
 	);
 });
 
-// Componente principal do post
+// Componente principal do post PROTEGIDO - HOOKS CORRIGIDOS
 const PostDetailContent = () => {
 	const { id } = useParams();
 
-	// Usar Suspense Query para carregamento instantâneo
+	// ✅ HOOKS SEMPRE NO TOP LEVEL
 	const { data: post } = usePostByIdSuspense(id);
 
 	const formatDate = useMemo(() => {
+		if (!post || !post.created_at) return "Data não disponível";
 		try {
-			return new Date(post.created_at).toLocaleDateString("pt-BR");
+			const date = new Date(post.created_at);
+			return isNaN(date.getTime())
+				? "Data não disponível"
+				: date.toLocaleDateString("pt-BR");
 		} catch (error) {
-			return "Data inválida";
+			return "Data não disponível";
 		}
-	}, [post.created_at]);
+	}, [post]);
+
+	const safePost = useMemo(() => {
+		if (!post) return null;
+
+		return {
+			id: post.id || 0,
+			title: post.title || "Título não disponível",
+			content: post.content || "Conteúdo não disponível",
+			excerpt: post.excerpt || "Descrição não disponível",
+			image_url:
+				post.image_url ||
+				"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
+			category: post.category || "geral",
+			category_name: post.category_name || "Geral",
+			author: post.author || "Equipe TF",
+			read_time: post.read_time || "5 min",
+			trending: post.trending || false,
+			published: post.published !== false,
+			tags: Array.isArray(post.tags) ? post.tags : [],
+			created_at: post.created_at || new Date().toISOString(),
+		};
+	}, [post]);
+
+	// VALIDAÇÃO APÓS HOOKS
+	if (!id) {
+		throw new Error("ID do post não fornecido");
+	}
+
+	if (!isValidPost(post)) {
+		console.error("PostDetailContent: Post inválido recebido", post);
+		throw new Error("Dados do post inválidos");
+	}
 
 	// SEO optimization - definir meta tags dinamicamente
 	React.useEffect(() => {
-		if (post) {
-			document.title = `${post.title} | Torque Forged Motorsport`;
+		if (safePost?.title && safePost?.excerpt) {
+			// Título da página
+			document.title = `${safePost.title} | Torque Forged Motorsport`;
 
 			// Meta description
 			const metaDescription = document.querySelector(
 				'meta[name="description"]'
 			);
 			if (metaDescription) {
-				metaDescription.setAttribute("content", post.excerpt);
+				metaDescription.setAttribute("content", safePost.excerpt);
+			} else {
+				const newMeta = document.createElement("meta");
+				newMeta.name = "description";
+				newMeta.content = safePost.excerpt;
+				document.head.appendChild(newMeta);
 			}
 
-			// Open Graph
-			const ogTitle = document.querySelector('meta[property="og:title"]');
-			const ogDescription = document.querySelector(
-				'meta[property="og:description"]'
-			);
-			const ogImage = document.querySelector('meta[property="og:image"]');
+			// Open Graph tags
+			const setOrCreateMetaTag = (property, content) => {
+				let tag = document.querySelector(`meta[property="${property}"]`);
+				if (!tag) {
+					tag = document.createElement("meta");
+					tag.setAttribute("property", property);
+					document.head.appendChild(tag);
+				}
+				tag.setAttribute("content", content);
+			};
 
-			if (ogTitle) ogTitle.setAttribute("content", post.title);
-			if (ogDescription) ogDescription.setAttribute("content", post.excerpt);
-			if (ogImage && post.image_url)
-				ogImage.setAttribute("content", post.image_url);
+			setOrCreateMetaTag("og:title", safePost.title);
+			setOrCreateMetaTag("og:description", safePost.excerpt);
+			setOrCreateMetaTag("og:image", safePost.image_url);
+			setOrCreateMetaTag("og:url", window.location.href);
+			setOrCreateMetaTag("og:type", "article");
 		}
 
 		// Cleanup ao desmontar
 		return () => {
 			document.title = "Torque Forged Motorsport";
 		};
-	}, [post]);
+	}, [safePost]);
 
 	return (
 		<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 			{/* Hero Image */}
 			<div className="relative h-96 md:h-[60vh] overflow-hidden">
 				<img
-					src={post.image_url}
-					alt={post.title}
+					src={safePost.image_url}
+					alt={safePost.title}
 					className="w-full h-full object-cover"
 					loading="eager"
+					onError={(e) => {
+						e.target.src =
+							"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
+					}}
 				/>
 				<div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
 
 				<div className="absolute bottom-8 left-0 right-0">
 					<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
 						<Link
-							to={`/${post.category}`}
+							to={`/${safePost.category}`}
 							className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-red-600 to-red-500 text-white text-sm font-semibold mb-4 hover:shadow-lg transition-all duration-300"
 						>
 							<Tag className="w-4 h-4 mr-2" />
-							{post.category_name}
+							{safePost.category_name}
 						</Link>
 						<h1 className="text-3xl md:text-5xl font-black text-white leading-tight">
-							{post.title}
+							{safePost.title}
 						</h1>
 					</div>
 				</div>
@@ -310,7 +429,7 @@ const PostDetailContent = () => {
 						<div className="flex flex-wrap items-center space-x-6 text-gray-400 mb-4 sm:mb-0">
 							<div className="flex items-center space-x-2">
 								<User className="w-5 h-5" />
-								<span className="font-medium">{post.author}</span>
+								<span className="font-medium">{safePost.author}</span>
 							</div>
 							<div className="flex items-center space-x-2">
 								<Calendar className="w-5 h-5" />
@@ -318,23 +437,23 @@ const PostDetailContent = () => {
 							</div>
 							<div className="flex items-center space-x-2">
 								<Clock className="w-5 h-5" />
-								<span>{post.read_time} de leitura</span>
+								<span>{safePost.read_time} de leitura</span>
 							</div>
 						</div>
-						<ShareButton post={post} />
+						<ShareButton post={safePost} />
 					</div>
 
 					{/* Article Body */}
-					<PostContent content={post.content} />
+					<PostContent content={safePost.content} />
 
 					{/* Tags */}
-					{post.tags && post.tags.length > 0 && (
+					{safePost.tags.length > 0 && (
 						<div className="mt-12 pt-8 border-t border-gray-700">
 							<h3 className="text-white font-bold mb-4">Tags:</h3>
 							<div className="flex flex-wrap gap-3">
-								{post.tags.map((tag, index) => (
+								{safePost.tags.map((tag, index) => (
 									<span
-										key={index}
+										key={`tag-${index}-${tag}`}
 										className="bg-gray-800 text-gray-300 px-4 py-2 rounded-full text-sm hover:bg-gray-700 transition-colors duration-300"
 									>
 										#{tag}
@@ -354,7 +473,7 @@ const PostDetailContent = () => {
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 									{[1, 2].map((i) => (
 										<div
-											key={i}
+											key={`related-skeleton-${i}`}
 											className="bg-gray-800 rounded-2xl overflow-hidden animate-pulse"
 										>
 											<div className="h-48 bg-gray-700"></div>
@@ -368,7 +487,14 @@ const PostDetailContent = () => {
 							</div>
 						}
 					>
-						<RelatedPosts currentPost={post} />
+						<ErrorBoundary
+							FallbackComponent={() => null} // Silenciar erros dos posts relacionados
+							onError={(error) => {
+								console.warn("Related posts error (non-critical):", error);
+							}}
+						>
+							<RelatedPosts currentPost={safePost} />
+						</ErrorBoundary>
 					</Suspense>
 
 					{/* Debug Info - apenas desenvolvimento */}
@@ -376,11 +502,12 @@ const PostDetailContent = () => {
 						<div className="mt-8 p-4 bg-gray-800/30 rounded-lg border border-gray-700/30">
 							<h4 className="text-white font-semibold mb-2">Debug Info</h4>
 							<div className="text-xs text-gray-400 space-y-1">
-								<div>Post ID: {post.id}</div>
-								<div>Category: {post.category}</div>
-								<div>Published: {post.published ? "Yes" : "No"}</div>
-								<div>Trending: {post.trending ? "Yes" : "No"}</div>
-								<div>Sistema: TanStack Query + Suspense</div>
+								<div>Post ID: {safePost.id}</div>
+								<div>Category: {safePost.category}</div>
+								<div>Published: {safePost.published ? "Yes" : "No"}</div>
+								<div>Trending: {safePost.trending ? "Yes" : "No"}</div>
+								<div>Valid: {isValidPost(post) ? "Yes" : "No"}</div>
+								<div>Sistema: TanStack Query + Suspense HOOKS CORRIGIDOS</div>
 							</div>
 						</div>
 					)}
@@ -390,7 +517,7 @@ const PostDetailContent = () => {
 	);
 };
 
-// Componente principal com Error Boundary
+// Componente principal com Error Boundary ROBUSTO
 const OptimizedPostDetail = () => {
 	return (
 		<ErrorBoundary
@@ -398,6 +525,9 @@ const OptimizedPostDetail = () => {
 			onReset={() => {
 				// Tentar recarregar a página
 				window.location.reload();
+			}}
+			onError={(error, errorInfo) => {
+				console.error("PostDetail Error Boundary:", error, errorInfo);
 			}}
 		>
 			<Suspense fallback={<PostDetailSkeleton />}>

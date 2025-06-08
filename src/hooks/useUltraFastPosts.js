@@ -10,16 +10,14 @@ import { FastDataService } from "../services/FastDataService";
 import toast from "react-hot-toast";
 
 /**
- * Hook Ultra-Rápido com TanStack Query
- * - Cache inteligente com stale-while-revalidate
- * - Prefetching automático
- * - Updates otimistas
- * - Suspense support
- * - Background sync
- * - Garantia de arrays válidos
+ * Hook Ultra-Rápido CORRIGIDO
+ * - Garantias de arrays válidos
+ * - Timeouts mais realistas
+ * - Melhor error handling
+ * - Fallbacks mais robustos
  */
 
-// Query keys centralizados para cache consistency
+// Query keys centralizados
 export const QUERY_KEYS = {
 	posts: {
 		all: ["posts"],
@@ -34,40 +32,34 @@ export const QUERY_KEYS = {
 	},
 };
 
-// Configurações de cache otimizadas
+// Configurações de cache MAIS ESTÁVEIS
 const CACHE_CONFIG = {
-	// Posts em destaque - cache mais agressivo
 	featured: {
-		staleTime: 3 * 60 * 1000, // 3 minutos fresh
-		cacheTime: 15 * 60 * 1000, // 15 minutos em cache
+		staleTime: 5 * 60 * 1000, // 5 minutos
+		cacheTime: 30 * 60 * 1000, // 30 minutos
 		refetchOnWindowFocus: false,
 		refetchOnMount: false,
+		retry: 2,
+		retryDelay: 1000,
 	},
-
-	// Posts gerais - cache moderado
 	posts: {
-		staleTime: 2 * 60 * 1000, // 2 minutos fresh
-		cacheTime: 10 * 60 * 1000, // 10 minutos em cache
+		staleTime: 3 * 60 * 1000, // 3 minutos
+		cacheTime: 20 * 60 * 1000, // 20 minutos
 		refetchOnWindowFocus: false,
+		retry: 2,
+		retryDelay: 1000,
 	},
-
-	// Post individual - cache longo
 	postDetail: {
-		staleTime: 5 * 60 * 1000, // 5 minutos fresh
-		cacheTime: 30 * 60 * 1000, // 30 minutos em cache
+		staleTime: 10 * 60 * 1000, // 10 minutos
+		cacheTime: 60 * 60 * 1000, // 1 hora
 		refetchOnWindowFocus: false,
-	},
-
-	// Admin operations - sem cache
-	admin: {
-		staleTime: 0,
-		cacheTime: 0,
-		refetchOnWindowFocus: true,
+		retry: 2,
+		retryDelay: 1000,
 	},
 };
 
-// Fallback data para casos de erro
-const FALLBACK_POSTS = [
+// Fallback GARANTIDO - sempre disponível
+const GUARANTEED_FALLBACK_POSTS = [
 	{
 		id: 1,
 		title: "GP de Mônaco 2025: Verstappen Domina nas Ruas Principescas",
@@ -75,11 +67,11 @@ const FALLBACK_POSTS = [
 		category: "f1",
 		category_name: "Fórmula 1",
 		image_url:
-			"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+			"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
 		excerpt:
 			"Max Verstappen conquista mais uma vitória em Mônaco com uma performance impecável que deixou os fãs extasiados.",
 		content:
-			"Max Verstappen mais uma vez demonstrou sua maestria nas ruas estreitas de Monte Carlo...",
+			"Max Verstappen mais uma vez demonstrou sua maestria nas ruas estreitas de Monte Carlo, conquistando uma vitória dominante no GP de Mônaco 2025. O piloto holandês, largando da pole position, controlou a corrida do início ao fim.",
 		author: "Equipe TF",
 		read_time: "5 min",
 		published: true,
@@ -95,10 +87,11 @@ const FALLBACK_POSTS = [
 		category: "nascar",
 		category_name: "NASCAR",
 		image_url:
-			"https://images.unsplash.com/photo-1566473965997-3de9c817e938?w=800",
+			"https://images.unsplash.com/photo-1566473965997-3de9c817e938?w=800&h=600&fit=crop",
 		excerpt:
-			"Relato completo da corrida mais emocionante do ano com ultrapassagens incríveis.",
-		content: "A Daytona 500 de 2025 entrou para a história...",
+			"Relato completo da corrida mais emocionante do ano com ultrapassagens incríveis e estratégias audaciosas.",
+		content:
+			"A Daytona 500 de 2025 entrou para a história como uma das corridas mais emocionantes já disputadas no autódromo mais famoso da NASCAR.",
 		author: "Race Team",
 		read_time: "6 min",
 		published: true,
@@ -114,10 +107,11 @@ const FALLBACK_POSTS = [
 		category: "engines",
 		category_name: "Motores",
 		image_url:
-			"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
+			"https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800&h=600&fit=crop",
 		excerpt:
-			"Análise completa do novo propulsor que está mudando o cenário do tuning.",
-		content: "A indústria automotiva testemunha mais uma revolução...",
+			"Análise completa do novo propulsor que está mudando o cenário do tuning com tecnologia de ponta.",
+		content:
+			"A indústria automotiva testemunha mais uma revolução com o lançamento do novo motor V8 biturbo que promete entregar incríveis 1000 cavalos de potência.",
 		author: "Tech Team",
 		read_time: "8 min",
 		published: true,
@@ -129,27 +123,63 @@ const FALLBACK_POSTS = [
 ];
 
 /**
- * Hook principal para posts em destaque
- * Usa Suspense para carregamento instantâneo
+ * Função para garantir array válido
+ */
+const ensureValidArray = (data, fallback = []) => {
+	if (Array.isArray(data) && data.length >= 0) {
+		return data;
+	}
+	console.warn(
+		"🔧 ensureValidArray: Data não é array válido, usando fallback",
+		{
+			dataType: typeof data,
+			isArray: Array.isArray(data),
+			fallbackLength: fallback.length,
+		}
+	);
+	return Array.isArray(fallback) ? fallback : [];
+};
+
+/**
+ * Hook principal para posts em destaque - SEM SUSPENSE
+ * Mudando para hook normal para melhor error handling
  */
 export const useFeaturedPosts = () => {
-	return useSuspenseQuery({
+	return useQuery({
 		queryKey: QUERY_KEYS.posts.featured,
 		queryFn: async () => {
 			try {
+				console.log("🚀 useFeaturedPosts: Iniciando...");
 				const data = await FastDataService.getFeaturedPosts();
-				return Array.isArray(data) ? data : FALLBACK_POSTS.slice(0, 3);
+
+				const validData = ensureValidArray(
+					data,
+					GUARANTEED_FALLBACK_POSTS.slice(0, 3)
+				);
+				console.log("✅ useFeaturedPosts: Sucesso", {
+					count: validData.length,
+				});
+
+				return validData;
 			} catch (error) {
-				console.error("Featured posts error:", error);
-				return FALLBACK_POSTS.slice(0, 3);
+				console.error("❌ useFeaturedPosts: Erro", error);
+				return GUARANTEED_FALLBACK_POSTS.slice(0, 3);
 			}
 		},
 		...CACHE_CONFIG.featured,
+		// SEMPRE retornar array válido
+		select: (data) =>
+			ensureValidArray(data, GUARANTEED_FALLBACK_POSTS.slice(0, 3)),
+		// Se falhar, usar placeholderData
+		placeholderData: GUARANTEED_FALLBACK_POSTS.slice(0, 3),
+		onError: (error) => {
+			console.error("useFeaturedPosts onError:", error);
+		},
 	});
 };
 
 /**
- * Hook para todos os posts com prefetching
+ * Hook para todos os posts - GARANTIDO
  */
 export const useAllPosts = (options = {}) => {
 	const queryClient = useQueryClient();
@@ -158,46 +188,37 @@ export const useAllPosts = (options = {}) => {
 		queryKey: QUERY_KEYS.posts.all,
 		queryFn: async () => {
 			try {
-				console.log("⚡ useAllPosts: Iniciando fetch...");
+				console.log("🚀 useAllPosts: Iniciando fetch...");
 				const data = await FastDataService.getAllPosts();
-				console.log("✅ useAllPosts received data:", {
-					isArray: Array.isArray(data),
-					length: data?.length,
-					type: typeof data,
-				});
 
-				// Garantir que sempre retorna um array válido
-				if (!Array.isArray(data)) {
-					console.warn("⚠️ useAllPosts: data não é array, usando fallback");
-					return FALLBACK_POSTS;
-				}
+				const validData = ensureValidArray(data, GUARANTEED_FALLBACK_POSTS);
+				console.log("✅ useAllPosts: Sucesso", { count: validData.length });
 
-				if (data.length === 0) {
-					console.warn("⚠️ useAllPosts: array vazio, usando fallback");
-					return FALLBACK_POSTS;
-				}
-
-				console.log("✅ useAllPosts: Retornando", data.length, "posts");
-				return data;
+				return validData;
 			} catch (error) {
-				console.error("❌ useAllPosts error:", error);
-				return FALLBACK_POSTS;
+				console.error("❌ useAllPosts: Erro", error);
+				return [...GUARANTEED_FALLBACK_POSTS];
 			}
 		},
 		...CACHE_CONFIG.posts,
+		// TRIPLA PROTEÇÃO contra undefined
 		select: (data) => {
-			// Garantir que o resultado é sempre um array
-			return Array.isArray(data) ? data : FALLBACK_POSTS;
+			const validData = ensureValidArray(data, GUARANTEED_FALLBACK_POSTS);
+			return validData;
 		},
+		placeholderData: [...GUARANTEED_FALLBACK_POSTS],
 		onSuccess: (data) => {
-			// Prefetch posts individuais em background
-			if (Array.isArray(data)) {
-				data.slice(0, 5).forEach((post) => {
-					queryClient.prefetchQuery({
-						queryKey: QUERY_KEYS.posts.byId(post.id),
-						queryFn: () => FastDataService.getPostById(post.id),
-						...CACHE_CONFIG.postDetail,
-					});
+			const validData = ensureValidArray(data);
+			if (validData.length > 0) {
+				// Prefetch posts individuais APENAS se data for válida
+				validData.slice(0, 3).forEach((post) => {
+					if (post && post.id) {
+						queryClient.prefetchQuery({
+							queryKey: QUERY_KEYS.posts.byId(post.id),
+							queryFn: () => FastDataService.getPostById(post.id),
+							...CACHE_CONFIG.postDetail,
+						});
+					}
 				});
 			}
 		},
@@ -207,15 +228,15 @@ export const useAllPosts = (options = {}) => {
 		...options,
 	});
 
-	// Garantir que data sempre é um array
+	// GARANTIR que data NUNCA seja undefined
 	return {
 		...query,
-		data: Array.isArray(query.data) ? query.data : [],
+		data: ensureValidArray(query.data, GUARANTEED_FALLBACK_POSTS),
 	};
 };
 
 /**
- * Hook para posts por categoria com prefetching inteligente
+ * Hook para posts por categoria - SUPER SEGURO
  */
 export const usePostsByCategory = (categoryId, options = {}) => {
 	const queryClient = useQueryClient();
@@ -224,96 +245,142 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 		queryKey: QUERY_KEYS.posts.byCategory(categoryId),
 		queryFn: async () => {
 			try {
+				console.log(`🚀 usePostsByCategory: Buscando ${categoryId}...`);
 				const data = await FastDataService.getPostsByCategory(categoryId);
 
-				// Garantir que sempre retorna um array válido
-				if (!Array.isArray(data)) {
-					const fallbackCategory = FALLBACK_POSTS.filter(
-						(p) => p.category === categoryId
-					);
-					return fallbackCategory.length > 0 ? fallbackCategory : [];
-				}
-
-				return data;
-			} catch (error) {
-				console.error(`usePostsByCategory error for ${categoryId}:`, error);
-				const fallbackCategory = FALLBACK_POSTS.filter(
+				// Filtrar fallback por categoria se API falhar
+				const fallbackForCategory = GUARANTEED_FALLBACK_POSTS.filter(
 					(p) => p.category === categoryId
 				);
-				return fallbackCategory.length > 0 ? fallbackCategory : [];
+
+				const validData = ensureValidArray(data, fallbackForCategory);
+				console.log(`✅ usePostsByCategory: ${categoryId} sucesso`, {
+					count: validData.length,
+				});
+
+				return validData;
+			} catch (error) {
+				console.error(`❌ usePostsByCategory: ${categoryId} erro`, error);
+				// Sempre retornar array, mesmo que vazio
+				return GUARANTEED_FALLBACK_POSTS.filter(
+					(p) => p.category === categoryId
+				);
 			}
 		},
-		enabled: !!categoryId,
+		enabled: !!categoryId && typeof categoryId === "string",
 		...CACHE_CONFIG.posts,
-		select: (data) => {
-			// Garantir que o resultado é sempre um array
-			return Array.isArray(data) ? data : [];
-		},
+		select: (data) => ensureValidArray(data, []),
+		placeholderData: [],
 		onSuccess: (data) => {
-			// Prefetch primeiros 3 posts da categoria
-			if (Array.isArray(data)) {
-				data.slice(0, 3).forEach((post) => {
-					queryClient.prefetchQuery({
-						queryKey: QUERY_KEYS.posts.byId(post.id),
-						queryFn: () => FastDataService.getPostById(post.id),
-						...CACHE_CONFIG.postDetail,
-					});
+			const validData = ensureValidArray(data);
+			if (validData.length > 0) {
+				// Prefetch primeiros posts APENAS se válidos
+				validData.slice(0, 2).forEach((post) => {
+					if (post && post.id) {
+						queryClient.prefetchQuery({
+							queryKey: QUERY_KEYS.posts.byId(post.id),
+							queryFn: () => FastDataService.getPostById(post.id),
+							...CACHE_CONFIG.postDetail,
+						});
+					}
 				});
 			}
+		},
+		onError: (error) => {
+			console.error(`usePostsByCategory ${categoryId} onError:`, error);
 		},
 		...options,
 	});
 };
 
 /**
- * Hook para post individual com cache longo
+ * Hook para post individual - MELHORADO
  */
 export const usePostById = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.posts.byId(id),
 		queryFn: async () => {
 			try {
+				console.log(`🚀 usePostById: Buscando post ${id}...`);
+
+				if (!id) {
+					throw new Error("ID não fornecido");
+				}
+
 				const data = await FastDataService.getPostById(id);
 
 				if (!data) {
 					// Tentar fallback
 					const postId = typeof id === "string" ? parseInt(id, 10) : id;
-					const fallbackPost = FALLBACK_POSTS.find((p) => p.id === postId);
-					return fallbackPost || null;
+					const fallbackPost = GUARANTEED_FALLBACK_POSTS.find(
+						(p) => p.id === postId
+					);
+
+					if (fallbackPost) {
+						console.log(`🔧 usePostById: Usando fallback para ${id}`);
+						return fallbackPost;
+					}
+
+					throw new Error("Post não encontrado");
 				}
 
+				console.log(`✅ usePostById: Post ${id} encontrado`);
 				return data;
 			} catch (error) {
-				console.error(`usePostById error for ${id}:`, error);
+				console.error(`❌ usePostById: Erro para ${id}`, error);
 
-				// Tentar fallback
+				// Última tentativa com fallback
 				const postId = typeof id === "string" ? parseInt(id, 10) : id;
-				const fallbackPost = FALLBACK_POSTS.find((p) => p.id === postId);
-				return fallbackPost || null;
+				const fallbackPost = GUARANTEED_FALLBACK_POSTS.find(
+					(p) => p.id === postId
+				);
+
+				if (fallbackPost) {
+					return fallbackPost;
+				}
+
+				// Se não encontrar nem no fallback, rejeitar
+				throw error;
 			}
 		},
 		enabled: !!id,
 		...CACHE_CONFIG.postDetail,
 		retry: (failureCount, error) => {
-			// Não retry para 404
-			if (error?.message?.includes("not found")) return false;
-			return failureCount < 2;
+			if (error?.message?.includes("não encontrado")) return false;
+			return failureCount < 1; // Apenas 1 retry
+		},
+		onError: (error) => {
+			console.error(`usePostById ${id} onError:`, error);
 		},
 		...options,
 	});
 };
 
 /**
- * Hook para post individual com Suspense
+ * Hook para post individual com Suspense - CORRIGIDO
  */
 export const usePostByIdSuspense = (id) => {
 	return useSuspenseQuery({
 		queryKey: QUERY_KEYS.posts.byId(id),
 		queryFn: async () => {
 			try {
+				if (!id) {
+					throw new Error("Post ID não fornecido");
+				}
+
 				const data = await FastDataService.getPostById(id);
 
 				if (!data) {
+					// Tentar fallback antes de falhar
+					const postId = typeof id === "string" ? parseInt(id, 10) : id;
+					const fallbackPost = GUARANTEED_FALLBACK_POSTS.find(
+						(p) => p.id === postId
+					);
+
+					if (fallbackPost) {
+						return fallbackPost;
+					}
+
 					throw new Error("Post not found");
 				}
 
@@ -328,7 +395,7 @@ export const usePostByIdSuspense = (id) => {
 };
 
 /**
- * Hook para posts populares
+ * Hook para posts populares - SEGURO
  */
 export const usePopularPosts = (limit = 5) => {
 	return useQuery({
@@ -336,103 +403,52 @@ export const usePopularPosts = (limit = 5) => {
 		queryFn: async () => {
 			try {
 				const data = await FastDataService.getPopularPosts(limit);
-				return Array.isArray(data) ? data : FALLBACK_POSTS.slice(0, limit);
+				const validData = ensureValidArray(
+					data,
+					GUARANTEED_FALLBACK_POSTS.slice(0, limit)
+				);
+				return validData;
 			} catch (error) {
 				console.error("usePopularPosts error:", error);
-				return FALLBACK_POSTS.slice(0, limit);
+				return GUARANTEED_FALLBACK_POSTS.slice(0, limit);
 			}
 		},
 		...CACHE_CONFIG.featured,
-		select: (data) => {
-			return Array.isArray(data) ? data : [];
-		},
+		select: (data) => ensureValidArray(data, []),
+		placeholderData: GUARANTEED_FALLBACK_POSTS.slice(0, limit),
 	});
 };
 
 /**
- * Hook para busca com debounce
+ * Hook para busca - SEGURO
  */
 export const useSearchPosts = (query, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.posts.search(query),
 		queryFn: async () => {
 			try {
+				if (!query || query.length < 2) {
+					return [];
+				}
+
 				const data = await FastDataService.searchPosts(query);
-				return Array.isArray(data) ? data : [];
+				return ensureValidArray(data, []);
 			} catch (error) {
 				console.error("useSearchPosts error:", error);
 				return [];
 			}
 		},
 		enabled: !!query && query.length >= 2,
-		staleTime: 5 * 60 * 1000, // 5 minutos
-		cacheTime: 10 * 60 * 1000, // 10 minutos
-		select: (data) => {
-			return Array.isArray(data) ? data : [];
-		},
+		staleTime: 5 * 60 * 1000,
+		cacheTime: 10 * 60 * 1000,
+		select: (data) => ensureValidArray(data, []),
+		placeholderData: [],
 		...options,
 	});
 };
 
 /**
- * Hook para carregar múltiplas categorias em paralelo
- */
-export const useMultipleCategories = (categories = []) => {
-	return useQueries({
-		queries: categories.map((categoryId) => ({
-			queryKey: QUERY_KEYS.posts.byCategory(categoryId),
-			queryFn: async () => {
-				try {
-					const data = await FastDataService.getPostsByCategory(categoryId);
-					return Array.isArray(data) ? data : [];
-				} catch (error) {
-					console.error(
-						`useMultipleCategories error for ${categoryId}:`,
-						error
-					);
-					return [];
-				}
-			},
-			...CACHE_CONFIG.posts,
-		})),
-	});
-};
-
-/**
- * Hook para infinite scroll (para implementar futuramente)
- */
-export const useInfinitePosts = (categoryId = null) => {
-	return useInfiniteQuery({
-		queryKey: categoryId
-			? QUERY_KEYS.posts.byCategory(categoryId)
-			: QUERY_KEYS.posts.all,
-		queryFn: async ({ pageParam = 0 }) => {
-			try {
-				const data = categoryId
-					? await FastDataService.getPostsByCategory(
-							categoryId,
-							12,
-							pageParam * 12
-					  )
-					: await FastDataService.getAllPosts(12, pageParam * 12);
-
-				return Array.isArray(data) ? data : [];
-			} catch (error) {
-				console.error("useInfinitePosts error:", error);
-				return [];
-			}
-		},
-		getNextPageParam: (lastPage, pages) => {
-			return Array.isArray(lastPage) && lastPage.length === 12
-				? pages.length
-				: undefined;
-		},
-		...CACHE_CONFIG.posts,
-	});
-};
-
-/**
- * Hooks para operações CRUD Admin
+ * Operações CRUD Admin - MELHORADAS
  */
 export const useCreatePost = () => {
 	const queryClient = useQueryClient();
@@ -440,34 +456,35 @@ export const useCreatePost = () => {
 	return useMutation({
 		mutationFn: FastDataService.createPost,
 		onMutate: async (newPost) => {
-			// Cancel ongoing refetches
 			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.posts.all });
 
-			// Snapshot current value
 			const previousPosts = queryClient.getQueryData(QUERY_KEYS.posts.all);
+			const validPreviousPosts = ensureValidArray(previousPosts, []);
 
-			// Optimistic update
-			if (Array.isArray(previousPosts)) {
-				queryClient.setQueryData(QUERY_KEYS.posts.all, (old) => [
-					{ ...newPost, id: Date.now(), created_at: new Date().toISOString() },
-					...(Array.isArray(old) ? old : []),
-				]);
-			}
+			const optimisticPost = {
+				...newPost,
+				id: Date.now(),
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString(),
+			};
 
-			return { previousPosts };
+			queryClient.setQueryData(QUERY_KEYS.posts.all, [
+				optimisticPost,
+				...validPreviousPosts,
+			]);
+
+			return { previousPosts: validPreviousPosts };
 		},
 		onError: (err, newPost, context) => {
-			// Rollback on error
 			if (context?.previousPosts) {
 				queryClient.setQueryData(QUERY_KEYS.posts.all, context.previousPosts);
 			}
 			toast.error("Erro ao criar post: " + err.message);
 		},
-		onSuccess: (data) => {
+		onSuccess: () => {
 			toast.success("Post criado com sucesso!");
 		},
 		onSettled: () => {
-			// Always refetch after error or success
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.all });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.featured });
 		},
@@ -480,39 +497,13 @@ export const useUpdatePost = () => {
 	return useMutation({
 		mutationFn: ({ id, ...postData }) =>
 			FastDataService.updatePost(id, postData),
-		onMutate: async ({ id, ...newData }) => {
-			// Cancel ongoing refetches
-			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.posts.byId(id) });
-
-			// Snapshot current value
-			const previousPost = queryClient.getQueryData(QUERY_KEYS.posts.byId(id));
-
-			// Optimistic update
-			if (previousPost) {
-				queryClient.setQueryData(QUERY_KEYS.posts.byId(id), (old) => ({
-					...old,
-					...newData,
-					updated_at: new Date().toISOString(),
-				}));
-			}
-
-			return { previousPost, id };
-		},
-		onError: (err, variables, context) => {
-			// Rollback on error
-			if (context?.previousPost) {
-				queryClient.setQueryData(
-					QUERY_KEYS.posts.byId(context.id),
-					context.previousPost
-				);
-			}
-			toast.error("Erro ao atualizar post: " + err.message);
-		},
 		onSuccess: () => {
 			toast.success("Post atualizado com sucesso!");
 		},
+		onError: (err) => {
+			toast.error("Erro ao atualizar post: " + err.message);
+		},
 		onSettled: (data, error, { id }) => {
-			// Invalidate all related queries
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.byId(id) });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.all });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.featured });
@@ -525,34 +516,13 @@ export const useDeletePost = () => {
 
 	return useMutation({
 		mutationFn: FastDataService.deletePost,
-		onMutate: async (id) => {
-			// Cancel ongoing refetches
-			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.posts.all });
-
-			// Snapshot current value
-			const previousPosts = queryClient.getQueryData(QUERY_KEYS.posts.all);
-
-			// Optimistic update - remove post from list
-			if (Array.isArray(previousPosts)) {
-				queryClient.setQueryData(QUERY_KEYS.posts.all, (old) =>
-					Array.isArray(old) ? old.filter((post) => post.id !== id) : []
-				);
-			}
-
-			return { previousPosts, id };
-		},
-		onError: (err, id, context) => {
-			// Rollback on error
-			if (context?.previousPosts) {
-				queryClient.setQueryData(QUERY_KEYS.posts.all, context.previousPosts);
-			}
-			toast.error("Erro ao deletar post: " + err.message);
-		},
 		onSuccess: () => {
 			toast.success("Post deletado com sucesso!");
 		},
+		onError: (err) => {
+			toast.error("Erro ao deletar post: " + err.message);
+		},
 		onSettled: (data, error, id) => {
-			// Remove from cache and invalidate
 			queryClient.removeQueries({ queryKey: QUERY_KEYS.posts.byId(id) });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.all });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.featured });
@@ -561,12 +531,14 @@ export const useDeletePost = () => {
 };
 
 /**
- * Hook para prefetching inteligente
+ * Hook para prefetching - SEGURO
  */
 export const usePrefetch = () => {
 	const queryClient = useQueryClient();
 
 	const prefetchPost = (id) => {
+		if (!id) return;
+
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.posts.byId(id),
 			queryFn: () => FastDataService.getPostById(id),
@@ -575,6 +547,8 @@ export const usePrefetch = () => {
 	};
 
 	const prefetchCategory = (categoryId) => {
+		if (!categoryId) return;
+
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.posts.byCategory(categoryId),
 			queryFn: () => FastDataService.getPostsByCategory(categoryId),
@@ -582,66 +556,43 @@ export const usePrefetch = () => {
 		});
 	};
 
-	const prefetchSearch = (query) => {
-		if (query && query.length >= 2) {
-			queryClient.prefetchQuery({
-				queryKey: QUERY_KEYS.posts.search(query),
-				queryFn: () => FastDataService.searchPosts(query),
-				staleTime: 5 * 60 * 1000,
-			});
-		}
-	};
-
 	return {
 		prefetchPost,
 		prefetchCategory,
-		prefetchSearch,
 	};
 };
 
 /**
- * Hook para warmup do cache
+ * Hook para warmup do cache - OTIMIZADO
  */
 export const useWarmupCache = () => {
 	const queryClient = useQueryClient();
 
 	const warmup = async () => {
-		console.log("🔥 Starting cache warmup...");
+		console.log("🔥 Starting safe cache warmup...");
 
-		// Prefetch dados críticos
-		const criticalQueries = [
+		const queries = [
 			{
 				queryKey: QUERY_KEYS.posts.featured,
-				queryFn: FastDataService.getFeaturedPosts,
-				...CACHE_CONFIG.featured,
+				queryFn: () =>
+					FastDataService.getFeaturedPosts().catch(() =>
+						GUARANTEED_FALLBACK_POSTS.slice(0, 3)
+					),
 			},
 			{
 				queryKey: QUERY_KEYS.posts.all,
-				queryFn: FastDataService.getAllPosts,
-				...CACHE_CONFIG.posts,
-			},
-			{
-				queryKey: QUERY_KEYS.posts.popular(5),
-				queryFn: () => FastDataService.getPopularPosts(5),
-				...CACHE_CONFIG.featured,
+				queryFn: () =>
+					FastDataService.getAllPosts().catch(() => [
+						...GUARANTEED_FALLBACK_POSTS,
+					]),
 			},
 		];
 
-		// Prefetch categorias principais
-		const mainCategories = ["f1", "nascar", "engines", "drift"];
-		mainCategories.forEach((category) => {
-			criticalQueries.push({
-				queryKey: QUERY_KEYS.posts.byCategory(category),
-				queryFn: () => FastDataService.getPostsByCategory(category),
-				...CACHE_CONFIG.posts,
-			});
-		});
-
 		try {
 			await Promise.allSettled(
-				criticalQueries.map((query) => queryClient.prefetchQuery(query))
+				queries.map((query) => queryClient.prefetchQuery(query))
 			);
-			console.log("✅ Cache warmup completed");
+			console.log("✅ Safe cache warmup completed");
 		} catch (error) {
 			console.error("❌ Cache warmup failed:", error);
 		}
@@ -667,13 +618,11 @@ export const useCacheStats = () => {
 			errorQueries: queries.filter((q) => q.state.status === "error").length,
 			loadingQueries: queries.filter((q) => q.state.status === "loading")
 				.length,
-			fastDataStats: FastDataService.getCacheStats(),
 		};
 	};
 
 	const clearCache = () => {
 		queryClient.clear();
-		FastDataService.clearCache();
 		toast.success("Cache limpo com sucesso!");
 	};
 

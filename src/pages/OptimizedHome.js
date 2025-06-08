@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo } from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
 	ChevronRight,
@@ -17,23 +17,57 @@ import {
 	useFeaturedPosts,
 	useAllPosts,
 	usePrefetch,
-	useCacheStats,
 } from "../hooks/useUltraFastPosts";
 import { ErrorBoundary } from "react-error-boundary";
 
-/**
- * Componente Home Ultra-Otimizado
- * - Suspense boundaries para carregamento progressivo
- * - Prefetching inteligente
- * - Memoização de componentes pesados
- * - Error boundaries granulares
- * - Loading states otimizados
- */
+// Validador de post RIGOROSO
+const isValidPost = (post) => {
+	return (
+		post &&
+		typeof post === "object" &&
+		post.id &&
+		post.title &&
+		typeof post.title === "string" &&
+		post.title.length > 0 &&
+		post.excerpt &&
+		typeof post.excerpt === "string" &&
+		post.image_url &&
+		typeof post.image_url === "string" &&
+		post.category &&
+		post.category_name &&
+		post.author &&
+		post.read_time &&
+		post.created_at
+	);
+};
 
-// Loading skeletons otimizados
+// Filtrar e validar posts
+const validateAndFilterPosts = (posts, context = "unknown") => {
+	if (!Array.isArray(posts)) {
+		console.warn(`🔧 validateAndFilterPosts: ${context} - não é array`, {
+			type: typeof posts,
+			value: posts,
+		});
+		return [];
+	}
+
+	const validPosts = posts.filter(isValidPost);
+
+	if (validPosts.length !== posts.length) {
+		console.warn(
+			`🔧 validateAndFilterPosts: ${context} - removidos ${
+				posts.length - validPosts.length
+			} posts inválidos`
+		);
+	}
+
+	return validPosts;
+};
+
+// Loading skeletons MELHORADOS
 const FeaturedPostsSkeleton = () => (
 	<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-		{[1, 2, 3].map((i) => (
+		{Array.from({ length: 3 }).map((_, i) => (
 			<div key={i} className="animate-pulse">
 				<div className="bg-gray-800 rounded-2xl overflow-hidden">
 					<div className="h-48 md:h-56 bg-gray-700"></div>
@@ -50,7 +84,7 @@ const FeaturedPostsSkeleton = () => (
 
 const PostListSkeleton = () => (
 	<div className="space-y-6 md:space-y-8">
-		{[1, 2, 3].map((i) => (
+		{Array.from({ length: 3 }).map((_, i) => (
 			<div key={i} className="animate-pulse">
 				<div className="bg-gray-800 rounded-2xl p-6 flex gap-6">
 					<div className="w-64 h-48 bg-gray-700 rounded-xl flex-shrink-0"></div>
@@ -67,7 +101,7 @@ const PostListSkeleton = () => (
 	</div>
 );
 
-// Error fallback component
+// Error fallback MELHORADO
 const ErrorFallback = ({ error, resetErrorBoundary, section }) => (
 	<div className="text-center py-12">
 		<div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -79,12 +113,20 @@ const ErrorFallback = ({ error, resetErrorBoundary, section }) => (
 		<p className="text-gray-400 mb-4 text-sm">
 			{error?.message || "Algo deu errado"}
 		</p>
-		<button
-			onClick={resetErrorBoundary}
-			className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
-		>
-			Tentar Novamente
-		</button>
+		<div className="space-y-2">
+			<button
+				onClick={resetErrorBoundary}
+				className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm mr-2"
+			>
+				Tentar Novamente
+			</button>
+			<button
+				onClick={() => window.location.reload()}
+				className="border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-4 py-2 rounded-lg transition-colors text-sm"
+			>
+				Recarregar Página
+			</button>
+		</div>
 	</div>
 );
 
@@ -107,7 +149,7 @@ const HeroSection = React.memo(() => {
 					<div className="mb-6 md:mb-8">
 						<div className="inline-flex items-center px-4 md:px-6 py-2 md:py-3 rounded-full bg-red-500/10 border border-red-500/20 backdrop-blur-sm mb-4 md:mb-6">
 							<span className="text-red-400 text-xs md:text-sm font-semibold">
-								🏁 Carregamento Ultra-Rápido - Menos de 1s
+								🏁 Sistema Corrigido - Estável e Rápido
 							</span>
 						</div>
 					</div>
@@ -167,40 +209,67 @@ const HeroSection = React.memo(() => {
 	);
 });
 
-// Componente de post memoizado
+// Componente de post SUPER PROTEGIDO - HOOKS CORRIGIDOS
 const PostCard = React.memo(({ post, index }) => {
 	const { prefetchPost } = usePrefetch();
 
+	// ✅ HOOKS SEMPRE NO TOP LEVEL
 	const formatDate = useMemo(() => {
+		if (!post || !post.created_at) return "Data não disponível";
 		try {
 			const date = new Date(post.created_at);
 			return isNaN(date.getTime())
 				? "Data inválida"
 				: date.toLocaleDateString("pt-BR");
 		} catch (error) {
-			return "Data inválida";
+			console.warn("PostCard: Erro ao formatar data", { error, post });
+			return "Data não disponível";
 		}
-	}, [post.created_at]);
+	}, [post]);
+
+	// VALIDAÇÃO APÓS HOOKS
+	if (!isValidPost(post)) {
+		console.warn("PostCard: Post inválido recebido", post);
+		return null;
+	}
+
+	const safePost = {
+		id: post.id || 0,
+		title: post.title || "Título não disponível",
+		excerpt: post.excerpt || "Descrição não disponível",
+		image_url:
+			post.image_url ||
+			"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
+		category: post.category || "geral",
+		category_name: post.category_name || "Geral",
+		author: post.author || "Equipe TF",
+		read_time: post.read_time || "5 min",
+		trending: post.trending || false,
+	};
 
 	return (
 		<article className="group relative bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl md:rounded-3xl overflow-hidden shadow-2xl hover:shadow-red-500/10 transition-all duration-500 hover:scale-105">
 			<div className="relative overflow-hidden">
 				<img
-					src={post.image_url}
-					alt={post.title}
+					src={safePost.image_url}
+					alt={safePost.title}
 					className="w-full h-48 md:h-56 object-cover transition-transform duration-700 group-hover:scale-110"
 					loading={index < 3 ? "eager" : "lazy"}
+					onError={(e) => {
+						e.target.src =
+							"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
+					}}
 				/>
 				<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
 
 				<div className="absolute top-3 md:top-4 left-3 md:left-4 flex items-center space-x-2">
 					<Link
-						to={`/${post.category}`}
+						to={`/${safePost.category}`}
 						className="bg-gradient-to-r from-red-600 to-red-500 text-white px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-semibold shadow-lg hover:shadow-red-500/25 transition-all duration-300"
 					>
-						{post.category_name}
+						{safePost.category_name}
 					</Link>
-					{post.trending && (
+					{safePost.trending && (
 						<span className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white px-2 md:px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1">
 							<TrendingUp className="w-2.5 h-2.5 md:w-3 md:h-3" />
 							<span>TREND</span>
@@ -211,26 +280,26 @@ const PostCard = React.memo(({ post, index }) => {
 
 			<div className="p-4 md:p-8">
 				<Link
-					to={`/post/${post.id}`}
-					onMouseEnter={() => prefetchPost(post.id)}
+					to={`/post/${safePost.id}`}
+					onMouseEnter={() => prefetchPost(safePost.id)}
 				>
 					<h3 className="text-lg md:text-xl font-bold text-white mb-3 md:mb-4 group-hover:text-red-400 transition-colors duration-300 leading-tight line-clamp-2">
-						{post.title}
+						{safePost.title}
 					</h3>
 				</Link>
 				<p className="text-gray-400 mb-4 md:mb-6 leading-relaxed line-clamp-3 text-sm md:text-base">
-					{post.excerpt}
+					{safePost.excerpt}
 				</p>
 
 				<div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-3 md:space-y-0">
 					<div className="flex items-center space-x-3 md:space-x-4 text-xs md:text-sm text-gray-500">
 						<div className="flex items-center space-x-1.5 md:space-x-2">
 							<User className="w-3 h-3 md:w-4 md:h-4" />
-							<span>{post.author}</span>
+							<span>{safePost.author}</span>
 						</div>
 						<div className="flex items-center space-x-1.5 md:space-x-2">
 							<Clock className="w-3 h-3 md:w-4 md:h-4" />
-							<span>{post.read_time}</span>
+							<span>{safePost.read_time}</span>
 						</div>
 					</div>
 					<div className="flex items-center space-x-1.5 md:space-x-2 text-xs md:text-sm text-gray-500">
@@ -241,8 +310,8 @@ const PostCard = React.memo(({ post, index }) => {
 
 				<div className="mt-4 md:mt-6 pt-4 md:pt-6 border-t border-gray-700">
 					<Link
-						to={`/post/${post.id}`}
-						onMouseEnter={() => prefetchPost(post.id)}
+						to={`/post/${safePost.id}`}
+						onMouseEnter={() => prefetchPost(safePost.id)}
 						className="text-red-400 hover:text-red-300 font-semibold text-sm flex items-center space-x-2 group-hover:space-x-3 transition-all duration-300"
 					>
 						<span>Leia mais</span>
@@ -254,9 +323,35 @@ const PostCard = React.memo(({ post, index }) => {
 	);
 });
 
-// Componente de posts em destaque com Suspense
+// Componente de posts em destaque PROTEGIDO
 const FeaturedPostsSection = () => {
-	const { data: featuredPosts = [] } = useFeaturedPosts();
+	const { data: featuredPosts = [], isLoading, error } = useFeaturedPosts();
+
+	// ✅ HOOKS SEMPRE NO TOP LEVEL
+	const safeFeaturedPosts = useMemo(() => {
+		console.log("🔍 FeaturedPostsSection: Validando posts", {
+			isArray: Array.isArray(featuredPosts),
+			length: featuredPosts?.length,
+			type: typeof featuredPosts,
+		});
+
+		return validateAndFilterPosts(featuredPosts, "featured");
+	}, [featuredPosts]);
+
+	if (error) {
+		console.error("FeaturedPostsSection error:", error);
+		return (
+			<div className="py-16 md:py-24 bg-gradient-to-b from-black to-gray-900">
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+					<ErrorFallback
+						error={error}
+						resetErrorBoundary={() => window.location.reload()}
+						section="posts em destaque"
+					/>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="py-16 md:py-24 bg-gradient-to-b from-black to-gray-900">
@@ -276,32 +371,83 @@ const FeaturedPostsSection = () => {
 					</p>
 				</div>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-					{featuredPosts.map((post, index) => (
-						<PostCard key={post.id} post={post} index={index} />
-					))}
-				</div>
+				{isLoading ? (
+					<FeaturedPostsSkeleton />
+				) : safeFeaturedPosts.length === 0 ? (
+					<div className="text-center py-12">
+						<div className="w-16 h-16 bg-gray-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+							<TrendingUp className="w-8 h-8 text-gray-400" />
+						</div>
+						<h3 className="text-xl font-bold text-white mb-2">
+							Nenhum post em destaque
+						</h3>
+						<p className="text-gray-400 mb-6">
+							Os posts em destaque aparecerão aqui em breve.
+						</p>
+						<Link
+							to="/f1"
+							className="inline-flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-semibold transition-colors"
+						>
+							<span>Ver todos os posts</span>
+							<ArrowRight className="w-4 h-4" />
+						</Link>
+					</div>
+				) : (
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+						{safeFeaturedPosts.map((post, index) => (
+							<PostCard
+								key={`featured-${post.id}-${index}`}
+								post={post}
+								index={index}
+							/>
+						))}
+					</div>
+				)}
 			</div>
 		</div>
 	);
 };
 
-// Componente de lista de posts com Suspense
+// Componente de lista de posts ULTRA PROTEGIDO - HOOKS CORRIGIDOS
 const PostListSection = () => {
 	const { data: allPosts = [], isLoading, error } = useAllPosts();
 	const { prefetchPost } = usePrefetch();
 
+	// ✅ HOOKS SEMPRE NO TOP LEVEL
+	const safeAllPosts = useMemo(() => {
+		console.log("🔍 PostListSection: Validando posts", {
+			isArray: Array.isArray(allPosts),
+			length: allPosts?.length,
+			type: typeof allPosts,
+		});
+
+		return validateAndFilterPosts(allPosts, "all-posts");
+	}, [allPosts]);
+
 	const formatDate = (dateString) => {
 		try {
-			return new Date(dateString).toLocaleDateString("pt-BR");
+			if (!dateString) return "Data não disponível";
+			const date = new Date(dateString);
+			return isNaN(date.getTime())
+				? "Data inválida"
+				: date.toLocaleDateString("pt-BR");
 		} catch (error) {
-			return "Data inválida";
+			return "Data não disponível";
 		}
 	};
 
 	// Loading state
 	if (isLoading) {
-		return <PostListSkeleton />;
+		return (
+			<div className="lg:col-span-2">
+				<div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 md:mb-12 space-y-4 md:space-y-0">
+					<h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-white">
+						Últimos Artigos
+					</h2>
+				</div>
+				<PostListSkeleton />
+			</div>
+		);
 	}
 
 	// Error state
@@ -318,7 +464,7 @@ const PostListSection = () => {
 	}
 
 	// Empty state
-	if (!allPosts || allPosts.length === 0) {
+	if (safeAllPosts.length === 0) {
 		return (
 			<div className="lg:col-span-2 text-center py-12">
 				<div className="w-16 h-16 bg-gray-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -356,88 +502,115 @@ const PostListSection = () => {
 			</div>
 
 			<div className="space-y-6 md:space-y-8">
-				{allPosts.map((post, index) => (
-					<article
-						key={post.id}
-						className="group bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-gray-700/50 hover:border-red-500/30 transition-all duration-500 hover:scale-[1.02]"
-					>
-						<div className="flex flex-col md:flex-row gap-6 md:gap-8">
-							<div className="relative overflow-hidden rounded-xl md:rounded-2xl">
-								<img
-									src={post.image_url}
-									alt={post.title}
-									className="w-full md:w-64 h-48 object-cover transition-transform duration-700 group-hover:scale-110"
-									loading={index < 3 ? "eager" : "lazy"}
-								/>
-								<div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-							</div>
-							<div className="flex-1 space-y-3 md:space-y-4">
-								<div className="flex flex-wrap items-center gap-2 md:gap-3">
-									<Link
-										to={`/${post.category}`}
-										className="text-red-400 text-sm font-semibold hover:text-red-300 transition-colors duration-300"
-									>
-										{post.category_name}
-									</Link>
-									{post.trending && (
-										<>
-											<span className="text-gray-600">•</span>
-											<span className="text-orange-400 text-sm font-semibold flex items-center space-x-1">
-												<TrendingUp className="w-3 h-3" />
-												<span>Trending</span>
-											</span>
-										</>
-									)}
+				{safeAllPosts.map((post, index) => {
+					// Validação individual de cada post
+					if (!isValidPost(post)) {
+						console.warn(`Post ${index} inválido no PostListSection`, post);
+						return null;
+					}
+
+					const safePost = {
+						id: post.id || `fallback-${index}`,
+						title: post.title || "Título não disponível",
+						excerpt: post.excerpt || "Descrição não disponível",
+						image_url:
+							post.image_url ||
+							"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+						category: post.category || "geral",
+						category_name: post.category_name || "Geral",
+						author: post.author || "Equipe TF",
+						read_time: post.read_time || "5 min",
+						trending: post.trending || false,
+						created_at: post.created_at || new Date().toISOString(),
+					};
+
+					return (
+						<article
+							key={`post-${safePost.id}-${index}`}
+							className="group bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-gray-700/50 hover:border-red-500/30 transition-all duration-500 hover:scale-[1.02]"
+						>
+							<div className="flex flex-col md:flex-row gap-6 md:gap-8">
+								<div className="relative overflow-hidden rounded-xl md:rounded-2xl">
+									<img
+										src={safePost.image_url}
+										alt={safePost.title}
+										className="w-full md:w-64 h-48 object-cover transition-transform duration-700 group-hover:scale-110"
+										loading={index < 3 ? "eager" : "lazy"}
+										onError={(e) => {
+											e.target.src =
+												"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
+										}}
+									/>
+									<div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
 								</div>
-								<Link
-									to={`/post/${post.id}`}
-									onMouseEnter={() => prefetchPost(post.id)}
-								>
-									<h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-red-400 transition-colors duration-300 leading-tight">
-										{post.title}
-									</h3>
-								</Link>
-								<p className="text-gray-400 leading-relaxed text-sm md:text-base">
-									{post.excerpt}
-								</p>
-								<div className="flex flex-col md:flex-row md:items-center md:justify-between pt-4 space-y-3 md:space-y-0">
-									<div className="flex flex-wrap items-center gap-4 md:gap-6 text-xs md:text-sm text-gray-500">
-										<div className="flex items-center space-x-2">
-											<User className="w-4 h-4" />
-											<span>{post.author}</span>
-										</div>
-										<div className="flex items-center space-x-2">
-											<Clock className="w-4 h-4" />
-											<span>{post.read_time}</span>
-										</div>
-										<div className="flex items-center space-x-2">
-											<Calendar className="w-4 h-4" />
-											<span>{formatDate(post.created_at)}</span>
-										</div>
+								<div className="flex-1 space-y-3 md:space-y-4">
+									<div className="flex flex-wrap items-center gap-2 md:gap-3">
+										<Link
+											to={`/${safePost.category}`}
+											className="text-red-400 text-sm font-semibold hover:text-red-300 transition-colors duration-300"
+										>
+											{safePost.category_name}
+										</Link>
+										{safePost.trending && (
+											<>
+												<span className="text-gray-600">•</span>
+												<span className="text-orange-400 text-sm font-semibold flex items-center space-x-1">
+													<TrendingUp className="w-3 h-3" />
+													<span>Trending</span>
+												</span>
+											</>
+										)}
 									</div>
 									<Link
-										to={`/post/${post.id}`}
-										onMouseEnter={() => prefetchPost(post.id)}
-										className="text-red-400 hover:text-red-300 font-semibold text-sm flex items-center space-x-2 group-hover:space-x-3 transition-all duration-300 self-start md:self-auto"
+										to={`/post/${safePost.id}`}
+										onMouseEnter={() => prefetchPost(safePost.id)}
 									>
-										<span>Leia mais</span>
-										<ArrowRight className="w-4 h-4" />
+										<h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-red-400 transition-colors duration-300 leading-tight">
+											{safePost.title}
+										</h3>
 									</Link>
+									<p className="text-gray-400 leading-relaxed text-sm md:text-base">
+										{safePost.excerpt}
+									</p>
+									<div className="flex flex-col md:flex-row md:items-center md:justify-between pt-4 space-y-3 md:space-y-0">
+										<div className="flex flex-wrap items-center gap-4 md:gap-6 text-xs md:text-sm text-gray-500">
+											<div className="flex items-center space-x-2">
+												<User className="w-4 h-4" />
+												<span>{safePost.author}</span>
+											</div>
+											<div className="flex items-center space-x-2">
+												<Clock className="w-4 h-4" />
+												<span>{safePost.read_time}</span>
+											</div>
+											<div className="flex items-center space-x-2">
+												<Calendar className="w-4 h-4" />
+												<span>{formatDate(safePost.created_at)}</span>
+											</div>
+										</div>
+										<Link
+											to={`/post/${safePost.id}`}
+											onMouseEnter={() => prefetchPost(safePost.id)}
+											className="text-red-400 hover:text-red-300 font-semibold text-sm flex items-center space-x-2 group-hover:space-x-3 transition-all duration-300 self-start md:self-auto"
+										>
+											<span>Leia mais</span>
+											<ArrowRight className="w-4 h-4" />
+										</Link>
+									</div>
 								</div>
 							</div>
-						</div>
-					</article>
-				))}
+						</article>
+					);
+				})}
 			</div>
 		</div>
 	);
 };
 
-// Sidebar memoizada
+// Sidebar memoizada e protegida
 const Sidebar = React.memo(() => {
 	const { prefetchCategory } = usePrefetch();
-	const { getStats } = useCacheStats();
 
+	// ✅ HOOKS SEMPRE NO TOP LEVEL
 	const staticCategories = useMemo(
 		() => [
 			{
@@ -492,9 +665,8 @@ const Sidebar = React.memo(() => {
 				{/* Debug info apenas em desenvolvimento */}
 				{process.env.NODE_ENV === "development" && (
 					<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl md:rounded-3xl p-3 md:p-4 border border-gray-700/50">
-						<div className="text-xs text-gray-500">
-							⚡ Sistema Ultra-Rápido | Cache Stats:{" "}
-							{JSON.stringify(getStats(), null, 2)}
+						<div className="text-xs text-green-400">
+							✅ Sistema Estabilizado | Hooks Corrigidos
 						</div>
 					</div>
 				)}
@@ -622,31 +794,25 @@ const Sidebar = React.memo(() => {
 	);
 });
 
-// Componente principal Home otimizado
+// Componente principal Home SUPER PROTEGIDO
 const OptimizedHome = () => {
 	return (
 		<>
 			{/* Hero Section */}
 			<HeroSection />
 
-			{/* Posts em Destaque com Suspense */}
+			{/* Posts em Destaque com Error Boundary */}
 			<ErrorBoundary
 				FallbackComponent={(props) => (
-					<ErrorFallback {...props} section="posts em destaque" />
+					<div className="py-16 md:py-24 bg-gradient-to-b from-black to-gray-900">
+						<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+							<ErrorFallback {...props} section="posts em destaque" />
+						</div>
+					</div>
 				)}
 				onReset={() => window.location.reload()}
 			>
-				<Suspense
-					fallback={
-						<div className="py-16 md:py-24 bg-gradient-to-b from-black to-gray-900">
-							<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-								<FeaturedPostsSkeleton />
-							</div>
-						</div>
-					}
-				>
-					<FeaturedPostsSection />
-				</Suspense>
+				<FeaturedPostsSection />
 			</ErrorBoundary>
 
 			{/* Últimos Artigos com Sidebar */}
@@ -656,7 +822,9 @@ const OptimizedHome = () => {
 						{/* Lista de Posts com Error Boundary próprio */}
 						<ErrorBoundary
 							FallbackComponent={(props) => (
-								<ErrorFallback {...props} section="últimos artigos" />
+								<div className="lg:col-span-2">
+									<ErrorFallback {...props} section="últimos artigos" />
+								</div>
 							)}
 							onReset={() => window.location.reload()}
 						>
