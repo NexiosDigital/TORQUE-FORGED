@@ -14,18 +14,17 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import {
-	useAllPostsAdmin, // Usando hook admin específico
+	useAllPostsAdmin,
 	useUpdatePost,
 	useDeletePost,
-	useCacheUtils,
 } from "../../hooks/usePostsQuery";
 import { ErrorBoundary } from "react-error-boundary";
 
 /**
- * Dashboard Admin - Usando hooks administrativos separados
- * - Usa useAllPostsAdmin para ver todos os posts (incluindo rascunhos)
- * - Separado completamente da visualização pública
+ * Dashboard Admin - Limpo e Sem Debug
+ * - Usa hooks administrativos separados
  * - Cache específico para admin
+ * - Interface clean e funcional
  */
 
 // Loading skeleton para dashboard
@@ -111,9 +110,6 @@ const RealTimeStats = React.memo(({ posts }) => {
 		};
 	}, [posts]);
 
-	const { getCacheStats } = useCacheUtils();
-	const cacheStats = getCacheStats();
-
 	const statCards = [
 		{
 			title: "Total de Posts",
@@ -151,7 +147,7 @@ const RealTimeStats = React.memo(({ posts }) => {
 
 	return (
 		<div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-			{statCards.map((stat, index) => {
+			{statCards.map((stat) => {
 				const Icon = stat.icon;
 				return (
 					<div
@@ -170,14 +166,6 @@ const RealTimeStats = React.memo(({ posts }) => {
 									{stat.value.toLocaleString()}
 								</p>
 								<p className="text-xs text-gray-500">{stat.subtitle}</p>
-
-								{/* Performance metrics apenas em dev */}
-								{process.env.NODE_ENV === "development" && index === 0 && (
-									<div className="mt-2 text-xs text-gray-600">
-										<div>Admin Cache: {cacheStats.admin?.total || 0}</div>
-										<div>Public Cache: {cacheStats.public?.total || 0}</div>
-									</div>
-								)}
 							</div>
 							<Icon className={`w-8 h-8 ${stat.color} opacity-80`} />
 						</div>
@@ -368,11 +356,10 @@ const PostsTable = React.memo(({ posts, filter }) => {
 const DashboardContent = () => {
 	const { signOut, isAdmin, getDisplayName } = useAuth();
 
-	// USANDO HOOK ADMIN ESPECÍFICO
+	// Hook admin específico
 	const { data: posts = [], isLoading, error, refetch } = useAllPostsAdmin();
 
 	const [filter, setFilter] = React.useState("all");
-	const { debugConnection } = useCacheUtils();
 
 	// Redirect se não for admin
 	React.useEffect(() => {
@@ -391,11 +378,6 @@ const DashboardContent = () => {
 
 	const handleRefresh = () => {
 		refetch();
-	};
-
-	const handleDebug = async () => {
-		const result = await debugConnection();
-		console.log("🔧 Debug Result:", result);
 	};
 
 	if (error) {
@@ -417,28 +399,9 @@ const DashboardContent = () => {
 								{getDisplayName()}
 							</span>
 						</p>
-
-						{/* Debug info apenas em dev */}
-						{process.env.NODE_ENV === "development" && (
-							<div className="mt-2 text-xs text-gray-500">
-								📊 Admin Dashboard | Posts: {posts.length} | Loading:{" "}
-								{isLoading ? "Sim" : "Não"}
-							</div>
-						)}
 					</div>
 
 					<div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-						{/* Debug button apenas em dev */}
-						{process.env.NODE_ENV === "development" && (
-							<button
-								onClick={handleDebug}
-								className="flex items-center justify-center space-x-2 border border-yellow-600 hover:border-yellow-500 text-yellow-300 hover:text-yellow-200 px-4 py-2 rounded-xl font-semibold transition-all duration-300"
-							>
-								<Shield className="w-4 h-4" />
-								<span>Debug</span>
-							</button>
-						)}
-
 						<button
 							onClick={handleRefresh}
 							disabled={isLoading}
@@ -523,7 +486,6 @@ const OptimizedAdminDashboard = () => {
 		<ErrorBoundary
 			FallbackComponent={DashboardErrorFallback}
 			onReset={() => {
-				// Limpar cache e recarregar
 				window.location.reload();
 			}}
 		>

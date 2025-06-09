@@ -14,15 +14,13 @@ import {
 	usePostsByCategory,
 	usePrefetch,
 } from "../hooks/usePostsQuery";
-import { useRealtimePost } from "../hooks/useRealtimeSync";
 import { ErrorBoundary } from "react-error-boundary";
 
 /**
- * OptimizedPostDetail - 100% Dinâmico do Banco
- * - SEM fallbacks estáticos
- * - Realtime sync para atualizações ao vivo
+ * OptimizedPostDetail - Limpo e Sem Debug
+ * - 100% dinâmico do banco
  * - Error handling robusto
- * - Cache persistence automático
+ * - Performance otimizada
  */
 
 // Loading skeleton para post
@@ -87,12 +85,6 @@ const PostNotFoundFallback = ({ error, resetErrorBoundary, postId }) => (
 				Verifique se o link está correto ou escolha outro post para ler.
 			</p>
 
-			{process.env.NODE_ENV === "development" && (
-				<p className="text-xs text-gray-600 mb-6 font-mono">
-					Post ID: {postId} | Erro: {error?.message}
-				</p>
-			)}
-
 			<div className="space-y-4">
 				<Link
 					to="/"
@@ -136,7 +128,6 @@ const ShareButton = React.memo(({ post }) => {
 				}
 			}
 		} catch (error) {
-			console.warn("Share failed:", error);
 			try {
 				const textArea = document.createElement("textarea");
 				textArea.value = window.location.href;
@@ -146,7 +137,7 @@ const ShareButton = React.memo(({ post }) => {
 				document.body.removeChild(textArea);
 				alert("URL copiada para a área de transferência!");
 			} catch (fallbackError) {
-				console.error("All share methods failed:", fallbackError);
+				console.error("Falha ao compartilhar:", fallbackError);
 			}
 		}
 	};
@@ -269,7 +260,6 @@ const RelatedPosts = React.memo(({ currentPost }) => {
 const PostDetailContent = () => {
 	const { id } = useParams();
 	const { data: post } = usePostByIdSuspense(id);
-	const { isLive } = useRealtimePost(id);
 
 	const formatDate = useMemo(() => {
 		if (!post?.created_at) return "Data não disponível";
@@ -280,7 +270,7 @@ const PostDetailContent = () => {
 		}
 	}, [post]);
 
-	// SEO optimization - definir meta tags dinamicamente
+	// SEO optimization
 	React.useEffect(() => {
 		if (post?.title && post?.excerpt) {
 			document.title = `${post.title} | Torque Forged Motorsport`;
@@ -320,13 +310,6 @@ const PostDetailContent = () => {
 
 	return (
 		<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
-			{/* Live update indicator */}
-			{isLive && (
-				<div className="fixed top-24 right-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-xl animate-pulse z-50">
-					🔴 Atualizado ao vivo
-				</div>
-			)}
-
 			{/* Hero Image */}
 			<div className="relative h-96 md:h-[60vh] overflow-hidden">
 				<img
@@ -441,21 +424,6 @@ const PostDetailContent = () => {
 							<RelatedPosts currentPost={post} />
 						</ErrorBoundary>
 					</Suspense>
-
-					{/* Debug Info */}
-					{process.env.NODE_ENV === "development" && (
-						<div className="mt-12 p-6 bg-gray-900/50 rounded-2xl border border-gray-700/30">
-							<h4 className="text-white font-bold mb-4">Debug Info</h4>
-							<div className="text-xs text-gray-400 space-y-1 font-mono">
-								<div>Post ID: {post.id}</div>
-								<div>Category: {post.category}</div>
-								<div>Published: {post.published ? "Yes" : "No"}</div>
-								<div>Trending: {post.trending ? "Yes" : "No"}</div>
-								<div>Realtime: {isLive ? "Live update!" : "Stable"}</div>
-								<div>Sistema: React Query + Supabase Realtime</div>
-							</div>
-						</div>
-					)}
 				</div>
 			</div>
 		</div>

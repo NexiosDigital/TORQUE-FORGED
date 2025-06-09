@@ -15,9 +15,8 @@ import { ErrorBoundary } from "react-error-boundary";
 /**
  * CategoryPage - 100% Dinâmica do Banco
  * - SEM fallbacks estáticos
- * - Usa novos hooks limpos
+ * - Limpa e sem debug
  * - Error handling robusto
- * - Cache persistence automático
  */
 
 // Loading skeleton para categoria
@@ -74,17 +73,6 @@ const PostsErrorFallback = ({ error, resetErrorBoundary, categoryName }) => (
 				<span>Voltar ao início</span>
 			</Link>
 		</div>
-
-		{process.env.NODE_ENV === "development" && (
-			<details className="mt-8 text-left max-w-md mx-auto">
-				<summary className="text-red-400 cursor-pointer text-sm">
-					Debug Info
-				</summary>
-				<pre className="mt-2 bg-gray-900 p-4 rounded-lg text-xs text-gray-300 overflow-auto">
-					{error?.stack}
-				</pre>
-			</details>
-		)}
 	</div>
 );
 
@@ -97,13 +85,11 @@ const PostCard = React.memo(({ post, index, gradient }) => {
 		try {
 			return new Date(post.created_at).toLocaleDateString("pt-BR");
 		} catch (error) {
-			console.warn("PostCard: Erro ao formatar data", { error, post });
 			return "Data não disponível";
 		}
 	}, [post]);
 
 	if (!post) {
-		console.warn("PostCard: Post inválido recebido", post);
 		return null;
 	}
 
@@ -198,7 +184,6 @@ const CategoryPostsGrid = ({ categoryId, title, gradient }) => {
 	}
 
 	if (error) {
-		console.error(`CategoryPostsGrid ${categoryId} error:`, error);
 		throw error;
 	}
 
@@ -237,14 +222,6 @@ const CategoryPostsGrid = ({ categoryId, title, gradient }) => {
 					Últimas publicações sobre{" "}
 					{title ? title.toLowerCase() : "a categoria selecionada"}
 				</p>
-
-				{process.env.NODE_ENV === "development" && (
-					<div className="mt-2 text-xs text-gray-500 font-mono">
-						🚀 React Query + Supabase | {categoryId} | Cache:{" "}
-						{categoryPosts.length > 0 ? "HIT" : "MISS"} | Count:{" "}
-						{categoryPosts.length}
-					</div>
-				)}
 			</div>
 
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">

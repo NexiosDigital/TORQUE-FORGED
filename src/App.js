@@ -12,6 +12,10 @@ const Home = lazy(() =>
 	import(/* webpackChunkName: "home" */ "./pages/OptimizedHome")
 );
 
+const AllPosts = lazy(() =>
+	import(/* webpackChunkName: "all-posts" */ "./pages/AllPosts")
+);
+
 const Formula1 = lazy(() =>
 	import(/* webpackChunkName: "categories" */ "./pages/Formula1")
 );
@@ -68,7 +72,7 @@ const PostEditor = lazy(() =>
 	import(/* webpackChunkName: "admin" */ "./pages/Admin/PostEditor")
 );
 
-// Componente de loading MODERNO
+// Componente de loading moderno e limpo
 const ModernPageLoader = ({ page = "página" }) => (
 	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 		<div className="text-center">
@@ -89,8 +93,6 @@ const ModernPageLoader = ({ page = "página" }) => (
 						/>
 					</svg>
 				</div>
-
-				{/* Efeito de pulso */}
 				<div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl mx-auto animate-ping opacity-20"></div>
 			</div>
 
@@ -102,18 +104,11 @@ const ModernPageLoader = ({ page = "página" }) => (
 			<div className="w-64 h-2 bg-gray-800 rounded-full mx-auto overflow-hidden">
 				<div className="h-full bg-gradient-to-r from-red-600 to-red-500 rounded-full animate-pulse"></div>
 			</div>
-
-			{/* Info técnica em desenvolvimento */}
-			{process.env.NODE_ENV === "development" && (
-				<p className="text-xs text-gray-500 mt-4 font-mono">
-					🚀 React Query + Supabase Realtime
-				</p>
-			)}
 		</div>
 	</div>
 );
 
-// Error boundary MELHORADO
+// Error boundary melhorado
 const AppErrorBoundary = ({ error, resetErrorBoundary }) => (
 	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 		<div className="text-center p-8 max-w-lg mx-auto">
@@ -159,23 +154,6 @@ const AppErrorBoundary = ({ error, resetErrorBoundary }) => (
 					Voltar ao Início
 				</button>
 			</div>
-
-			{/* Debug em desenvolvimento */}
-			{process.env.NODE_ENV === "development" && error && (
-				<details className="mt-8 text-left">
-					<summary className="text-red-400 cursor-pointer mb-4 text-sm font-semibold">
-						🔧 Detalhes do erro (desenvolvimento)
-					</summary>
-					<div className="bg-gray-900 p-4 rounded-xl border border-gray-700">
-						<p className="text-red-300 text-sm mb-2 font-mono">
-							{error.message}
-						</p>
-						<pre className="text-gray-400 text-xs overflow-auto max-h-40 font-mono">
-							{error.stack}
-						</pre>
-					</div>
-				</details>
-			)}
 		</div>
 	</div>
 );
@@ -187,28 +165,15 @@ function App() {
 			FallbackComponent={AppErrorBoundary}
 			onError={(error, errorInfo) => {
 				console.error("🔴 App Error Boundary:", error, errorInfo);
-
-				// Log para serviços de monitoramento em produção
-				if (process.env.NODE_ENV === "production") {
-					// analytics.track('app_error_boundary', {
-					//   error: error.message,
-					//   stack: error.stack,
-					//   componentStack: errorInfo.componentStack,
-					// });
-				}
 			}}
 			onReset={() => {
-				// Limpar estados/cache se necessário
-				if (window.cacheUtils) {
-					window.cacheUtils.clear();
-				}
 				window.location.reload();
 			}}
 		>
 			<AuthProvider>
 				<ModernQueryProvider>
 					<div className="App">
-						{/* Toast notifications MODERNAS */}
+						{/* Toast notifications modernas */}
 						<Toaster
 							position="top-right"
 							gutter={8}
@@ -271,6 +236,20 @@ function App() {
 									<Layout>
 										<Suspense fallback={<ModernPageLoader page="homepage" />}>
 											<Home />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							{/* Nova rota para todos os posts */}
+							<Route
+								path="/posts"
+								element={
+									<Layout>
+										<Suspense
+											fallback={<ModernPageLoader page="todos os posts" />}
+										>
+											<AllPosts />
 										</Suspense>
 									</Layout>
 								}
@@ -451,7 +430,7 @@ function App() {
 								}
 							/>
 
-							{/* 404 Route MODERNA */}
+							{/* 404 Route */}
 							<Route
 								path="*"
 								element={

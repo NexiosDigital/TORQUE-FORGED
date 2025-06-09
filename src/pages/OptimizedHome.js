@@ -12,111 +12,14 @@ import {
 	Zap,
 	Settings,
 	AlertCircle,
-	Bug,
 } from "lucide-react";
 import {
 	useFeaturedPosts,
 	useAllPosts,
 	useCategories,
 	usePrefetch,
-	useAutoDebug,
-	useCacheUtils,
 } from "../hooks/usePostsQuery";
 import { ErrorBoundary } from "react-error-boundary";
-
-/**
- * OptimizedHome com Debug Automático
- * - Debug automático em desenvolvimento
- * - Logs detalhados no console
- * - Botão de debug manual
- * - Cliente público forçado
- */
-
-// Debug Panel para desenvolvimento
-const DebugPanel = () => {
-	const { data: debugData } = useAutoDebug();
-	const { debugConnection, getCacheStats, forceRefreshAll, clearCache } =
-		useCacheUtils();
-	const [showPanel, setShowPanel] = React.useState(false);
-
-	if (process.env.NODE_ENV !== "development") return null;
-
-	return (
-		<div className="fixed bottom-4 right-4 z-50">
-			<button
-				onClick={() => setShowPanel(!showPanel)}
-				className="bg-yellow-600 hover:bg-yellow-500 text-white p-3 rounded-full shadow-xl transition-all duration-300"
-				title="Debug Panel"
-			>
-				<Bug className="w-5 h-5" />
-			</button>
-
-			{showPanel && (
-				<div className="absolute bottom-16 right-0 w-80 bg-gray-900 border border-gray-700 rounded-2xl p-4 shadow-2xl">
-					<h3 className="text-white font-bold mb-3 flex items-center space-x-2">
-						<Bug className="w-4 h-4" />
-						<span>Debug Panel</span>
-					</h3>
-
-					<div className="space-y-3 text-sm">
-						{/* Status atual */}
-						{debugData && (
-							<div className="bg-gray-800 p-3 rounded-lg">
-								<p className="text-gray-300 mb-2">
-									<strong>Auth:</strong>{" "}
-									{debugData.authentication?.isLoggedIn
-										? "Logado"
-										: "Não logado"}
-								</p>
-								<p className="text-gray-300 mb-2">
-									<strong>Posts Públicos:</strong>{" "}
-									{debugData.database?.public?.count || 0}
-								</p>
-								<p className="text-gray-300">
-									<strong>Posts Admin:</strong>{" "}
-									{debugData.database?.admin?.count || 0}
-								</p>
-							</div>
-						)}
-
-						{/* Botões de ação */}
-						<div className="grid grid-cols-2 gap-2">
-							<button
-								onClick={debugConnection}
-								className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-xs font-semibold"
-							>
-								Debug
-							</button>
-							<button
-								onClick={getCacheStats}
-								className="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-xs font-semibold"
-							>
-								Cache
-							</button>
-							<button
-								onClick={forceRefreshAll}
-								className="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded text-xs font-semibold"
-							>
-								Refresh
-							</button>
-							<button
-								onClick={clearCache}
-								className="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-xs font-semibold"
-							>
-								Clear
-							</button>
-						</div>
-
-						{/* Instruções */}
-						<div className="bg-yellow-900/30 p-2 rounded text-xs text-yellow-300">
-							<p>📊 Verifique o console para logs detalhados</p>
-						</div>
-					</div>
-				</div>
-			)}
-		</div>
-	);
-};
 
 // Loading skeletons modernos
 const FeaturedPostsSkeleton = () => (
@@ -166,7 +69,7 @@ const PostListSkeleton = () => (
 	</div>
 );
 
-// Error fallbacks específicos com debug
+// Error fallbacks específicos
 const ErrorFallback = ({ error, resetErrorBoundary, section }) => (
 	<div className="text-center py-16">
 		<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
@@ -175,24 +78,9 @@ const ErrorFallback = ({ error, resetErrorBoundary, section }) => (
 		<h3 className="text-2xl font-bold text-white mb-4">
 			Erro ao carregar {section}
 		</h3>
-		<p className="text-gray-400 mb-2">
+		<p className="text-gray-400 mb-8">
 			{error?.message || "Algo deu errado ao carregar os dados"}
 		</p>
-		<p className="text-gray-500 text-sm mb-8">
-			Verifique o console para mais detalhes
-		</p>
-
-		{/* Debug info em desenvolvimento */}
-		{process.env.NODE_ENV === "development" && (
-			<div className="bg-gray-900/50 rounded-xl p-4 mb-6 text-left max-w-md mx-auto">
-				<h4 className="text-yellow-400 font-bold mb-2">Debug Info:</h4>
-				<p className="text-xs text-gray-300 font-mono break-all">
-					Error: {error?.message}
-				</p>
-				<p className="text-xs text-gray-400 mt-2">Section: {section}</p>
-			</div>
-		)}
-
 		<div className="space-y-4">
 			<button
 				onClick={resetErrorBoundary}
@@ -288,22 +176,9 @@ const HeroSection = React.memo(() => {
 	);
 });
 
-// Featured Posts Section com debug
+// Featured Posts Section
 const FeaturedPostsSection = () => {
 	const { data: featuredPosts = [], isLoading, error } = useFeaturedPosts();
-
-	// Debug log
-	React.useEffect(() => {
-		console.log("🎯 FeaturedPostsSection render:", {
-			isLoading,
-			error: error?.message,
-			postsCount: featuredPosts?.length || 0,
-			posts:
-				featuredPosts
-					?.slice(0, 2)
-					?.map((p) => ({ id: p.id, title: p.title })) || [],
-		});
-	}, [isLoading, error, featuredPosts]);
 
 	if (error) {
 		return (
@@ -334,15 +209,6 @@ const FeaturedPostsSection = () => {
 					<p className="text-xl text-gray-400 max-w-2xl mx-auto">
 						As últimas novidades do mundo do motorsport direto da nossa redação
 					</p>
-
-					{/* Debug info em desenvolvimento */}
-					{process.env.NODE_ENV === "development" && (
-						<div className="mt-4 text-xs text-gray-500 font-mono">
-							📊 Featured:{" "}
-							{isLoading ? "Loading..." : `${featuredPosts.length} posts`}
-							{error && ` | Error: ${error.message}`}
-						</div>
-					)}
 				</div>
 
 				{/* Content */}
@@ -359,16 +225,6 @@ const FeaturedPostsSection = () => {
 						<p className="text-gray-400 mb-8">
 							Os posts em destaque aparecerão aqui assim que forem publicados.
 						</p>
-
-						{/* Debug em desenvolvimento */}
-						{process.env.NODE_ENV === "development" && (
-							<div className="bg-yellow-900/20 border border-yellow-700 rounded-xl p-4 max-w-md mx-auto mb-8">
-								<p className="text-yellow-300 text-sm">
-									🔧 Debug: Verifique se há posts com trending=true no banco
-								</p>
-							</div>
-						)}
-
 						<Link
 							to="/f1"
 							className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
@@ -389,7 +245,7 @@ const FeaturedPostsSection = () => {
 	);
 };
 
-// PostCard sem fallbacks
+// PostCard sem debugs
 const PostCard = React.memo(({ post, index }) => {
 	const { prefetchPost } = usePrefetch();
 
@@ -485,21 +341,15 @@ const PostCard = React.memo(({ post, index }) => {
 	);
 });
 
-// Posts List Section com debug
+// Posts List Section limitada
 const PostListSection = () => {
 	const { data: allPosts = [], isLoading, error } = useAllPosts();
 	const { prefetchPost } = usePrefetch();
 
-	// Debug log
-	React.useEffect(() => {
-		console.log("📝 PostListSection render:", {
-			isLoading,
-			error: error?.message,
-			postsCount: allPosts?.length || 0,
-			posts:
-				allPosts?.slice(0, 2)?.map((p) => ({ id: p.id, title: p.title })) || [],
-		});
-	}, [isLoading, error, allPosts]);
+	// Limitar para apenas 4 posts na home
+	const limitedPosts = useMemo(() => {
+		return allPosts.slice(0, 4);
+	}, [allPosts]);
 
 	if (isLoading) {
 		return (
@@ -538,15 +388,6 @@ const PostListSection = () => {
 				<p className="text-gray-400 mb-8">
 					Não há posts publicados no momento. Volte em breve!
 				</p>
-
-				{/* Debug em desenvolvimento */}
-				{process.env.NODE_ENV === "development" && (
-					<div className="bg-yellow-900/20 border border-yellow-700 rounded-xl p-4 max-w-md mx-auto">
-						<p className="text-yellow-300 text-sm">
-							🔧 Debug: Verifique se há posts com published=true no banco
-						</p>
-					</div>
-				)}
 			</div>
 		);
 	}
@@ -558,7 +399,7 @@ const PostListSection = () => {
 					Últimos Artigos
 				</h2>
 				<Link
-					to="/f1"
+					to="/posts"
 					className="text-red-400 hover:text-red-300 font-bold flex items-center space-x-2 group"
 				>
 					<span>Ver todos</span>
@@ -566,15 +407,8 @@ const PostListSection = () => {
 				</Link>
 			</div>
 
-			{/* Debug info em desenvolvimento */}
-			{process.env.NODE_ENV === "development" && (
-				<div className="mb-4 text-xs text-gray-500 font-mono">
-					📊 All Posts: {allPosts.length} carregados
-				</div>
-			)}
-
 			<div className="space-y-8">
-				{allPosts.map((post, index) => {
+				{limitedPosts.map((post, index) => {
 					const formatDate = (dateString) => {
 						try {
 							return new Date(dateString).toLocaleDateString("pt-BR");
@@ -664,6 +498,19 @@ const PostListSection = () => {
 					);
 				})}
 			</div>
+
+			{/* Ver mais posts */}
+			{allPosts.length > 4 && (
+				<div className="text-center pt-8">
+					<Link
+						to="/posts"
+						className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
+					>
+						<span>Ver todos os {allPosts.length} posts</span>
+						<ArrowRight className="w-4 h-4" />
+					</Link>
+				</div>
+			)}
 		</div>
 	);
 };
@@ -683,14 +530,6 @@ const Sidebar = React.memo(() => {
 						<div className="w-2 h-8 bg-gradient-to-b from-red-500 to-orange-500 rounded-full"></div>
 						<span>Categorias</span>
 					</h3>
-
-					{/* Debug em desenvolvimento */}
-					{process.env.NODE_ENV === "development" && (
-						<div className="mb-4 text-xs text-gray-500 font-mono">
-							📂 Categories:{" "}
-							{loadingCategories ? "Loading..." : categories.length}
-						</div>
-					)}
 
 					{loadingCategories ? (
 						<div className="space-y-4">
@@ -712,11 +551,6 @@ const Sidebar = React.memo(() => {
 					) : categories.length === 0 ? (
 						<div className="text-center py-8">
 							<p className="text-gray-400">Nenhuma categoria encontrada</p>
-							{process.env.NODE_ENV === "development" && (
-								<p className="text-yellow-400 text-xs mt-2">
-									🔧 Verifique a tabela 'categories' no banco
-								</p>
-							)}
 						</div>
 					) : (
 						<div className="space-y-4">
@@ -803,26 +637,10 @@ const Sidebar = React.memo(() => {
 	);
 });
 
-// Componente principal Home com debug
+// Componente principal Home
 const OptimizedHome = () => {
-	// Auto debug em desenvolvimento
-	const {} = useAutoDebug();
-
-	React.useEffect(() => {
-		console.log("🏠 OptimizedHome: Componente montado");
-
-		if (process.env.NODE_ENV === "development") {
-			console.log(
-				"🔧 Modo desenvolvimento ativo - Debug automático habilitado"
-			);
-		}
-	}, []);
-
 	return (
 		<>
-			{/* Debug Panel em desenvolvimento */}
-			<DebugPanel />
-
 			{/* Hero Section */}
 			<HeroSection />
 
@@ -840,11 +658,11 @@ const OptimizedHome = () => {
 				<FeaturedPostsSection />
 			</ErrorBoundary>
 
-			{/* Últimos Artigos com Sidebar */}
+			{/* Últimos Artigos com Sidebar - LAYOUT ALINHADO */}
 			<div className="py-24 bg-gradient-to-b from-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-						{/* Lista de Posts */}
+					<div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
+						{/* Lista de Posts - com altura limitada */}
 						<ErrorBoundary
 							FallbackComponent={(props) => (
 								<div className="lg:col-span-2">
@@ -856,7 +674,7 @@ const OptimizedHome = () => {
 							<PostListSection />
 						</ErrorBoundary>
 
-						{/* Sidebar */}
+						{/* Sidebar - com altura fixa */}
 						<Sidebar />
 					</div>
 				</div>
