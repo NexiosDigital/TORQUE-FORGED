@@ -11,17 +11,10 @@
     "supabase",
     "performance"
   ],
-  "homepage": "https://torqueforged.com",
-  "bugs": {
-    "url": "https://github.com/Petronilha/torque-forged-motorsport/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Petronilha/torque-forged-motorsport.git"
-  },
+  "homepage": "https://torqueforgedmotorsport.com",
   "author": {
     "name": "Daniel Petronilha",
-    "email": "daniel@torqueforged.com",
+    "email": "danielpetronilha@torqueforgedmotorsport.com",
     "url": "https://github.com/Petronilha"
   },
   "license": "MIT",
