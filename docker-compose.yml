@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  torque-forged:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: torque-forged-web
+    restart: unless-stopped
+    
+    # Variáveis de ambiente
+    environment:
+      - NODE_ENV=production
+    
+    # Networks
+    networks:
+      - traefik
+    
+    # Labels do Traefik
+    labels:
+      # Habilitar Traefik
+      - "traefik.enable=true"
+      
+      # Configuração de rede
+      - "traefik.docker.network=traefik"
+      
+      # Roteamento HTTP
+      - "traefik.http.routers.torque-forged.rule=Host(`torqueforgedmotorsport.com`) || Host(`www.torqueforgedmotorsport.com`)"
+      - "traefik.http.routers.torque-forged.entrypoints=web"
+      
+      # Redirect HTTP para HTTPS
+      - "traefik.http.routers.torque-forged.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+      
+      # Roteamento HTTPS
+      - "traefik.http.routers.torque-forged-secure.rule=Host(`torqueforgedmotorsport.com`) || Host(`www.torqueforgedmotorsport.com`)"
+      - "traefik.http.routers.torque-forged-secure.entrypoints=websecure"
+      - "traefik.http.routers.torque-forged-secure.tls=true"
+      - "traefik.http.routers.torque-forged-secure.tls.certresolver=letsencrypt"
+      
+      # Middleware de segurança
+      - "traefik.http.routers.torque-forged-secure.middlewares=security-headers,www-redirect"
+      
+      # Redirect www para não-www
+      - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www\\.(.*)"
+      - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://$${1}"
+      - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
+      
+      # Headers de segurança
+      - "traefik.http.middlewares.security-headers.headers.customRequestHeaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
+      - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-Content-Type-Options=nosniff"
+      - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-XSS-Protection=1; mode=block"
+      - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.Strict-Transport-Security=max-age=31536000; includeSubDomains"
+      - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.Referrer-Policy=strict-origin-when-cross-origin"
+      
+      # Configuração do serviço
+      - "traefik.http.services.torque-forged.loadbalancer.server.port=80"
+      
+      # Health check
+      - "traefik.http.services.torque-forged.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.torque-forged.loadbalancer.healthcheck.interval=30s"
+      - "traefik.http.services.torque-forged.loadbalancer.healthcheck.timeout=5s"
+      
+    # Health check do Docker
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  traefik:
+    external: true

@@ -1,0 +1,49 @@
+# Dockerfile para Torque Forged Motorsport
+# Multi-stage build para otimização
+
+# Stage 1: Build da aplicação
+FROM node:18-alpine AS builder
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Copiar package files
+COPY package*.json ./
+
+# Instalar dependências
+RUN npm ci --only=production --silent
+
+# Copiar código fonte
+COPY . .
+
+# Build da aplicação para produção
+RUN npm run build
+
+# Stage 2: Servidor nginx otimizado
+FROM nginx:alpine
+
+# Instalar curl para health checks
+RUN apk add --no-cache curl
+
+# Remover configuração padrão do nginx
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copiar configuração customizada do nginx
+COPY nginx.conf /etc/nginx/conf.d/
+
+# Copiar build da aplicação
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Adicionar script de health check
+COPY healthcheck.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/healthcheck.sh
+
+# Expor porta 80
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD /usr/local/bin/healthcheck.sh
+
+# Comando para iniciar nginx
+CMD ["nginx", "-g", "daemon off;"]
