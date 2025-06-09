@@ -7,10 +7,18 @@ import "react-quill/dist/quill.snow.css";
 import {
 	useCreatePost,
 	useUpdatePost,
-	usePostById,
-} from "../../hooks/usePostsQuery"; // CORRIGIDO: era useUltraFastPosts
+	usePostByIdAdmin, // Hook admin para buscar post incluindo rascunhos
+	useCategories,
+} from "../../hooks/usePostsQuery";
 import toast from "react-hot-toast";
 import { supabase } from "../../lib/supabase";
+
+/**
+ * PostEditor Corrigido - Usando hooks administrativos
+ * - usePostByIdAdmin para edição (inclui rascunhos)
+ * - Separado da visualização pública
+ * - Cache específico para admin
+ */
 
 const PostEditor = () => {
 	const navigate = useNavigate();
@@ -19,9 +27,14 @@ const PostEditor = () => {
 
 	const createPostMutation = useCreatePost();
 	const updatePostMutation = useUpdatePost();
-	const { data: existingPost, isLoading: loadingPost } = usePostById(id, {
+
+	// USANDO HOOK ADMIN para buscar post (inclui rascunhos)
+	const { data: existingPost, isLoading: loadingPost } = usePostByIdAdmin(id, {
 		enabled: isEditing,
 	});
+
+	// Hook público para categorias
+	const { data: categories = [] } = useCategories();
 
 	const {
 		register,
@@ -32,41 +45,20 @@ const PostEditor = () => {
 	} = useForm();
 
 	const [content, setContent] = useState("");
-	const [categories, setCategories] = useState([]);
 	const [loading, setLoading] = useState(false);
 
 	const watchTitle = watch("title");
 	const watchPublished = watch("published");
 	const watchTrending = watch("trending");
 
-	// Buscar categorias com timeout reduzido
-	useEffect(() => {
-		const fetchCategoriesFast = async () => {
-			try {
-				const { data } = await supabase.from("categories").select("*");
-				setCategories(data || []);
-			} catch (error) {
-				console.error(
-					"❌ PostEditor: Erro categorias, usando fallback:",
-					error
-				);
-				// Fallback instantâneo para categorias estáticas
-				setCategories([
-					{ id: "f1", name: "Fórmula 1" },
-					{ id: "nascar", name: "NASCAR" },
-					{ id: "endurance", name: "Endurance" },
-					{ id: "drift", name: "Formula Drift" },
-					{ id: "tuning", name: "Tuning & Custom" },
-					{ id: "engines", name: "Motores" },
-				]);
-			}
-		};
-		fetchCategoriesFast();
-	}, []);
-
 	// Carregar post para edição
 	useEffect(() => {
 		if (isEditing && existingPost) {
+			console.log(
+				"📝 PostEditor: Carregando post para edição:",
+				existingPost.title
+			);
+
 			setValue("title", existingPost.title);
 			setValue("slug", existingPost.slug);
 			setValue("category", existingPost.category);
@@ -98,6 +90,13 @@ const PostEditor = () => {
 
 	const onSubmit = async (data) => {
 		try {
+			setLoading(true);
+
+			console.log("💾 PostEditor: Salvando post...", {
+				isEditing,
+				title: data.title,
+			});
+
 			const postData = {
 				...data,
 				content,
@@ -107,13 +106,16 @@ const PostEditor = () => {
 				published: data.published || false,
 				trending: data.trending || false,
 			};
+
 			if (isEditing) {
 				await updatePostMutation.mutateAsync({
 					id,
 					...postData,
 				});
+				console.log("✅ PostEditor: Post atualizado com sucesso");
 			} else {
 				await createPostMutation.mutateAsync(postData);
+				console.log("✅ PostEditor: Post criado com sucesso");
 			}
 
 			navigate("/admin/dashboard");
@@ -138,13 +140,44 @@ const PostEditor = () => {
 		],
 	};
 
+	// Loading state
 	if (loadingPost) {
 		return (
 			<div className="min-h-screen bg-black flex items-center justify-center">
 				<div className="text-center">
 					<div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-500 mb-4"></div>
-					<p className="text-gray-400 text-lg">Carregamento ultra-rápido...</p>
-					<p className="text-gray-500 text-sm">⚡ PostEditor ≤4s</p>
+					<p className="text-gray-400 text-lg">
+						Carregando post para edição...
+					</p>
+					<p className="text-gray-500 text-sm">Sistema Admin | ID: {id}</p>
+				</div>
+			</div>
+		);
+	}
+
+	// Error state se não conseguir carregar o post
+	if (isEditing && !loadingPost && !existingPost) {
+		return (
+			<div className="min-h-screen bg-black flex items-center justify-center">
+				<div className="text-center">
+					<div className="w-20 h-20 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+						<ArrowLeft className="w-10 h-10 text-white" />
+					</div>
+					<h1 className="text-3xl font-bold text-white mb-4">
+						Post não encontrado
+					</h1>
+					<p className="text-gray-400 mb-8">
+						O post que você está tentando editar não foi encontrado ou você não
+						tem permissão para acessá-lo.
+					</p>
+					<div className="space-y-4">
+						<button
+							onClick={() => navigate("/admin/dashboard")}
+							className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
+						>
+							Voltar ao Dashboard
+						</button>
+					</div>
 				</div>
 			</div>
 		);
@@ -168,12 +201,12 @@ const PostEditor = () => {
 							</h1>
 							<p className="text-gray-400">
 								{isEditing
-									? "Edite as informações do seu post"
+									? `Editando: ${existingPost?.title || "Carregando..."}`
 									: "Crie um novo post para o blog"}
 							</p>
 							{process.env.NODE_ENV === "development" && (
 								<p className="text-xs text-gray-500 mt-1">
-									⚡ Sistema Ultra-Rápido | Save ≤6s
+									🔧 Admin Editor | {isEditing ? `ID: ${id}` : "Novo post"}
 								</p>
 							)}
 						</div>
@@ -285,7 +318,7 @@ const PostEditor = () => {
 							{/* Publish Settings */}
 							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
 								<h3 className="text-xl font-bold text-white mb-4">
-									Publicação Rápida
+									Configurações
 								</h3>
 
 								<div className="space-y-4">
@@ -398,7 +431,7 @@ const PostEditor = () => {
 								</p>
 							</div>
 
-							{/* Save Button Ultra-rápido */}
+							{/* Save Button */}
 							<button
 								type="submit"
 								disabled={
@@ -415,7 +448,7 @@ const PostEditor = () => {
 								) : (
 									<>
 										<Save className="w-5 h-5" />
-										<span>{isEditing ? "Atualizar ⚡" : "Salvar ⚡"}</span>
+										<span>{isEditing ? "Atualizar Post" : "Salvar Post"}</span>
 									</>
 								)}
 							</button>

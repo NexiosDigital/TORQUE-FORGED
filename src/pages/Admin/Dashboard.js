@@ -14,22 +14,18 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import {
-	useAllPosts,
+	useAllPostsAdmin, // Usando hook admin específico
 	useUpdatePost,
 	useDeletePost,
-	useCacheUtils, // CORRIGIDO: era useCacheStats
+	useCacheUtils,
 } from "../../hooks/usePostsQuery";
 import { ErrorBoundary } from "react-error-boundary";
-import { supabase } from "../../lib/supabase";
-const { data } = await supabase.from("user_profiles").select("full_name");
 
 /**
- * Dashboard Admin Ultra-Otimizado
- * - TanStack Query para operações CRUD instantâneas
- * - Updates otimistas para UX perfeita
- * - Suspense boundaries para carregamento progressivo
- * - Métricas de performance em tempo real
- * - Error handling granular
+ * Dashboard Admin - Usando hooks administrativos separados
+ * - Usa useAllPostsAdmin para ver todos os posts (incluindo rascunhos)
+ * - Separado completamente da visualização pública
+ * - Cache específico para admin
  */
 
 // Loading skeleton para dashboard
@@ -115,7 +111,7 @@ const RealTimeStats = React.memo(({ posts }) => {
 		};
 	}, [posts]);
 
-	const { getCacheStats } = useCacheUtils(); // CORRIGIDO: usar useCacheUtils
+	const { getCacheStats } = useCacheUtils();
 	const cacheStats = getCacheStats();
 
 	const statCards = [
@@ -178,8 +174,8 @@ const RealTimeStats = React.memo(({ posts }) => {
 								{/* Performance metrics apenas em dev */}
 								{process.env.NODE_ENV === "development" && index === 0 && (
 									<div className="mt-2 text-xs text-gray-600">
-										<div>Cache Queries: {cacheStats.totalQueries}</div>
-										<div>Fresh: {cacheStats.freshQueries}</div>
+										<div>Admin Cache: {cacheStats.admin?.total || 0}</div>
+										<div>Public Cache: {cacheStats.public?.total || 0}</div>
 									</div>
 								)}
 							</div>
@@ -370,9 +366,13 @@ const PostsTable = React.memo(({ posts, filter }) => {
 
 // Componente principal do dashboard
 const DashboardContent = () => {
-	const { signOut, isAdmin } = useAuth();
-	const { data: posts = [], isLoading, error, refetch } = useAllPosts();
+	const { signOut, isAdmin, getDisplayName } = useAuth();
+
+	// USANDO HOOK ADMIN ESPECÍFICO
+	const { data: posts = [], isLoading, error, refetch } = useAllPostsAdmin();
+
 	const [filter, setFilter] = React.useState("all");
+	const { debugConnection } = useCacheUtils();
 
 	// Redirect se não for admin
 	React.useEffect(() => {
@@ -393,6 +393,11 @@ const DashboardContent = () => {
 		refetch();
 	};
 
+	const handleDebug = async () => {
+		const result = await debugConnection();
+		console.log("🔧 Debug Result:", result);
+	};
+
 	if (error) {
 		throw error; // Será capturado pelo Error Boundary
 	}
@@ -409,12 +414,31 @@ const DashboardContent = () => {
 						<p className="text-gray-400">
 							Bem-vindo,{" "}
 							<span className="text-red-400 font-medium">
-								{data[0].full_name}
+								{getDisplayName()}
 							</span>
 						</p>
+
+						{/* Debug info apenas em dev */}
+						{process.env.NODE_ENV === "development" && (
+							<div className="mt-2 text-xs text-gray-500">
+								📊 Admin Dashboard | Posts: {posts.length} | Loading:{" "}
+								{isLoading ? "Sim" : "Não"}
+							</div>
+						)}
 					</div>
 
 					<div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+						{/* Debug button apenas em dev */}
+						{process.env.NODE_ENV === "development" && (
+							<button
+								onClick={handleDebug}
+								className="flex items-center justify-center space-x-2 border border-yellow-600 hover:border-yellow-500 text-yellow-300 hover:text-yellow-200 px-4 py-2 rounded-xl font-semibold transition-all duration-300"
+							>
+								<Shield className="w-4 h-4" />
+								<span>Debug</span>
+							</button>
+						)}
+
 						<button
 							onClick={handleRefresh}
 							disabled={isLoading}
@@ -480,7 +504,7 @@ const DashboardContent = () => {
 							{isLoading && (
 								<div className="flex items-center space-x-2 text-gray-400">
 									<RefreshCw className="w-4 h-4 animate-spin" />
-									<span className="text-sm">Sincronizando...</span>
+									<span className="text-sm">Carregando posts admin...</span>
 								</div>
 							)}
 						</div>
