@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3.3'
 
 services:
   torque-forged:
@@ -11,6 +11,13 @@ services:
     # Variáveis de ambiente
     environment:
       - NODE_ENV=production
+      # Variáveis que podem ser alteradas sem rebuild
+      - REACT_APP_SUPABASE_URL=${REACT_APP_SUPABASE_URL}
+      - REACT_APP_SUPABASE_ANON_KEY=${REACT_APP_SUPABASE_ANON_KEY}
+      - REACT_APP_DOMAIN=${REACT_APP_DOMAIN:-torqueforgedmotorsport.com}
+    # Arquivo de environment (alternativa)
+    env_file:
+      - .env.production
     
     # Networks
     networks:
