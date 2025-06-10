@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useMemo, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
 	Calendar,
 	User,
@@ -11,6 +11,7 @@ import {
 	List,
 	ChevronDown,
 	Tag,
+	X,
 } from "lucide-react";
 import {
 	useAllPosts,
@@ -249,10 +250,90 @@ const PostCardList = React.memo(({ post, index }) => {
 const AllPosts = () => {
 	const { data: allPosts = [], isLoading, error } = useAllPosts();
 	const { data: categories = [] } = useCategories();
+
+	// URL search params
+	const [searchParams, setSearchParams] = useSearchParams();
+
+	// Suporte para navegador sem URLSearchParams
+	const getSearchParam = (key) => {
+		try {
+			return searchParams.get(key);
+		} catch (error) {
+			const urlParams = new URLSearchParams(window.location.search);
+			return urlParams.get(key);
+		}
+	};
+
+	// States locais
 	const [selectedCategory, setSelectedCategory] = useState("all");
 	const [searchTerm, setSearchTerm] = useState("");
 	const [viewMode, setViewMode] = useState("grid");
 	const [sortBy, setSortBy] = useState("newest");
+
+	// Inicializar com parâmetros da URL
+	useEffect(() => {
+		const urlSearch = getSearchParam("search");
+		const urlCategory = getSearchParam("category");
+		const urlSort = getSearchParam("sort");
+		const urlView = getSearchParam("view");
+
+		if (urlSearch) {
+			setSearchTerm(decodeURIComponent(urlSearch));
+		}
+		if (urlCategory) {
+			setSelectedCategory(urlCategory);
+		}
+		if (urlSort) {
+			setSortBy(urlSort);
+		}
+		if (urlView) {
+			setViewMode(urlView);
+		}
+	}, [searchParams]);
+
+	// Atualizar URL quando filtros mudarem
+	const updateSearchParams = (updates) => {
+		const newSearchParams = new URLSearchParams(searchParams);
+
+		Object.entries(updates).forEach(([key, value]) => {
+			if (value && value !== "all" && value !== "") {
+				newSearchParams.set(key, value);
+			} else {
+				newSearchParams.delete(key);
+			}
+		});
+
+		setSearchParams(newSearchParams);
+	};
+
+	// Handlers para filtros
+	const handleSearchChange = (value) => {
+		setSearchTerm(value);
+		updateSearchParams({ search: value });
+	};
+
+	const handleCategoryChange = (value) => {
+		setSelectedCategory(value);
+		updateSearchParams({ category: value === "all" ? "" : value });
+	};
+
+	const handleSortChange = (value) => {
+		setSortBy(value);
+		updateSearchParams({ sort: value === "newest" ? "" : value });
+	};
+
+	const handleViewChange = (value) => {
+		setViewMode(value);
+		updateSearchParams({ view: value === "grid" ? "" : value });
+	};
+
+	// Limpar filtros
+	const clearFilters = () => {
+		setSearchTerm("");
+		setSelectedCategory("all");
+		setSortBy("newest");
+		setSearchParams({});
+	};
 
 	// Filtrar e ordenar posts
 	const filteredAndSortedPosts = useMemo(() => {
@@ -270,7 +351,8 @@ const AllPosts = () => {
 				(post) =>
 					post.title.toLowerCase().includes(search) ||
 					post.excerpt.toLowerCase().includes(search) ||
-					post.category_name.toLowerCase().includes(search)
+					post.category_name.toLowerCase().includes(search) ||
+					post.content.toLowerCase().includes(search)
 			);
 		}
 
@@ -299,6 +381,10 @@ const AllPosts = () => {
 
 		return filtered;
 	}, [allPosts, selectedCategory, searchTerm, sortBy]);
+
+	// Verifica se há filtros ativos
+	const hasActiveFilters =
+		searchTerm || selectedCategory !== "all" || sortBy !== "newest";
 
 	if (error) {
 		return (
@@ -329,11 +415,16 @@ const AllPosts = () => {
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="text-center">
 						<h1 className="text-5xl md:text-6xl font-black text-white mb-6 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-							Todos os Posts
+							{searchTerm
+								? `Resultados para "${searchTerm}"`
+								: "Todos os Posts"}
 						</h1>
 						<p className="text-xl text-gray-400 max-w-2xl mx-auto">
-							Explore todo o nosso conteúdo sobre motorsport, tuning e cultura
-							automotiva
+							{searchTerm
+								? `${filteredAndSortedPosts.length} resultado${
+										filteredAndSortedPosts.length !== 1 ? "s" : ""
+								  } encontrado${filteredAndSortedPosts.length !== 1 ? "s" : ""}`
+								: "Explore todo o nosso conteúdo sobre motorsport, tuning e cultura automotiva"}
 						</p>
 					</div>
 				</div>
@@ -350,9 +441,17 @@ const AllPosts = () => {
 								type="text"
 								placeholder="Buscar posts..."
 								value={searchTerm}
-								onChange={(e) => setSearchTerm(e.target.value)}
-								className="w-full pl-12 pr-4 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
+								onChange={(e) => handleSearchChange(e.target.value)}
+								className="w-full pl-12 pr-12 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
 							/>
+							{searchTerm && (
+								<button
+									onClick={() => handleSearchChange("")}
+									className="absolute right-4 top-4 text-gray-400 hover:text-gray-300 transition-colors duration-300"
+								>
+									<X className="w-5 h-5" />
+								</button>
+							)}
 						</div>
 
 						{/* Filters */}
@@ -361,7 +460,7 @@ const AllPosts = () => {
 							<div className="relative">
 								<select
 									value={selectedCategory}
-									onChange={(e) => setSelectedCategory(e.target.value)}
+									onChange={(e) => handleCategoryChange(e.target.value)}
 									className="appearance-none bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white px-6 py-4 pr-12 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
 								>
 									<option value="all">Todas as categorias</option>
@@ -378,7 +477,7 @@ const AllPosts = () => {
 							<div className="relative">
 								<select
 									value={sortBy}
-									onChange={(e) => setSortBy(e.target.value)}
+									onChange={(e) => handleSortChange(e.target.value)}
 									className="appearance-none bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white px-6 py-4 pr-12 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
 								>
 									<option value="newest">Mais recentes</option>
@@ -391,7 +490,7 @@ const AllPosts = () => {
 							{/* View Mode */}
 							<div className="flex items-center bg-gray-800/50 border border-gray-600/50 rounded-2xl p-1">
 								<button
-									onClick={() => setViewMode("grid")}
+									onClick={() => handleViewChange("grid")}
 									className={`p-3 rounded-xl transition-all duration-300 ${
 										viewMode === "grid"
 											? "bg-red-600 text-white"
@@ -401,7 +500,7 @@ const AllPosts = () => {
 									<Grid className="w-5 h-5" />
 								</button>
 								<button
-									onClick={() => setViewMode("list")}
+									onClick={() => handleViewChange("list")}
 									className={`p-3 rounded-xl transition-all duration-300 ${
 										viewMode === "list"
 											? "bg-red-600 text-white"
@@ -411,6 +510,17 @@ const AllPosts = () => {
 									<List className="w-5 h-5" />
 								</button>
 							</div>
+
+							{/* Clear Filters */}
+							{hasActiveFilters && (
+								<button
+									onClick={clearFilters}
+									className="flex items-center space-x-2 text-red-400 hover:text-red-300 font-semibold transition-colors duration-300"
+								>
+									<X className="w-4 h-4" />
+									<span>Limpar</span>
+								</button>
+							)}
 						</div>
 					</div>
 
@@ -426,6 +536,22 @@ const AllPosts = () => {
 									"categoria"
 								}`}
 						</p>
+
+						{/* Search suggestions */}
+						{searchTerm && filteredAndSortedPosts.length === 0 && (
+							<div className="flex items-center space-x-2 text-sm text-gray-500">
+								<span>Tente buscar:</span>
+								{["F1", "NASCAR", "Tuning", "Motor"].map((suggestion) => (
+									<button
+										key={suggestion}
+										onClick={() => handleSearchChange(suggestion)}
+										className="text-red-400 hover:text-red-300 underline"
+									>
+										{suggestion}
+									</button>
+								))}
+							</div>
+						)}
 					</div>
 				</div>
 			</div>
@@ -445,19 +571,20 @@ const AllPosts = () => {
 								<Search className="w-10 h-10 text-gray-400" />
 							</div>
 							<h3 className="text-2xl font-bold text-white mb-4">
-								Nenhum post encontrado
+								{searchTerm
+									? "Nenhum resultado encontrado"
+									: "Nenhum post encontrado"}
 							</h3>
 							<p className="text-gray-400 mb-8">
-								{searchTerm || selectedCategory !== "all"
-									? "Tente ajustar os filtros ou busca"
+								{searchTerm
+									? `Não encontramos posts que correspondam a "${searchTerm}". Tente usar outras palavras-chave.`
+									: hasActiveFilters
+									? "Tente ajustar os filtros para ver mais resultados"
 									: "Não há posts publicados no momento"}
 							</p>
-							{(searchTerm || selectedCategory !== "all") && (
+							{hasActiveFilters && (
 								<button
-									onClick={() => {
-										setSearchTerm("");
-										setSelectedCategory("all");
-									}}
+									onClick={clearFilters}
 									className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300"
 								>
 									Limpar Filtros
