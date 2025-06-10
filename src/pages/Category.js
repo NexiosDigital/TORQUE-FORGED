@@ -123,7 +123,6 @@ const DynamicCategoryContent = () => {
 
 	// Loading state
 	if (isLoading) {
-		console.log("🔄 Category: Carregando categorias...");
 		return <CategorySkeleton />;
 	}
 
@@ -144,11 +143,6 @@ const DynamicCategoryContent = () => {
 		);
 		throw notFoundError;
 	}
-
-	console.log(
-		`✅ Category: Categoria "${categorySlug}" carregada:`,
-		categoryData.name
-	);
 
 	// Renderizar CategoryPage com dados dinâmicos
 	return (
@@ -176,14 +170,6 @@ const Category = () => {
 			}}
 			onError={(error, errorInfo) => {
 				console.error("🔴 Category Error Boundary:", error, errorInfo);
-
-				// Log específico para categoria não encontrada
-				if (error?.message?.includes("não encontrada")) {
-					console.log(
-						`📊 Analytics: Categoria não encontrada - ${categorySlug}`
-					);
-					// analytics.track('category_not_found', { categorySlug });
-				}
 			}}
 			// Reset quando a categoria mudar
 			resetKeys={[categorySlug]}

@@ -509,9 +509,10 @@ const Header = () => {
 									<Link
 										key={item.name}
 										to={item.href}
-										className={`relative px-3 py-2 rounded-xl text-sm font-semibold transition-all duration-300 
-											medium-navbar:px-1.5 medium-navbar:text-sm
-											xl:px-3
+										className={`relative px-4 py-2 rounded-xl text-lg font-semibold transition-all duration-300 
+											medium-navbar:px-1.5 medium-navbar:text-base
+											xl:px-4
+											hover:text-xl
 											${
 												location.pathname === item.href
 													? "text-white"

@@ -11,7 +11,6 @@ import {
 	useCategories,
 } from "../../hooks/usePostsQuery";
 import toast from "react-hot-toast";
-import { supabase } from "../../lib/supabase";
 
 /**
  * PostEditor Corrigido - Usando hooks administrativos
@@ -54,11 +53,6 @@ const PostEditor = () => {
 	// Carregar post para edição
 	useEffect(() => {
 		if (isEditing && existingPost) {
-			console.log(
-				"📝 PostEditor: Carregando post para edição:",
-				existingPost.title
-			);
-
 			setValue("title", existingPost.title);
 			setValue("slug", existingPost.slug);
 			setValue("category", existingPost.category);
@@ -92,11 +86,6 @@ const PostEditor = () => {
 		try {
 			setLoading(true);
 
-			console.log("💾 PostEditor: Salvando post...", {
-				isEditing,
-				title: data.title,
-			});
-
 			const postData = {
 				...data,
 				content,
@@ -112,10 +101,8 @@ const PostEditor = () => {
 					id,
 					...postData,
 				});
-				console.log("✅ PostEditor: Post atualizado com sucesso");
 			} else {
 				await createPostMutation.mutateAsync(postData);
-				console.log("✅ PostEditor: Post criado com sucesso");
 			}
 
 			navigate("/admin/dashboard");

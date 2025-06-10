@@ -1,37 +1,59 @@
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * PostService Limpo - SEM DEBUG
- * - Cliente público para visualização
- * - Cliente autenticado para admin
- * - Error handling robusto
- * - Fallbacks automáticos
+ * PostService - SOLUÇÃO RADICAL
+ * - Cliente NOVO a cada request público
+ * - ZERO possibilidade de contaminação
+ * - Literalmente simula estar sempre deslogado
  */
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-// Cliente anônimo para visualização pública
-const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey, {
-	auth: {
-		persistSession: false,
-		autoRefreshToken: false,
-		detectSessionInUrl: false,
-	},
-});
+// Cliente admin (mantém como estava)
+const adminClient = createClient(supabaseUrl, supabaseAnonKey);
 
-// Cliente principal para admin
-const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+// Função para criar cliente SEMPRE novo e anônimo
+const createFreshAnonymousClient = () => {
+	if (process.env.NODE_ENV === "development") {
+		console.log("🆕 Criando cliente TOTALMENTE NOVO e anônimo");
+	}
+
+	return createClient(supabaseUrl, supabaseAnonKey, {
+		auth: {
+			persistSession: false,
+			autoRefreshToken: false,
+			detectSessionInUrl: false,
+			flowType: "implicit",
+			storageKey: `supabase.auth.token.anonymous.${Date.now()}`, // Key única
+		},
+		global: {
+			headers: {
+				"X-Client-Type": `fresh-anonymous-${Date.now()}`,
+				"X-Force-Anonymous": "true",
+			},
+		},
+	});
+};
 
 export class PostService {
 	/**
-	 * MÉTODOS PÚBLICOS
+	 * ======================================
+	 * MÉTODOS PÚBLICOS - CLIENTE NOVO SEMPRE
+	 * ======================================
 	 */
 
-	// Posts em destaque
+	// Posts em destaque - Cliente NOVO a cada chamada
 	static async getFeaturedPosts() {
 		try {
-			const { data, error } = await supabaseAnon
+			if (process.env.NODE_ENV === "development") {
+				console.log("🌟 getFeaturedPosts: Criando cliente NOVO e anônimo");
+			}
+
+			// Cliente completamente novo
+			const freshClient = createFreshAnonymousClient();
+
+			const { data, error } = await freshClient
 				.from("posts")
 				.select("*")
 				.eq("published", true)
@@ -40,64 +62,115 @@ export class PostService {
 				.limit(6);
 
 			if (error) {
-				// Fallback: buscar posts recentes se não houver trending
-				const { data: fallbackData, error: fallbackError } = await supabaseAnon
-					.from("posts")
-					.select("*")
-					.eq("published", true)
-					.order("created_at", { ascending: false })
-					.limit(6);
+				console.warn("Featured posts error, trying fallback:", error);
 
-				if (fallbackError) throw fallbackError;
+				// Fallback com OUTRO cliente novo
+				const fallbackClient = createFreshAnonymousClient();
+				const { data: fallbackData, error: fallbackError } =
+					await fallbackClient
+						.from("posts")
+						.select("*")
+						.eq("published", true)
+						.order("created_at", { ascending: false })
+						.limit(6);
+
+				if (fallbackError) {
+					console.error("Fallback também falhou:", fallbackError);
+					throw fallbackError;
+				}
+				if (process.env.NODE_ENV === "development") {
+					console.log(
+						"✅ getFeaturedPosts fallback success:",
+						fallbackData?.length || 0
+					);
+				}
 				return fallbackData || [];
 			}
-
+			if (process.env.NODE_ENV === "development") {
+				console.log("✅ getFeaturedPosts success:", data?.length || 0);
+			}
 			return data || [];
 		} catch (error) {
+			console.error("❌ PostService.getFeaturedPosts error:", error);
 			throw new Error(`Erro ao carregar posts em destaque: ${error.message}`);
 		}
 	}
 
-	// Todos os posts
+	// Todos os posts - Cliente NOVO a cada chamada
 	static async getAllPosts() {
 		try {
-			const { data, error } = await supabaseAnon
+			if (process.env.NODE_ENV === "development") {
+				console.log("📰 getAllPosts: Criando cliente NOVO e anônimo");
+			}
+
+			// Cliente completamente novo
+			const freshClient = createFreshAnonymousClient();
+
+			const { data, error } = await freshClient
 				.from("posts")
 				.select("*")
 				.eq("published", true)
 				.order("created_at", { ascending: false });
 
-			if (error) throw error;
+			if (error) {
+				console.error("❌ getAllPosts error:", error);
+				throw error;
+			}
+			if (process.env.NODE_ENV === "development") {
+				console.log("✅ getAllPosts success:", data?.length || 0, "posts");
+			}
 			return data || [];
 		} catch (error) {
+			console.error("❌ PostService.getAllPosts error:", error);
 			throw new Error(`Erro ao carregar posts: ${error.message}`);
 		}
 	}
 
-	// Posts por categoria
+	// Posts por categoria - Cliente NOVO a cada chamada
 	static async getPostsByCategory(categoryId) {
 		if (!categoryId) {
 			throw new Error("Category ID é obrigatório");
 		}
 
 		try {
-			const { data, error } = await supabaseAnon
+			if (process.env.NODE_ENV === "development") {
+				console.log(
+					`🏷️ getPostsByCategory(${categoryId}): Criando cliente NOVO e anônimo`
+				);
+			}
+
+			// Cliente completamente novo
+			const freshClient = createFreshAnonymousClient();
+
+			const { data, error } = await freshClient
 				.from("posts")
 				.select("*")
 				.eq("published", true)
 				.eq("category", categoryId)
 				.order("created_at", { ascending: false });
 
-			if (error) throw error;
+			if (error) {
+				console.error(`❌ getPostsByCategory(${categoryId}) error:`, error);
+				throw error;
+			}
+
+			if (process.env.NODE_ENV === "development") {
+				console.log(
+					`✅ getPostsByCategory(${categoryId}) success:`,
+					data?.length || 0,
+					"posts"
+				);
+			}
 			return data || [];
 		} catch (error) {
+			console.error("❌ PostService.getPostsByCategory error:", error);
 			throw new Error(
 				`Erro ao carregar posts da categoria ${categoryId}: ${error.message}`
 			);
 		}
 	}
 
-	// Post individual
+	// Post individual - Cliente NOVO a cada chamada
 	static async getPostById(id) {
 		if (!id) {
 			throw new Error("Post ID é obrigatório");
@@ -110,7 +183,16 @@ export class PostService {
 				throw new Error(`ID inválido: ${id}`);
 			}
 
-			const { data, error } = await supabaseAnon
+			if (process.env.NODE_ENV === "development") {
+				console.log(
+					`📖 getPostById(${postId}): Criando cliente NOVO e anônimo`
+				);
+			}
+
+			// Cliente completamente novo
+			const freshClient = createFreshAnonymousClient();
+
+			const { data, error } = await freshClient
 				.from("posts")
 				.select("*")
 				.eq("id", postId)
@@ -121,35 +203,270 @@ export class PostService {
 				if (error.code === "PGRST116") {
 					throw new Error("Post não encontrado");
 				}
+				console.error(`❌ getPostById(${postId}) error:`, error);
 				throw error;
 			}
 
+			if (process.env.NODE_ENV === "development") {
+				console.log(`✅ getPostById(${postId}) success:`, data.title);
+			}
 			return data;
 		} catch (error) {
+			console.error("❌ PostService.getPostById error:", error);
 			throw new Error(`Erro ao carregar post: ${error.message}`);
 		}
 	}
 
-	// Categorias
+	// Categorias - Cliente NOVO a cada chamada
 	static async getCategories() {
 		try {
-			const { data, error } = await supabaseAnon
+			if (process.env.NODE_ENV === "development") {
+				console.log("🏷️ getCategories: Criando cliente NOVO e anônimo");
+			}
+
+			// Cliente completamente novo
+			const freshClient = createFreshAnonymousClient();
+
+			const { data, error } = await freshClient
 				.from("categories")
 				.select("*")
 				.order("name");
 
 			if (error) {
-				// Fallback para categorias hardcoded
+				console.warn("Categories error, using fallback:", error);
 				return this.getFallbackCategories();
 			}
 
-			return data && data.length > 0 ? data : this.getFallbackCategories();
+			const result =
+				data && data.length > 0 ? data : this.getFallbackCategories();
+			console.log("✅ getCategories success:", result?.length || 0);
+			return result;
 		} catch (error) {
+			console.error("❌ PostService.getCategories error:", error);
 			return this.getFallbackCategories();
 		}
 	}
 
-	// Categorias fallback
+	// Busca de posts - Cliente NOVO a cada chamada
+	static async searchPosts(query) {
+		if (!query || query.length < 2) {
+			return [];
+		}
+
+		try {
+			if (process.env.NODE_ENV === "development") {
+				console.log(
+					`🔍 searchPosts("${query}"): Criando cliente NOVO e anônimo`
+				);
+			}
+
+			// Cliente completamente novo
+			const freshClient = createFreshAnonymousClient();
+
+			const { data, error } = await freshClient
+				.from("posts")
+				.select("*")
+				.eq("published", true)
+				.or(
+					`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`
+				)
+				.order("created_at", { ascending: false })
+				.limit(20);
+
+			if (error) {
+				console.error(`❌ searchPosts("${query}") error:`, error);
+				throw error;
+			}
+
+			if (process.env.NODE_ENV === "development") {
+				console.log(`✅ searchPosts("${query}") success:`, data?.length || 0);
+			}
+			return data || [];
+		} catch (error) {
+			console.error("❌ PostService.searchPosts error:", error);
+			throw new Error(`Erro na busca: ${error.message}`);
+		}
+	}
+
+	/**
+	 * ======================================
+	 * MÉTODOS ADMINISTRATIVOS - MANTÉM COMO ESTAVA
+	 * ======================================
+	 */
+
+	static async getAllPostsAdmin() {
+		try {
+			if (process.env.NODE_ENV === "development") {
+				console.log(
+					"🛡️ getAllPostsAdmin: Usando cliente autenticado (mantido)"
+				);
+			}
+
+			const { data, error } = await adminClient
+				.from("posts")
+				.select("*")
+				.order("created_at", { ascending: false });
+
+			if (error) {
+				console.error("❌ getAllPostsAdmin error:", error);
+				throw error;
+			}
+
+			if (process.env.NODE_ENV === "development") {
+				console.log("✅ getAllPostsAdmin success:", data?.length || 0, "posts");
+			}
+			return data || [];
+		} catch (error) {
+			console.error("❌ PostService.getAllPostsAdmin error:", error);
+			throw new Error(`Erro ao carregar posts admin: ${error.message}`);
+		}
+	}
+
+	static async getPostByIdAdmin(id) {
+		if (!id) {
+			throw new Error("Post ID é obrigatório");
+		}
+
+		try {
+			const postId = typeof id === "string" ? parseInt(id, 10) : id;
+
+			if (isNaN(postId)) {
+				throw new Error(`ID inválido: ${id}`);
+			}
+
+			if (process.env.NODE_ENV === "development") {
+				console.log(
+					`🛡️ getPostByIdAdmin(${postId}): Usando cliente autenticado (mantido)`
+				);
+			}
+
+			const { data, error } = await adminClient
+				.from("posts")
+				.select("*")
+				.eq("id", postId)
+				.single();
+
+			if (error) {
+				if (error.code === "PGRST116") {
+					throw new Error("Post não encontrado");
+				}
+				console.error(`❌ getPostByIdAdmin(${postId}) error:`, error);
+				throw error;
+			}
+
+			if (process.env.NODE_ENV === "development") {
+				console.log(`✅ getPostByIdAdmin(${postId}) success:`, data.title);
+			}
+			return data;
+		} catch (error) {
+			console.error("❌ PostService.getPostByIdAdmin error:", error);
+			throw new Error(`Erro ao carregar post admin: ${error.message}`);
+		}
+	}
+
+	static async createPost(postData) {
+		try {
+			if (process.env.NODE_ENV === "development") {
+				console.log("🛡️ createPost: Usando cliente autenticado (mantido)");
+			}
+
+			const { data, error } = await adminClient
+				.from("posts")
+				.insert([
+					{
+						...postData,
+						created_at: new Date().toISOString(),
+						updated_at: new Date().toISOString(),
+					},
+				])
+				.select()
+				.single();
+
+			if (error) {
+				console.error("❌ createPost error:", error);
+				throw error;
+			}
+
+			if (process.env.NODE_ENV === "development") {
+				console.log("✅ createPost success:", data.title);
+			}
+			return data;
+		} catch (error) {
+			console.error("❌ PostService.createPost error:", error);
+			throw new Error(`Erro ao criar post: ${error.message}`);
+		}
+	}
+
+	static async updatePost(id, postData) {
+		try {
+			const postId = typeof id === "string" ? parseInt(id, 10) : id;
+
+			if (process.env.NODE_ENV === "development") {
+				console.log(
+					`🛡️ updatePost(${postId}): Usando cliente autenticado (mantido)`
+				);
+			}
+
+			const { data, error } = await adminClient
+				.from("posts")
+				.update({
+					...postData,
+					updated_at: new Date().toISOString(),
+				})
+				.eq("id", postId)
+				.select()
+				.single();
+
+			if (error) {
+				console.error("❌ updatePost error:", error);
+				throw error;
+			}
+
+			if (process.env.NODE_ENV === "development") {
+				console.log("✅ updatePost success:", data.title);
+			}
+			return data;
+		} catch (error) {
+			console.error("❌ PostService.updatePost error:", error);
+			throw new Error(`Erro ao atualizar post: ${error.message}`);
+		}
+	}
+
+	static async deletePost(id) {
+		try {
+			const postId = typeof id === "string" ? parseInt(id, 10) : id;
+
+			if (process.env.NODE_ENV === "development") {
+				console.log(
+					`🛡️ deletePost(${postId}): Usando cliente autenticado (mantido)`
+				);
+			}
+
+			const { error } = await adminClient
+				.from("posts")
+				.delete()
+				.eq("id", postId);
+
+			if (error) {
+				console.error("❌ deletePost error:", error);
+				throw error;
+			}
+
+			if (process.env.NODE_ENV === "development") {
+				console.log("✅ deletePost success, ID:", postId);
+			}
+		} catch (error) {
+			console.error("❌ PostService.deletePost error:", error);
+			throw new Error(`Erro ao deletar post: ${error.message}`);
+		}
+	}
+
+	/**
+	 * ======================================
+	 * UTILITIES
+	 * ======================================
+	 */
+
 	static getFallbackCategories() {
 		return [
 			{
@@ -189,140 +506,5 @@ export class PostService {
 				color: "from-indigo-500 to-purple-500",
 			},
 		];
-	}
-
-	// Busca de posts
-	static async searchPosts(query) {
-		if (!query || query.length < 2) {
-			return [];
-		}
-
-		try {
-			const { data, error } = await supabaseAnon
-				.from("posts")
-				.select("*")
-				.eq("published", true)
-				.or(
-					`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`
-				)
-				.order("created_at", { ascending: false })
-				.limit(20);
-
-			if (error) throw error;
-			return data || [];
-		} catch (error) {
-			throw new Error(`Erro na busca: ${error.message}`);
-		}
-	}
-
-	/**
-	 * MÉTODOS ADMINISTRATIVOS
-	 */
-
-	// Posts admin (incluindo rascunhos)
-	static async getAllPostsAdmin() {
-		try {
-			const { data, error } = await supabaseAuth
-				.from("posts")
-				.select("*")
-				.order("created_at", { ascending: false });
-
-			if (error) throw error;
-			return data || [];
-		} catch (error) {
-			throw new Error(`Erro ao carregar posts admin: ${error.message}`);
-		}
-	}
-
-	// Post admin individual
-	static async getPostByIdAdmin(id) {
-		if (!id) {
-			throw new Error("Post ID é obrigatório");
-		}
-
-		try {
-			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-
-			if (isNaN(postId)) {
-				throw new Error(`ID inválido: ${id}`);
-			}
-
-			const { data, error } = await supabaseAuth
-				.from("posts")
-				.select("*")
-				.eq("id", postId)
-				.single();
-
-			if (error) {
-				if (error.code === "PGRST116") {
-					throw new Error("Post não encontrado");
-				}
-				throw error;
-			}
-
-			return data;
-		} catch (error) {
-			throw new Error(`Erro ao carregar post admin: ${error.message}`);
-		}
-	}
-
-	// Criar post
-	static async createPost(postData) {
-		try {
-			const { data, error } = await supabaseAuth
-				.from("posts")
-				.insert([
-					{
-						...postData,
-						created_at: new Date().toISOString(),
-						updated_at: new Date().toISOString(),
-					},
-				])
-				.select()
-				.single();
-
-			if (error) throw error;
-			return data;
-		} catch (error) {
-			throw new Error(`Erro ao criar post: ${error.message}`);
-		}
-	}
-
-	// Atualizar post
-	static async updatePost(id, postData) {
-		try {
-			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-
-			const { data, error } = await supabaseAuth
-				.from("posts")
-				.update({
-					...postData,
-					updated_at: new Date().toISOString(),
-				})
-				.eq("id", postId)
-				.select()
-				.single();
-
-			if (error) throw error;
-			return data;
-		} catch (error) {
-			throw new Error(`Erro ao atualizar post: ${error.message}`);
-		}
-	}
-
-	// Deletar post
-	static async deletePost(id) {
-		try {
-			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-
-			const { error } = await supabaseAuth
-				.from("posts")
-				.delete()
-				.eq("id", postId);
-
-			if (error) throw error;
-		} catch (error) {
-			throw new Error(`Erro ao deletar post: ${error.message}`);
-		}
 	}
 }

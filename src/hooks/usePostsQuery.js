@@ -6,16 +6,18 @@ import {
 } from "@tanstack/react-query";
 import { PostService } from "../services/PostService";
 import toast from "react-hot-toast";
+import { useAuth } from "../contexts/AuthContext";
 
 /**
- * Hooks Limpos de Posts - SEM DEBUG
- * - Queries otimizadas para performance
- * - Error handling robusto
- * - Cache persistence automático
+ * Hooks com Cache Separado
+ * - QUERY_KEYS separados para public vs admin
+ * - Zero interferência entre estados de auth
+ * - Cliente específico por contexto
  */
 
-// Query keys centralizados
+// Query keys SEPARADOS por contexto
 export const QUERY_KEYS = {
+	// Posts públicos - SEMPRE as mesmas keys independente de auth
 	public: {
 		posts: ["public", "posts"],
 		featured: ["public", "posts", "featured"],
@@ -24,13 +26,14 @@ export const QUERY_KEYS = {
 		search: (query) => ["public", "posts", "search", query],
 		categories: ["public", "categories"],
 	},
+	// Posts admin - SEMPRE separados
 	admin: {
 		posts: ["admin", "posts"],
 		byId: (id) => ["admin", "posts", "detail", id],
 	},
 };
 
-// Configurações de cache otimizadas
+// Configurações otimizadas
 const PUBLIC_CACHE_CONFIG = {
 	staleTime: 5 * 60 * 1000, // 5 minutos
 	gcTime: 30 * 60 * 1000, // 30 minutos
@@ -43,15 +46,27 @@ const PUBLIC_CACHE_CONFIG = {
 	retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000),
 };
 
+const ADMIN_CACHE_CONFIG = {
+	staleTime: 2 * 60 * 1000, // 2 minutos
+	gcTime: 10 * 60 * 1000, // 10 minutos
+	refetchOnWindowFocus: true,
+	refetchOnMount: true,
+	retry: 1,
+};
+
 /**
- * HOOKS PÚBLICOS
+ * ======================================
+ * HOOKS PÚBLICOS - SEMPRE ANÔNIMO
+ * ======================================
  */
 
-// Posts em destaque
+// Posts em destaque - SEMPRE usa cliente público
 export const useFeaturedPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.featured,
-		queryFn: () => PostService.getFeaturedPosts(),
+		queryFn: () => {
+			return PostService.getFeaturedPosts();
+		},
 		...PUBLIC_CACHE_CONFIG,
 		meta: {
 			errorMessage: "Erro ao carregar posts em destaque",
@@ -60,11 +75,13 @@ export const useFeaturedPosts = (options = {}) => {
 	});
 };
 
-// Todos os posts
+// Todos os posts - SEMPRE usa cliente público
 export const useAllPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.posts,
-		queryFn: () => PostService.getAllPosts(),
+		queryFn: () => {
+			return PostService.getAllPosts();
+		},
 		...PUBLIC_CACHE_CONFIG,
 		meta: {
 			errorMessage: "Erro ao carregar posts",
@@ -73,11 +90,13 @@ export const useAllPosts = (options = {}) => {
 	});
 };
 
-// Posts por categoria
+// Posts por categoria - SEMPRE usa cliente público
 export const usePostsByCategory = (categoryId, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byCategory(categoryId),
-		queryFn: () => PostService.getPostsByCategory(categoryId),
+		queryFn: () => {
+			return PostService.getPostsByCategory(categoryId);
+		},
 		enabled: !!categoryId && typeof categoryId === "string",
 		...PUBLIC_CACHE_CONFIG,
 		meta: {
@@ -87,11 +106,13 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 	});
 };
 
-// Post individual
+// Post individual - SEMPRE usa cliente público
 export const usePostById = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
-		queryFn: () => PostService.getPostById(id),
+		queryFn: () => {
+			return PostService.getPostById(id);
+		},
 		enabled: !!id,
 		...PUBLIC_CACHE_CONFIG,
 		meta: {
@@ -101,12 +122,14 @@ export const usePostById = (id, options = {}) => {
 	});
 };
 
-// Categorias
+// Categorias - SEMPRE usa cliente público
 export const useCategories = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.categories,
-		queryFn: () => PostService.getCategories(),
-		staleTime: 15 * 60 * 1000, // 15 minutos (categorias são mais estáveis)
+		queryFn: () => {
+			return PostService.getCategories();
+		},
+		staleTime: 15 * 60 * 1000, // 15 minutos (categorias são estáveis)
 		gcTime: 60 * 60 * 1000, // 1 hora
 		refetchOnWindowFocus: false,
 		meta: {
@@ -116,18 +139,36 @@ export const useCategories = (options = {}) => {
 	});
 };
 
+// Busca - SEMPRE usa cliente público
+export const useSearchPosts = (query, options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.search(query),
+		queryFn: () => {
+			return PostService.searchPosts(query);
+		},
+		enabled: !!query && query.length >= 2,
+		...PUBLIC_CACHE_CONFIG,
+		...options,
+	});
+};
+
 /**
- * HOOKS ADMIN
+ * ======================================
+ * HOOKS ADMIN - SEMPRE AUTENTICADO
+ * ======================================
  */
 
-// Posts admin
+// Posts admin - SEMPRE usa cliente autenticado
 export const useAllPostsAdmin = (options = {}) => {
+	const { isAdmin } = useAuth();
+
 	return useQuery({
 		queryKey: QUERY_KEYS.admin.posts,
-		queryFn: () => PostService.getAllPostsAdmin(),
-		staleTime: 2 * 60 * 1000, // 2 minutos
-		gcTime: 10 * 60 * 1000, // 10 minutos
-		refetchOnWindowFocus: true,
+		queryFn: () => {
+			return PostService.getAllPostsAdmin();
+		},
+		enabled: isAdmin, // Só executa se for admin
+		...ADMIN_CACHE_CONFIG,
 		meta: {
 			errorMessage: "Erro ao carregar posts admin",
 		},
@@ -135,14 +176,17 @@ export const useAllPostsAdmin = (options = {}) => {
 	});
 };
 
-// Post admin individual
+// Post admin individual - SEMPRE usa cliente autenticado
 export const usePostByIdAdmin = (id, options = {}) => {
+	const { isAdmin } = useAuth();
+
 	return useQuery({
 		queryKey: QUERY_KEYS.admin.byId(id),
-		queryFn: () => PostService.getPostByIdAdmin(id),
-		enabled: !!id,
-		staleTime: 2 * 60 * 1000,
-		gcTime: 10 * 60 * 1000,
+		queryFn: () => {
+			return PostService.getPostByIdAdmin(id);
+		},
+		enabled: !!id && isAdmin, // Só executa se tiver ID e for admin
+		...ADMIN_CACHE_CONFIG,
 		meta: {
 			errorMessage: `Erro ao carregar post admin ${id}`,
 		},
@@ -151,15 +195,20 @@ export const usePostByIdAdmin = (id, options = {}) => {
 };
 
 /**
- * MUTATIONS
+ * ======================================
+ * MUTATIONS - SEMPRE ADMIN
+ * ======================================
  */
 export const useCreatePost = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: (postData) => PostService.createPost(postData),
+		mutationFn: (postData) => {
+			return PostService.createPost(postData);
+		},
 		onSuccess: () => {
 			toast.success("Post criado com sucesso!");
+			// Invalidar AMBOS os caches
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -174,9 +223,12 @@ export const useUpdatePost = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: ({ id, ...postData }) => PostService.updatePost(id, postData),
+		mutationFn: ({ id, ...postData }) => {
+			return PostService.updatePost(id, postData);
+		},
 		onSuccess: (data) => {
 			toast.success("Post atualizado com sucesso!");
+			// Invalidar AMBOS os caches
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -197,9 +249,12 @@ export const useDeletePost = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: (id) => PostService.deletePost(id),
+		mutationFn: (id) => {
+			return PostService.deletePost(id);
+		},
 		onSuccess: () => {
 			toast.success("Post deletado com sucesso!");
+			// Invalidar AMBOS os caches
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -211,13 +266,16 @@ export const useDeletePost = () => {
 };
 
 /**
+ * ======================================
  * UTILITIES
+ * ======================================
  */
 export const usePrefetch = () => {
 	const queryClient = useQueryClient();
 
 	const prefetchPost = (id) => {
 		if (!id) return;
+
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byId(id),
 			queryFn: () => PostService.getPostById(id),
@@ -227,6 +285,7 @@ export const usePrefetch = () => {
 
 	const prefetchCategory = (categoryId) => {
 		if (!categoryId) return;
+
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byCategory(categoryId),
 			queryFn: () => PostService.getPostsByCategory(categoryId),
@@ -278,22 +337,13 @@ export const useCacheUtils = () => {
 	};
 };
 
-// Suspense hook
+// Suspense hook - SEMPRE público
 export const usePostByIdSuspense = (id) => {
 	return useSuspenseQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
-		queryFn: () => PostService.getPostById(id),
-	});
-};
-
-// Busca
-export const useSearchPosts = (query, options = {}) => {
-	return useQuery({
-		queryKey: QUERY_KEYS.public.search(query),
-		queryFn: () => PostService.searchPosts(query),
-		enabled: !!query && query.length >= 2,
-		...PUBLIC_CACHE_CONFIG,
-		...options,
+		queryFn: () => {
+			return PostService.getPostById(id);
+		},
 	});
 };
 

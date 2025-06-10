@@ -19,7 +19,6 @@ const Contact = () => {
 	const handleSubmit = (e) => {
 		e.preventDefault();
 		// Aqui você implementaria o envio do formulário
-		console.log("Form submitted:", formData);
 		alert("Mensagem enviada com sucesso!");
 		setFormData({ name: "", email: "", subject: "", message: "" });
 	};
