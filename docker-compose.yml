@@ -11,71 +11,50 @@ services:
     # Variáveis de ambiente
     environment:
       - NODE_ENV=production
+      # Variáveis que podem ser alteradas sem rebuild
       - REACT_APP_SUPABASE_URL=${REACT_APP_SUPABASE_URL}
       - REACT_APP_SUPABASE_ANON_KEY=${REACT_APP_SUPABASE_ANON_KEY}
       - REACT_APP_DOMAIN=${REACT_APP_DOMAIN:-torqueforgedmotorsport.com}
-    
-    # Arquivo de environment
+    # Arquivo de environment (alternativa)
     env_file:
       - .env.production
     
-    # Networks - USANDO SUA REDE EXISTENTE
+    # Networks
     networks:
-      - NexiosNet
+      - traefik
     
-    # Labels do Traefik - BASEADO NO SEU PADRÃO
+    # Labels do Traefik
     labels:
       # Habilitar Traefik
       - "traefik.enable=true"
       
-      # Configuração de rede (sua rede)
-      - "traefik.docker.network=NexiosNet"
+      # Configuração de rede
+      - "traefik.docker.network=traefik"
       
       # Roteamento HTTP
       - "traefik.http.routers.torque-forged.rule=Host(`torqueforgedmotorsport.com`) || Host(`www.torqueforgedmotorsport.com`)"
       - "traefik.http.routers.torque-forged.entrypoints=web"
-      - "traefik.http.routers.torque-forged.middlewares=redirect-to-https"
       
-      # Middleware de redirecionamento
+      # Redirect HTTP para HTTPS
+      - "traefik.http.routers.torque-forged.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
       
-      # Roteamento HTTPS - SEM CERTRESOLVER (como seu nexiosdigital)
+      # Roteamento HTTPS
       - "traefik.http.routers.torque-forged-secure.rule=Host(`torqueforgedmotorsport.com`) || Host(`www.torqueforgedmotorsport.com`)"
       - "traefik.http.routers.torque-forged-secure.entrypoints=websecure"
       - "traefik.http.routers.torque-forged-secure.tls=true"
+      - "traefik.http.routers.torque-forged-secure.tls.certresolver=letsencrypt"
       
-      # Middleware de redirecionamento www
-      - "traefik.http.routers.torque-forged-secure.middlewares=www-redirect"
-      - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www\\.(.*)"
-      - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://${1}"
-      - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
+      # Middleware de segurança
+      - "traefik.http.routers.torque-forged-secure.middlewares=security-headers,www-redirect"
       
-      # Configuração do serviço
-      - "traefik.http.services.torque-forged.loadbalancer.server.port=80"
-      
-    # Health check do Docker
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    
-    # Logging
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-networks:
-  NexiosNet:
-    external: trueik.http.routers.torque-forged-secure.middlewares=security-headers,www-redirect"
-      
+      # Redirect www para não-www
       - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www\\.(.*)"
       - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://$${1}"
       - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
       
+      # Headers de segurança
       - "traefik.http.middlewares.security-headers.headers.customRequestHeaders.X-Forwarded-Proto=https"
       - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
       - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-Content-Type-Options=nosniff"
@@ -83,8 +62,10 @@ networks:
       - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.Strict-Transport-Security=max-age=31536000; includeSubDomains"
       - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.Referrer-Policy=strict-origin-when-cross-origin"
       
+      # Configuração do serviço
       - "traefik.http.services.torque-forged.loadbalancer.server.port=80"
       
+      # Health check
       - "traefik.http.services.torque-forged.loadbalancer.healthcheck.path=/health"
       - "traefik.http.services.torque-forged.loadbalancer.healthcheck.interval=30s"
       - "traefik.http.services.torque-forged.loadbalancer.healthcheck.timeout=5s"
