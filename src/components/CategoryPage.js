@@ -13,10 +13,11 @@ import { usePostsByCategory, usePrefetch } from "../hooks/usePostsQuery";
 import { ErrorBoundary } from "react-error-boundary";
 
 /**
- * CategoryPage - 100% Dinâmica do Banco
+ * CategoryPage - 100% Dinâmica do Banco - HOOKS PÚBLICOS APENAS
  * - SEM fallbacks estáticos
  * - Limpa e sem debug
  * - Error handling robusto
+ * - SEMPRE usa hooks públicos independente de login
  */
 
 // Loading skeleton para categoria
@@ -171,8 +172,9 @@ const PostCard = React.memo(({ post, index, gradient }) => {
 	);
 });
 
-// Componente principal de posts com Suspense
+// Componente principal de posts com Suspense - SEMPRE HOOKS PÚBLICOS
 const CategoryPostsGrid = ({ categoryId, title, gradient }) => {
+	// SEMPRE usar hook público, mesmo quando logado
 	const {
 		data: categoryPosts = [],
 		isLoading,
@@ -238,7 +240,7 @@ const CategoryPostsGrid = ({ categoryId, title, gradient }) => {
 	);
 };
 
-// Componente principal CategoryPage
+// Componente principal CategoryPage - SEMPRE HOOKS PÚBLICOS
 const CategoryPage = ({ categoryId, title, description, gradient }) => {
 	const safeProps = useMemo(() => {
 		const sanitized = {
@@ -317,7 +319,7 @@ const CategoryPage = ({ categoryId, title, description, gradient }) => {
 				</div>
 			</div>
 
-			{/* Posts Section */}
+			{/* Posts Section - SEMPRE HOOKS PÚBLICOS */}
 			<div className="py-16 bg-gradient-to-b from-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<ErrorBoundary

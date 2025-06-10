@@ -52,6 +52,60 @@ body {
   overflow: hidden;
 }
 
+/* NOVA BREAKPOINT: Medium Navbar (1024px - 1280px) */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .medium-navbar\:hidden {
+    display: none !important;
+  }
+  
+  .medium-navbar\:block {
+    display: block !important;
+  }
+  
+  .medium-navbar\:px-1\.5 {
+    padding-left: 0.375rem !important;
+    padding-right: 0.375rem !important;
+  }
+  
+  .medium-navbar\:px-2 {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  
+  .medium-navbar\:px-3 {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  
+  .medium-navbar\:py-2 {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+  
+  .medium-navbar\:text-sm {
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+  }
+  
+  .medium-navbar\:space-x-0\.5 > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 0;
+    margin-right: calc(0.125rem * var(--tw-space-x-reverse)) !important;
+    margin-left: calc(0.125rem * calc(1 - var(--tw-space-x-reverse))) !important;
+  }
+  
+  .medium-navbar\:space-x-1 > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 0;
+    margin-right: calc(0.25rem * var(--tw-space-x-reverse)) !important;
+    margin-left: calc(0.25rem * calc(1 - var(--tw-space-x-reverse))) !important;
+  }
+  
+  .medium-navbar\:space-x-2 > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 0;
+    margin-right: calc(0.5rem * var(--tw-space-x-reverse)) !important;
+    margin-left: calc(0.5rem * calc(1 - var(--tw-space-x-reverse))) !important;
+  }
+}
+
 /* Estilos para o Modal de Busca */
 
 /* Smooth transitions for search modal */
@@ -169,6 +223,14 @@ body {
 @media (max-width: 1536px) {
   .navbar-perfect-center {
     grid-template-columns: 260px 1fr 260px;
+  }
+}
+
+/* Ajuste para medium navbar - entre 1024px e 1280px */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .navbar-perfect-center {
+    grid-template-columns: 180px 1fr 180px;
+    gap: 0.25rem;
   }
 }
 

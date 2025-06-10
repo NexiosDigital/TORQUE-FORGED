@@ -21,7 +21,7 @@ import {
 } from "../hooks/usePostsQuery";
 import { ErrorBoundary } from "react-error-boundary";
 
-// Loading skeletons modernos
+// Loading skeletons modernos (mantidos iguais)
 const FeaturedPostsSkeleton = () => (
 	<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
 		{Array.from({ length: 3 }).map((_, i) => (
@@ -176,8 +176,9 @@ const HeroSection = React.memo(() => {
 	);
 });
 
-// Featured Posts Section
+// Featured Posts Section - USANDO APENAS HOOKS PÚBLICOS
 const FeaturedPostsSection = () => {
+	// SEMPRE usar hook público, mesmo quando logado
 	const { data: featuredPosts = [], isLoading, error } = useFeaturedPosts();
 
 	if (error) {
@@ -341,8 +342,9 @@ const PostCard = React.memo(({ post, index }) => {
 	);
 });
 
-// Posts List Section limitada
+// Posts List Section limitada - USANDO APENAS HOOKS PÚBLICOS
 const PostListSection = () => {
+	// SEMPRE usar hook público, mesmo quando logado
 	const { data: allPosts = [], isLoading, error } = useAllPosts();
 	const { prefetchPost } = usePrefetch();
 
@@ -515,8 +517,9 @@ const PostListSection = () => {
 	);
 };
 
-// Sidebar dinâmica
+// Sidebar dinâmica - USANDO APENAS HOOKS PÚBLICOS
 const Sidebar = React.memo(() => {
+	// SEMPRE usar hook público, mesmo quando logado
 	const { data: categories = [], isLoading: loadingCategories } =
 		useCategories();
 	const { prefetchCategory } = usePrefetch();
@@ -637,14 +640,14 @@ const Sidebar = React.memo(() => {
 	);
 });
 
-// Componente principal Home
+// Componente principal Home - SEMPRE USANDO HOOKS PÚBLICOS
 const OptimizedHome = () => {
 	return (
 		<>
 			{/* Hero Section */}
 			<HeroSection />
 
-			{/* Posts em Destaque */}
+			{/* Posts em Destaque - SEMPRE PÚBLICO */}
 			<ErrorBoundary
 				FallbackComponent={(props) => (
 					<div className="py-24 bg-gradient-to-b from-black to-gray-900">
@@ -658,11 +661,11 @@ const OptimizedHome = () => {
 				<FeaturedPostsSection />
 			</ErrorBoundary>
 
-			{/* Últimos Artigos com Sidebar - LAYOUT ALINHADO */}
+			{/* Últimos Artigos com Sidebar - SEMPRE PÚBLICO */}
 			<div className="py-24 bg-gradient-to-b from-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
-						{/* Lista de Posts - com altura limitada */}
+						{/* Lista de Posts - SEMPRE PÚBLICO */}
 						<ErrorBoundary
 							FallbackComponent={(props) => (
 								<div className="lg:col-span-2">
@@ -674,7 +677,7 @@ const OptimizedHome = () => {
 							<PostListSection />
 						</ErrorBoundary>
 
-						{/* Sidebar - com altura fixa */}
+						{/* Sidebar - SEMPRE PÚBLICO */}
 						<Sidebar />
 					</div>
 				</div>

@@ -19,7 +19,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useSearchPosts, usePrefetch } from "../../hooks/usePostsQuery";
 
-// Componente do Modal de Busca
+// Componente do Modal de Busca (mantido igual)
 const SearchModal = ({ isOpen, onClose }) => {
 	const [searchTerm, setSearchTerm] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -477,7 +477,12 @@ const Header = () => {
 							<Link to="/" className="flex items-center space-x-4">
 								<div className="relative group">
 									<div className="w-12 h-12 bg-gradient-to-r from-red-600 to-red-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-red-500/25 transition-all duration-300">
-										<Settings className="w-7 h-7 text-white group-hover:rotate-45 transition-transform duration-300" />
+										{/* Ícone da engrenagem - escondido entre 1150px e 1280px */}
+										<Settings
+											className="w-7 h-7 text-white group-hover:rotate-45 transition-transform duration-300 
+											lg:block xl:block 
+										"
+										/>
 									</div>
 								</div>
 								<div className="hidden sm:block">
@@ -491,18 +496,27 @@ const Header = () => {
 							</Link>
 						</div>
 
-						{/* Desktop Navigation */}
-						<div className="hidden lg:block flex-1 max-w-4xl mx-8">
-							<div className="flex items-center justify-center space-x-1">
+						{/* Desktop Navigation - Responsivo */}
+						<div className="hidden lg:block flex-1 max-w-4xl mx-4">
+							<div
+								className="flex items-center justify-center 
+								lg:space-x-1 
+								medium-navbar:space-x-0.5
+								xl:space-x-1
+							"
+							>
 								{navigation.map((item) => (
 									<Link
 										key={item.name}
 										to={item.href}
-										className={`relative px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 ${
-											location.pathname === item.href
-												? "text-white"
-												: "text-gray-300 hover:text-white"
-										}`}
+										className={`relative px-3 py-2 rounded-xl text-sm font-semibold transition-all duration-300 
+											medium-navbar:px-1.5 medium-navbar:text-sm
+											xl:px-3
+											${
+												location.pathname === item.href
+													? "text-white"
+													: "text-gray-300 hover:text-white"
+											}`}
 									>
 										{location.pathname === item.href && (
 											<div className="absolute inset-0 bg-gradient-to-r from-red-600 to-red-500 rounded-xl shadow-lg"></div>
@@ -514,9 +528,18 @@ const Header = () => {
 						</div>
 
 						{/* Right Side Actions */}
-						<div className="flex items-center space-x-4">
-							{/* Social Media - Hidden on mobile */}
-							<div className="hidden md:flex items-center space-x-3">
+						<div
+							className="flex items-center space-x-3 
+							medium-navbar:space-x-2
+						"
+						>
+							{/* Social Media - Hidden on mobile and medium navbar */}
+							<div
+								className="hidden md:flex items-center space-x-3 
+								medium-navbar:hidden
+								xl:flex
+							"
+							>
 								<a
 									href="https://www.youtube.com/channel/UCTk9ewLwz0tx80SeKxxPpVQ"
 									target="_blank"
@@ -537,14 +560,17 @@ const Header = () => {
 								</a>
 							</div>
 
-							{/* Search Button */}
+							{/* Search Button - Compacto para medium navbar */}
 							<button
 								onClick={() => setIsSearchOpen(true)}
-								className="flex items-center space-x-2 bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-white px-4 py-2 rounded-xl text-sm transition-all duration-300 border border-gray-600/30 group"
+								className="flex items-center space-x-2 bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-white px-3 py-2 rounded-xl text-sm transition-all duration-300 border border-gray-600/30 group
+									medium-navbar:px-2 medium-navbar:space-x-1"
 								title="Buscar (Ctrl+K)"
 							>
 								<Search className="w-4 h-4" />
-								<span className="hidden sm:block">Buscar</span>
+								<span className="hidden sm:block medium-navbar:hidden xl:block">
+									Buscar
+								</span>
 							</button>
 
 							{/* User Menu or Login */}
@@ -553,7 +579,8 @@ const Header = () => {
 							) : (
 								<Link
 									to="/admin/login"
-									className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
+									className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105
+										medium-navbar:px-3 medium-navbar:py-2"
 								>
 									Login
 								</Link>
