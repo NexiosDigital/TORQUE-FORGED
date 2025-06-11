@@ -408,3 +408,60 @@ textarea:focus {
     color: black !important;
   }
 }
+
+/* Fix para o botão do usuário no header */
+.user-menu-button {
+  position: relative !important;
+  z-index: 10 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.user-menu-button:hover {
+  background-color: rgba(55, 65, 81, 0.5) !important;
+}
+
+/* Fix para o dropdown do menu */
+.user-menu-dropdown {
+  position: absolute !important;
+  right: 0 !important;
+  top: 100% !important;
+  margin-top: 0.5rem !important;
+  width: 16rem !important;
+  background: rgba(17, 24, 39, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  border-radius: 1rem !important;
+  border: 1px solid rgba(55, 65, 81, 0.5) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  z-index: 100 !important;
+  pointer-events: auto !important;
+}
+
+/* Fix para garantir que cliques funcionem */
+.navbar-user-section {
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+.navbar-user-section button {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Fix para elementos do dropdown */
+.user-menu-dropdown a,
+.user-menu-dropdown button {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  text-align: left !important;
+}
+
+/* Garantir que hover funcione */
+.user-menu-dropdown a:hover,
+.user-menu-dropdown button:hover {
+  background-color: rgba(55, 65, 81, 0.5) !important;
+}

@@ -306,6 +306,7 @@ const Header = () => {
 	const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [scrollY, setScrollY] = useState(0);
+	const [isLoggingOut, setIsLoggingOut] = useState(false);
 	const location = useLocation();
 	const { user, profile, signOut, isAdmin, getDisplayName } = useAuth();
 	const userMenuRef = useRef(null);
@@ -355,8 +356,24 @@ const Header = () => {
 	];
 
 	const handleSignOut = async () => {
-		setIsUserMenuOpen(false);
-		await signOut();
+		try {
+			setIsLoggingOut(true);
+			setIsUserMenuOpen(false);
+
+			console.log("🚪 Iniciando logout do header...");
+
+			const result = await signOut();
+
+			if (result?.error) {
+				console.error("Erro no logout:", result.error);
+			} else {
+				console.log("✅ Logout realizado com sucesso no header");
+			}
+		} catch (error) {
+			console.error("Erro inesperado no logout:", error);
+		} finally {
+			setIsLoggingOut(false);
+		}
 	};
 
 	const UserAvatar = () => {
@@ -378,14 +395,23 @@ const Header = () => {
 	};
 
 	const UserMenu = () => (
-		<div ref={userMenuRef} className="relative">
+		<div ref={userMenuRef} className="relative navbar-user-section">
 			<button
-				onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-				className="flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 border border-gray-600/30"
+				onClick={(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					console.log(
+						"🔘 UserMenu button clicked, current state:",
+						isUserMenuOpen
+					);
+					setIsUserMenuOpen(!isUserMenuOpen);
+				}}
+				className="user-menu-button flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 border border-gray-600/30 cursor-pointer"
+				style={{ pointerEvents: "auto", zIndex: 10 }}
 			>
 				<UserAvatar />
 				<span className="text-white text-sm font-medium hidden md:block">
-					{getDisplayName()}
+					{isLoggingOut ? "Saindo..." : getDisplayName()}
 				</span>
 				<ChevronDown
 					className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${
@@ -395,7 +421,7 @@ const Header = () => {
 			</button>
 
 			{isUserMenuOpen && (
-				<div className="absolute right-0 top-full mt-2 w-64 bg-gray-900/95 backdrop-blur-md rounded-2xl border border-gray-700/50 shadow-2xl z-50">
+				<div className="user-menu-dropdown absolute right-0 top-full mt-2 w-64 bg-gray-900/95 backdrop-blur-md rounded-2xl border border-gray-700/50 shadow-2xl z-[100]">
 					<div className="p-4 border-b border-gray-700/50">
 						<div className="flex items-center space-x-3">
 							<div className="w-12 h-12 flex-shrink-0">
@@ -449,10 +475,17 @@ const Header = () => {
 
 						<button
 							onClick={handleSignOut}
-							className="flex items-center space-x-3 p-3 rounded-xl hover:bg-red-500/20 transition-colors duration-300 w-full text-left"
+							disabled={isLoggingOut}
+							className="flex items-center space-x-3 p-3 rounded-xl hover:bg-red-500/20 transition-colors duration-300 w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
 						>
-							<LogOut className="w-5 h-5 text-red-400" />
-							<span className="text-gray-300">Sair</span>
+							{isLoggingOut ? (
+								<div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+							) : (
+								<LogOut className="w-5 h-5 text-red-400" />
+							)}
+							<span className="text-gray-300">
+								{isLoggingOut ? "Saindo..." : "Sair"}
+							</span>
 						</button>
 					</div>
 				</div>

@@ -23,11 +23,18 @@ export const AuthProvider = ({ children }) => {
 			try {
 				const {
 					data: { session },
+					error: sessionError,
 				} = await supabase.auth.getSession();
+
+				if (sessionError) {
+					console.error("Error getting session:", sessionError);
+					setLoading(false);
+					return;
+				}
 
 				if (session?.user) {
 					setUser(session.user);
-					await fetchUserProfile(session.user.id);
+					await fetchUserProfile(session.user.id, session.user.email);
 				}
 			} catch (error) {
 				console.error("Error getting session:", error);
@@ -42,6 +49,8 @@ export const AuthProvider = ({ children }) => {
 		const {
 			data: { subscription },
 		} = supabase.auth.onAuthStateChange(async (event, session) => {
+			console.log("Auth state change:", event, session?.user?.email);
+
 			if (event === "SIGNED_OUT") {
 				setUser(null);
 				setProfile(null);
@@ -51,7 +60,7 @@ export const AuthProvider = ({ children }) => {
 
 			if (session?.user) {
 				setUser(session.user);
-				await fetchUserProfile(session.user.id);
+				await fetchUserProfile(session.user.id, session.user.email);
 			} else {
 				setUser(null);
 				setProfile(null);
@@ -64,8 +73,10 @@ export const AuthProvider = ({ children }) => {
 		};
 	}, []);
 
-	const fetchUserProfile = async (userId) => {
+	const fetchUserProfile = async (userId, userEmail) => {
 		try {
+			console.log("Fetching profile for user:", userId);
+
 			const { data, error } = await supabase
 				.from("user_profiles")
 				.select("*")
@@ -78,18 +89,21 @@ export const AuthProvider = ({ children }) => {
 			}
 
 			if (data) {
+				console.log("Profile found:", data);
 				setProfile(data);
 			} else {
 				// Criar perfil se não existir
-				const userEmail = user?.email || "";
-				const userName = userEmail.split("@")[0];
+				console.log("Creating new profile for user:", userId);
+
+				const userEmailFallback = userEmail || "";
+				const userName = userEmailFallback.split("@")[0] || "Usuário";
 
 				const { data: newProfile, error: createError } = await supabase
 					.from("user_profiles")
 					.insert([
 						{
 							id: userId,
-							email: userEmail,
+							email: userEmailFallback,
 							full_name: userName,
 							role: "admin", // Por padrão, usuários criados serão admin
 							created_at: new Date().toISOString(),
@@ -99,11 +113,15 @@ export const AuthProvider = ({ children }) => {
 					.single();
 
 				if (!createError && newProfile) {
+					console.log("New profile created:", newProfile);
 					setProfile(newProfile);
 				} else {
+					console.error("Error creating profile:", createError);
 				}
 			}
-		} catch (error) {}
+		} catch (error) {
+			console.error("Fetch user profile error:", error);
+		}
 	};
 
 	const signIn = async (email, password) => {
@@ -122,6 +140,7 @@ export const AuthProvider = ({ children }) => {
 			toast.success("Login realizado com sucesso!");
 			return { data, error: null };
 		} catch (error) {
+			console.error("Sign in error:", error);
 			toast.error(error.message || "Erro ao fazer login");
 			return { data: null, error };
 		} finally {
@@ -131,6 +150,7 @@ export const AuthProvider = ({ children }) => {
 
 	const signOut = async () => {
 		try {
+			console.log("🚪 Iniciando logout...");
 			setLoading(true);
 
 			// Primeiro, chamar o signOut do Supabase
@@ -145,13 +165,15 @@ export const AuthProvider = ({ children }) => {
 			setUser(null);
 			setProfile(null);
 
+			console.log("✅ Logout realizado com sucesso");
+
 			// Mostrar toast de sucesso
 			toast.success("Logout realizado com sucesso!");
 
-			// Redirecionar para home
+			// Redirecionar para home após um delay
 			setTimeout(() => {
 				window.location.href = "/";
-			}, 500);
+			}, 1000);
 
 			return { error: null };
 		} catch (error) {
@@ -203,7 +225,7 @@ export const AuthProvider = ({ children }) => {
 				throw error;
 			}
 
-			await fetchUserProfile(user.id);
+			await fetchUserProfile(user.id, user.email);
 			toast.success("Perfil atualizado com sucesso!");
 			return { error: null };
 		} catch (error) {

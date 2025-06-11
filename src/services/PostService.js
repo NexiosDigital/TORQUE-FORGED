@@ -239,7 +239,6 @@ export class PostService {
 
 			const result =
 				data && data.length > 0 ? data : this.getFallbackCategories();
-			console.log("✅ getCategories success:", result?.length || 0);
 			return result;
 		} catch (error) {
 			console.error("❌ PostService.getCategories error:", error);
