@@ -19,7 +19,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useSearchPosts, usePrefetch } from "../../hooks/usePostsQuery";
 
-// Componente do Modal de Busca (mantido igual)
+// Componente do Modal de Busca (mantido igual como estava no código original)
 const SearchModal = ({ isOpen, onClose }) => {
 	const [searchTerm, setSearchTerm] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -376,122 +376,129 @@ const Header = () => {
 		}
 	};
 
-	const UserAvatar = () => {
-		if (profile?.avatar_url) {
+	// Componente UserAvatar CORRIGIDO - sem problemas de onError
+	const UserAvatar = React.memo(() => {
+		const [imageError, setImageError] = useState(false);
+		const avatarUrl = profile?.avatar_url;
+
+		// Reset error quando URL muda
+		useEffect(() => {
+			setImageError(false);
+		}, [avatarUrl]);
+
+		if (avatarUrl && !imageError) {
 			return (
 				<img
-					src={profile.avatar_url}
+					src={avatarUrl}
 					alt={getDisplayName()}
 					className="w-8 h-8 rounded-lg object-cover"
+					onError={() => {
+						console.warn("Erro ao carregar avatar no header, usando fallback");
+						setImageError(true);
+					}}
 				/>
 			);
 		}
 
+		// Fallback - ícone padrão
 		return (
 			<div className="w-8 h-8 bg-gradient-to-r from-red-600 to-red-500 rounded-lg flex items-center justify-center">
 				<User className="w-4 h-4 text-white" />
 			</div>
 		);
-	};
+	});
 
-	const UserMenu = () => (
-		<div ref={userMenuRef} className="relative navbar-user-section">
-			<button
-				onClick={(e) => {
-					e.preventDefault();
-					e.stopPropagation();
-					console.log(
-						"🔘 UserMenu button clicked, current state:",
-						isUserMenuOpen
-					);
-					setIsUserMenuOpen(!isUserMenuOpen);
-				}}
-				className="user-menu-button flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 border border-gray-600/30 cursor-pointer"
-				style={{ pointerEvents: "auto", zIndex: 10 }}
-			>
-				<UserAvatar />
-				<span className="text-white text-sm font-medium hidden md:block">
-					{isLoggingOut ? "Saindo..." : getDisplayName()}
-				</span>
-				<ChevronDown
-					className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${
-						isUserMenuOpen ? "rotate-180" : ""
-					}`}
-				/>
-			</button>
+	const UserMenu = () => {
+		// Só renderizar se user existir
+		if (!user) return null;
 
-			{isUserMenuOpen && (
-				<div className="user-menu-dropdown absolute right-0 top-full mt-2 w-64 bg-gray-900/95 backdrop-blur-md rounded-2xl border border-gray-700/50 shadow-2xl z-[100]">
-					<div className="p-4 border-b border-gray-700/50">
-						<div className="flex items-center space-x-3">
-							<div className="w-12 h-12 flex-shrink-0">
-								{profile?.avatar_url ? (
-									<img
-										src={profile.avatar_url}
-										alt={getDisplayName()}
-										className="w-12 h-12 rounded-xl object-cover"
-									/>
-								) : (
-									<div className="w-12 h-12 bg-gradient-to-r from-red-600 to-red-500 rounded-xl flex items-center justify-center">
-										<User className="w-6 h-6 text-white" />
-									</div>
-								)}
-							</div>
-							<div className="flex-1 min-w-0">
-								<p className="text-white font-semibold truncate">
-									{getDisplayName()}
-								</p>
-								<p className="text-gray-400 text-sm truncate">{user?.email}</p>
-								{isAdmin && (
-									<span className="inline-flex items-center space-x-1 text-xs text-orange-400 bg-orange-500/20 px-2 py-1 rounded-full mt-1">
-										<Shield className="w-3 h-3" />
-										<span>Admin</span>
-									</span>
-								)}
+		return (
+			<div ref={userMenuRef} className="relative navbar-user-section">
+				<button
+					onClick={(e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						setIsUserMenuOpen(!isUserMenuOpen);
+					}}
+					className="user-menu-button flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 border border-gray-600/30 cursor-pointer"
+					style={{ pointerEvents: "auto", zIndex: 10 }}
+				>
+					<UserAvatar />
+					<span className="text-white text-sm font-medium hidden md:block">
+						{isLoggingOut ? "Saindo..." : getDisplayName()}
+					</span>
+					<ChevronDown
+						className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${
+							isUserMenuOpen ? "rotate-180" : ""
+						}`}
+					/>
+				</button>
+
+				{isUserMenuOpen && (
+					<div className="user-menu-dropdown absolute right-0 top-full mt-2 w-64 bg-gray-900/95 backdrop-blur-md rounded-2xl border border-gray-700/50 shadow-2xl z-[100]">
+						<div className="p-4 border-b border-gray-700/50">
+							<div className="flex items-center space-x-3">
+								<div className="w-12 h-12 flex-shrink-0">
+									<UserAvatar />
+								</div>
+								<div className="flex-1 min-w-0">
+									<p className="text-white font-semibold truncate">
+										{getDisplayName()}
+									</p>
+									<p className="text-gray-400 text-sm truncate">
+										{user?.email}
+									</p>
+									{isAdmin && (
+										<span className="inline-flex items-center space-x-1 text-xs text-orange-400 bg-orange-500/20 px-2 py-1 rounded-full mt-1">
+											<Shield className="w-3 h-3" />
+											<span>Admin</span>
+										</span>
+									)}
+								</div>
 							</div>
 						</div>
-					</div>
 
-					<div className="p-2">
-						<Link
-							to="/profile"
-							onClick={() => setIsUserMenuOpen(false)}
-							className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-800/50 transition-colors duration-300 w-full text-left"
-						>
-							<User className="w-5 h-5 text-gray-400" />
-							<span className="text-gray-300">Meu Perfil</span>
-						</Link>
-
-						{isAdmin && (
+						<div className="p-2">
 							<Link
-								to="/admin/dashboard"
+								to="/profile"
 								onClick={() => setIsUserMenuOpen(false)}
 								className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-800/50 transition-colors duration-300 w-full text-left"
 							>
-								<Shield className="w-5 h-5 text-red-400" />
-								<span className="text-gray-300">Dashboard Admin</span>
+								<User className="w-5 h-5 text-gray-400" />
+								<span className="text-gray-300">Meu Perfil</span>
 							</Link>
-						)}
 
-						<button
-							onClick={handleSignOut}
-							disabled={isLoggingOut}
-							className="flex items-center space-x-3 p-3 rounded-xl hover:bg-red-500/20 transition-colors duration-300 w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
-						>
-							{isLoggingOut ? (
-								<div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-							) : (
-								<LogOut className="w-5 h-5 text-red-400" />
+							{isAdmin && (
+								<Link
+									to="/admin/dashboard"
+									onClick={() => setIsUserMenuOpen(false)}
+									className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-800/50 transition-colors duration-300 w-full text-left"
+								>
+									<Shield className="w-5 h-5 text-red-400" />
+									<span className="text-gray-300">Dashboard Admin</span>
+								</Link>
 							)}
-							<span className="text-gray-300">
-								{isLoggingOut ? "Saindo..." : "Sair"}
-							</span>
-						</button>
+
+							<button
+								onClick={handleSignOut}
+								disabled={isLoggingOut}
+								className="flex items-center space-x-3 p-3 rounded-xl hover:bg-red-500/20 transition-colors duration-300 w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								{isLoggingOut ? (
+									<div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+								) : (
+									<LogOut className="w-5 h-5 text-red-400" />
+								)}
+								<span className="text-gray-300">
+									{isLoggingOut ? "Saindo..." : "Sair"}
+								</span>
+							</button>
+						</div>
 					</div>
-				</div>
-			)}
-		</div>
-	);
+				)}
+			</div>
+		);
+	};
 
 	return (
 		<>
@@ -510,7 +517,6 @@ const Header = () => {
 							<Link to="/" className="flex items-center space-x-4">
 								<div className="relative group">
 									<div className="w-12 h-12 bg-gradient-to-r from-red-600 to-red-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-red-500/25 transition-all duration-300">
-										{/* Ícone da engrenagem - escondido entre 1150px e 1280px */}
 										<Settings
 											className="w-7 h-7 text-white group-hover:rotate-45 transition-transform duration-300 
 											lg:block xl:block 

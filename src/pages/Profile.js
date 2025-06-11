@@ -12,12 +12,11 @@ import {
 	Camera,
 	Upload,
 	X,
-	AlertCircle,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import toast from "react-hot-toast";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 const Profile = () => {
 	const {
@@ -27,7 +26,9 @@ const Profile = () => {
 		updateProfile,
 		getDisplayName,
 		loading: authLoading,
+		sessionChecked,
 	} = useAuth();
+
 	const [loading, setLoading] = useState(false);
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -35,7 +36,6 @@ const Profile = () => {
 	const [avatarFile, setAvatarFile] = useState(null);
 	const [avatarPreview, setAvatarPreview] = useState(null);
 	const [uploadingAvatar, setUploadingAvatar] = useState(false);
-	const [pageReady, setPageReady] = useState(false);
 	const fileInputRef = useRef(null);
 
 	const {
@@ -47,37 +47,25 @@ const Profile = () => {
 
 	const passwordForm = useForm();
 
-	// Debug: Log estado inicial
+	// Preencher formulário quando dados estiverem disponíveis
+	// SEMPRE chamar useEffect - não condicionalmente
 	useEffect(() => {
-		console.log("🔍 Profile Debug:", {
-			authLoading,
-			user: !!user,
-			profile: !!profile,
-			userEmail: user?.email,
-			profileData: profile,
-		});
+		// Só preencher se tiver usuário e não estiver carregando
+		if (user && sessionChecked && !authLoading) {
+			console.log("📝 Preenchendo formulário com dados disponíveis");
 
-		// Definir a página como pronta após um pequeno delay
-		const timer = setTimeout(() => {
-			setPageReady(true);
-		}, 500);
+			// Usar dados do profile se disponível, senão usar dados do user
+			const name = profile?.full_name || user.email?.split("@")[0] || "";
+			const email = profile?.email || user.email || "";
 
-		return () => clearTimeout(timer);
-	}, [authLoading, user, profile]);
+			setValue("full_name", name);
+			setValue("email", email);
 
-	// Preencher formulário quando profile estiver disponível
-	useEffect(() => {
-		if (profile && pageReady) {
-			console.log("📝 Preenchendo formulário com dados do profile:", profile);
-			setValue("full_name", profile.full_name || "");
-			setValue("email", profile.email || user?.email || "");
-			setAvatarPreview(profile.avatar_url);
-		} else if (user && !profile && pageReady) {
-			console.log("📝 Preenchendo formulário com dados do user:", user);
-			setValue("email", user.email || "");
-			setValue("full_name", user.email?.split("@")[0] || "");
+			if (profile?.avatar_url) {
+				setAvatarPreview(profile.avatar_url);
+			}
 		}
-	}, [profile, user, setValue, pageReady]);
+	}, [user, profile, authLoading, sessionChecked, setValue]); // Dependências corretas
 
 	const handleAvatarChange = (event) => {
 		const file = event.target.files[0];
@@ -221,146 +209,59 @@ const Profile = () => {
 
 	const currentAvatar = avatarPreview || profile?.avatar_url;
 
-	// Loading inicial enquanto auth está carregando ou página não está pronta
-	if (authLoading || !pageReady) {
+	// Aguardar verificação da sessão
+	if (!sessionChecked) {
 		return (
 			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 				<div className="text-center">
-					{/* Logo animado */}
 					<div className="relative mb-8">
 						<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl flex items-center justify-center mx-auto shadow-2xl">
 							<User className="w-10 h-10 text-white" />
 						</div>
 						<div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl mx-auto animate-ping opacity-20"></div>
 					</div>
-
-					{/* Texto de carregamento */}
 					<h2 className="text-2xl font-bold text-white mb-2">
-						Carregando perfil
+						Verificando autenticação
 					</h2>
 					<p className="text-gray-400 mb-4">
-						Buscando informações da sua conta...
+						Aguarde enquanto verificamos sua sessão...
 					</p>
-
-					{/* Debug info apenas em desenvolvimento */}
-					{process.env.NODE_ENV === "development" && (
-						<div className="mt-8 text-xs text-gray-500 space-y-1">
-							<p>🔧 Modo desenvolvimento</p>
-							<p>Auth Loading: {authLoading ? "true" : "false"}</p>
-							<p>Page Ready: {pageReady ? "true" : "false"}</p>
-							<p>User: {user ? "presente" : "ausente"}</p>
-							<p>Profile: {profile ? "presente" : "ausente"}</p>
-						</div>
-					)}
 				</div>
 			</div>
 		);
 	}
 
-	// Se não há usuário após loading, mostrar erro
-	if (!user) {
+	// Redirecionar se não autenticado
+	if (!authLoading && !user) {
 		return (
-			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
-				<div className="text-center p-8 max-w-md mx-auto">
-					<div className="w-24 h-24 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
-						<AlertCircle className="w-12 h-12 text-white" />
-					</div>
-					<h1 className="text-4xl font-black text-white mb-4">
-						Erro de Autenticação
-					</h1>
-					<p className="text-gray-400 mb-8">
-						Não foi possível carregar os dados do usuário.
-					</p>
-					<div className="space-y-4">
-						<Link
-							to="/admin/login"
-							className="w-full inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
-						>
-							<span>Fazer Login</span>
-						</Link>
-						<Link
-							to="/"
-							className="w-full inline-flex items-center justify-center space-x-2 border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300"
-						>
-							<ArrowLeft className="w-4 h-4" />
-							<span>Voltar ao início</span>
-						</Link>
-					</div>
-				</div>
-			</div>
+			<Navigate
+				to="/admin/login"
+				state={{ from: { pathname: "/profile" } }}
+				replace
+			/>
 		);
 	}
 
-	// Loading inicial enquanto auth está carregando ou página não está pronta
-	if (authLoading || !pageReady) {
+	// Loading se ainda estiver carregando auth
+	if (authLoading) {
 		return (
 			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 				<div className="text-center">
-					{/* Logo animado */}
 					<div className="relative mb-8">
 						<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl flex items-center justify-center mx-auto shadow-2xl">
-							<User className="w-10 h-10 text-white" />
+							<User className="w-10 h-10 text-white animate-pulse" />
 						</div>
-						<div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl mx-auto animate-ping opacity-20"></div>
 					</div>
-
-					{/* Texto de carregamento */}
 					<h2 className="text-2xl font-bold text-white mb-2">
 						Carregando perfil
 					</h2>
-					<p className="text-gray-400 mb-4">
-						Buscando informações da sua conta...
-					</p>
-
-					{/* Debug info apenas em desenvolvimento */}
-					{process.env.NODE_ENV === "development" && (
-						<div className="mt-8 text-xs text-gray-500 space-y-1">
-							<p>🔧 Modo desenvolvimento</p>
-							<p>Auth Loading: {authLoading ? "true" : "false"}</p>
-							<p>Page Ready: {pageReady ? "true" : "false"}</p>
-							<p>User: {user ? "presente" : "ausente"}</p>
-							<p>Profile: {profile ? "presente" : "ausente"}</p>
-						</div>
-					)}
+					<p className="text-gray-400">Buscando informações da sua conta...</p>
 				</div>
 			</div>
 		);
 	}
 
-	// Se não há usuário após loading, mostrar erro
-	if (!user) {
-		return (
-			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
-				<div className="text-center p-8 max-w-md mx-auto">
-					<div className="w-24 h-24 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
-						<AlertCircle className="w-12 h-12 text-white" />
-					</div>
-					<h1 className="text-4xl font-black text-white mb-4">
-						Erro de Autenticação
-					</h1>
-					<p className="text-gray-400 mb-8">
-						Não foi possível carregar os dados do usuário.
-					</p>
-					<div className="space-y-4">
-						<Link
-							to="/admin/login"
-							className="w-full inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
-						>
-							<span>Fazer Login</span>
-						</Link>
-						<Link
-							to="/"
-							className="w-full inline-flex items-center justify-center space-x-2 border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300"
-						>
-							<ArrowLeft className="w-4 h-4" />
-							<span>Voltar ao início</span>
-						</Link>
-					</div>
-				</div>
-			</div>
-		);
-	}
-
+	// Se chegou até aqui, usuário está autenticado
 	return (
 		<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 			<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -708,22 +609,7 @@ const Profile = () => {
 						<h3 className="text-white font-semibold mb-2">🔧 Debug Info</h3>
 						<div className="text-sm text-gray-400 space-y-1">
 							<p>Auth Loading: {authLoading ? "true" : "false"}</p>
-							<p>Page Ready: {pageReady ? "true" : "false"}</p>
-							<p>User ID: {user?.id || "null"}</p>
-							<p>User Email: {user?.email || "null"}</p>
-							<p>Profile ID: {profile?.id || "null"}</p>
-							<p>Profile Email: {profile?.email || "null"}</p>
-							<p>Is Admin: {isAdmin ? "true" : "false"}</p>
-						</div>
-					</div>
-				)}
-				{/* Debug info apenas em desenvolvimento */}
-				{process.env.NODE_ENV === "development" && (
-					<div className="mt-8 p-4 bg-gray-900/50 rounded-xl border border-gray-700/30">
-						<h3 className="text-white font-semibold mb-2">🔧 Debug Info</h3>
-						<div className="text-sm text-gray-400 space-y-1">
-							<p>Auth Loading: {authLoading ? "true" : "false"}</p>
-							<p>Page Ready: {pageReady ? "true" : "false"}</p>
+							<p>Session Checked: {sessionChecked ? "true" : "false"}</p>
 							<p>User ID: {user?.id || "null"}</p>
 							<p>User Email: {user?.email || "null"}</p>
 							<p>Profile ID: {profile?.id || "null"}</p>
