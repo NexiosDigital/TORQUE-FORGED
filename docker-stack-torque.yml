@@ -1,120 +1,44 @@
 version: '3.8'
 
+networks:
+  NexiosNet:
+    external: true
+
 services:
   torque-forged:
     image: torque-forged:latest
-    
-    # Build será feito antes do deploy
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    
-    environment:
-      - NODE_ENV=production
-      - REACT_APP_SUPABASE_URL=${REACT_APP_SUPABASE_URL}
-      - REACT_APP_SUPABASE_ANON_KEY=${REACT_APP_SUPABASE_ANON_KEY}
-      - REACT_APP_DOMAIN=torqueforgedmotorsport.com
-    
-    env_file:
-      - .env.production
-    
     networks:
-      - traefik-public
-      - nexios-net
-    
+      - NexiosNet
     deploy:
-      mode: replicated
       replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
-      
+      restart_policy:
+        condition: on-failure
       labels:
         # Habilitar Traefik
         - "traefik.enable=true"
         
         # Configuração de rede
-        - "traefik.docker.network=traefik-public"
+        - "traefik.docker.network=NexiosNet"
         
-        # HTTP Router (vai redirecionar para HTTPS)
-        - "traefik.http.routers.torque-forged-http.rule=Host(`torqueforgedmotorsport.com`) || Host(`www.torqueforgedmotorsport.com`)"
-        - "traefik.http.routers.torque-forged-http.entrypoints=web"
-        - "traefik.http.routers.torque-forged-http.middlewares=redirect-to-https,www-redirect"
-        
-        # HTTPS Router (principal)
+        # Roteamento HTTP (redirecionamento)
         - "traefik.http.routers.torque-forged.rule=Host(`torqueforgedmotorsport.com`) || Host(`www.torqueforgedmotorsport.com`)"
-        - "traefik.http.routers.torque-forged.entrypoints=websecure"
-        - "traefik.http.routers.torque-forged.tls=true"
-        - "traefik.http.routers.torque-forged.tls.certresolver=letsencrypt"
-        - "traefik.http.routers.torque-forged.middlewares=security-headers,www-redirect"
+        - "traefik.http.routers.torque-forged.entrypoints=web"
+        - "traefik.http.routers.torque-forged.middlewares=redirect-to-https"
         
-        # Middlewares
-        # Redirect HTTP para HTTPS
+        # Middleware de redirecionamento
         - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
         - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
         
-        # Redirect www para não-www
-        - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https?://www\\.(.*)"
+        # Roteamento HTTPS
+        - "traefik.http.routers.torque-forged-secure.rule=Host(`torqueforgedmotorsport.com`) || Host(`www.torqueforgedmotorsport.com`)"
+        - "traefik.http.routers.torque-forged-secure.entrypoints=websecure"
+        - "traefik.http.routers.torque-forged-secure.tls=true"
+        
+        # Middleware www redirect
+        - "traefik.http.routers.torque-forged-secure.middlewares=www-redirect"
+        - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www\\.(.*)"
         - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://$${1}"
         - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
         
-        # Headers de segurança
-        - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
-        - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-Content-Type-Options=nosniff"
-        - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-XSS-Protection=1; mode=block"
-        - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.Strict-Transport-Security=max-age=63072000; includeSubDomains; preload"
-        - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.Referrer-Policy=strict-origin-when-cross-origin"
-        - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.Content-Security-Policy=default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' https:; connect-src 'self' https:;"
-        
-        # Rate limiting
-        - "traefik.http.middlewares.rate-limit.ratelimit.burst=100"
-        - "traefik.http.middlewares.rate-limit.ratelimit.average=50"
-        
-        # Serviço
+        # Configuração do serviço
         - "traefik.http.services.torque-forged.loadbalancer.server.port=80"
-        
-        # Health check
-        - "traefik.http.services.torque-forged.loadbalancer.healthcheck.path=/health"
-        - "traefik.http.services.torque-forged.loadbalancer.healthcheck.interval=30s"
-        - "traefik.http.services.torque-forged.loadbalancer.healthcheck.timeout=5s"
-      
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 3
-        window: 60s
-      
-      update_config:
-        parallelism: 1
-        delay: 10s
-        failure_action: rollback
-        monitor: 60s
-        max_failure_ratio: 0.3
-      
-      rollback_config:
-        parallelism: 1
-        delay: 0s
-        failure_action: pause
-        monitor: 60s
-        max_failure_ratio: 0.3
-      
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
-    
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health", "||", "exit", "1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-networks:
-  traefik-public:
-    external: true
-  nexios-net:
-    external: true
