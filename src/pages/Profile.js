@@ -524,9 +524,6 @@ const Profile = () => {
 									</h3>
 									<div className="space-y-2 text-gray-400">
 										<p>
-											<strong>ID:</strong> {user?.id}
-										</p>
-										<p>
 											<strong>Cadastrado em:</strong>{" "}
 											{user?.created_at
 												? new Date(user.created_at).toLocaleDateString("pt-BR")
@@ -677,29 +674,6 @@ const Profile = () => {
 						)}
 					</div>
 				</div>
-
-				{/* Debug info apenas em desenvolvimento */}
-				{process.env.NODE_ENV === "development" && (
-					<div className="mt-8 p-4 bg-gray-900/50 rounded-xl border border-gray-700/30">
-						<h3 className="text-white font-semibold mb-2">🔧 Debug Info</h3>
-						<div className="text-sm text-gray-400 space-y-1">
-							<p>Session Checked: {sessionChecked ? "✅" : "❌"}</p>
-							<p>Auth Loading: {authLoading ? "⏳" : "✅"}</p>
-							<p>Profile Loading: {profileLoading ? "⏳" : "✅"}</p>
-							<p>Form Initialized: {formInitialized ? "✅" : "❌"}</p>
-							<p>
-								User: {user ? "✅" : "❌"} {user?.email}
-							</p>
-							<p>
-								Profile: {profile ? "✅" : "❌"} {profile?.email}
-							</p>
-							<p>
-								Is Admin: {isAdmin ? "✅ ADMIN" : "❌ USER"} (role:{" "}
-								{profile?.role})
-							</p>
-						</div>
-					</div>
-				)}
 			</div>
 		</div>
 	);

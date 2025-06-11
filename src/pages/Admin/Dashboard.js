@@ -11,6 +11,7 @@ import {
 	Shield,
 	RefreshCw,
 	BarChart3,
+	ArrowLeft,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -402,6 +403,14 @@ const DashboardContent = () => {
 					</div>
 
 					<div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+						<Link
+							to="/"
+							className="flex items-center justify-center space-x-2 border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-4 py-2 rounded-xl font-semibold transition-all duration-300"
+						>
+							<ArrowLeft className="w-4 h-4" />
+							<span>Voltar ao Início</span>
+						</Link>
+
 						<button
 							onClick={handleRefresh}
 							disabled={isLoading}

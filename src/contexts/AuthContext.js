@@ -33,8 +33,6 @@ export const AuthProvider = ({ children }) => {
 	// Função para FORÇAR limpeza do cache - SOLUÇÃO PARA "old caches cleaner"
 	const forceClearAllCaches = () => {
 		try {
-			console.log("🗑️ FORÇA limpeza de todos os caches");
-
 			// 1. Limpar React Query
 			if (window.queryClient) {
 				window.queryClient.clear();
@@ -55,8 +53,6 @@ export const AuthProvider = ({ children }) => {
 					sessionStorage.removeItem(key);
 				}
 			});
-
-			console.log("✅ Cache completamente limpo");
 		} catch (error) {
 			console.warn("Erro ao limpar cache:", error);
 		}
@@ -66,7 +62,6 @@ export const AuthProvider = ({ children }) => {
 	const fetchUserProfile = async (userId, userEmail, retryCount = 0) => {
 		// Evitar múltiplas chamadas simultâneas
 		if (isLoadingProfile.current && currentUserId.current === userId) {
-			console.log("🔄 Profile fetch já em andamento para:", userId);
 			return null;
 		}
 
@@ -85,12 +80,6 @@ export const AuthProvider = ({ children }) => {
 			currentUserId.current = userId;
 			setProfileLoading(true);
 
-			console.log(
-				`🔍 Buscando perfil para usuário: ${userId} (tentativa ${
-					retryCount + 1
-				})`
-			);
-
 			const { data, error } = await supabase
 				.from("user_profiles")
 				.select("*")
@@ -103,7 +92,6 @@ export const AuthProvider = ({ children }) => {
 				// Retry com delay exponencial
 				if (retryCount < 2) {
 					const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
-					console.log(`🔄 Retry em ${delay}ms...`);
 					setTimeout(() => {
 						fetchUserProfile(userId, userEmail, retryCount + 1);
 					}, delay);
@@ -115,7 +103,6 @@ export const AuthProvider = ({ children }) => {
 			}
 
 			if (data) {
-				console.log("✅ Perfil encontrado:", data);
 				setProfile(data);
 				setProfileLoading(false);
 				isLoadingProfile.current = false;
@@ -123,7 +110,6 @@ export const AuthProvider = ({ children }) => {
 				return data;
 			} else {
 				// Criar perfil se não existir
-				console.log("📝 Criando novo perfil para usuário:", userId);
 
 				const userEmailFallback = userEmail || "";
 				const userName = userEmailFallback.split("@")[0] || "Usuário";
@@ -143,7 +129,6 @@ export const AuthProvider = ({ children }) => {
 					.single();
 
 				if (!createError && newProfile) {
-					console.log("✅ Novo perfil criado:", newProfile);
 					setProfile(newProfile);
 					setProfileLoading(false);
 					isLoadingProfile.current = false;
@@ -168,8 +153,6 @@ export const AuthProvider = ({ children }) => {
 
 	// Função para limpar estado - MELHORADA
 	const clearAuthState = () => {
-		console.log("🧹 Limpando estado de autenticação");
-
 		// Reset refs
 		isLoadingProfile.current = false;
 		currentUserId.current = null;
@@ -184,26 +167,22 @@ export const AuthProvider = ({ children }) => {
 		forceClearAllCaches();
 	};
 
-	// Inicialização da sessão - COM DEBOUNCE
+	// Inicialização da sessão - COM INIT MAIS RÁPIDO
 	useEffect(() => {
 		let mounted = true;
 		let timeoutId;
 
 		const initializeAuth = async () => {
-			// Evitar múltiplas inicializações
 			initializationCount.current += 1;
 			const currentInit = initializationCount.current;
 
 			try {
-				console.log(`🚀 Inicializando autenticação... (#${currentInit})`);
 				setLoading(true);
 
-				// Delay para evitar race conditions
-				await new Promise((resolve) => setTimeout(resolve, 100));
+				// REDUZIR delay inicial para acelerar quando não há usuário
+				await new Promise((resolve) => setTimeout(resolve, 50));
 
-				// Verificar se ainda é a inicialização atual
 				if (!mounted || currentInit !== initializationCount.current) {
-					console.log("🚫 Inicialização cancelada (nova tentativa iniciada)");
 					return;
 				}
 
@@ -222,10 +201,8 @@ export const AuthProvider = ({ children }) => {
 				}
 
 				if (session?.user) {
-					console.log("✅ Sessão encontrada:", session.user.email);
 					setUser(session.user);
 
-					// Buscar perfil com debounce
 					if (mounted && currentInit === initializationCount.current) {
 						const profileData = await fetchUserProfile(
 							session.user.id,
@@ -235,18 +212,14 @@ export const AuthProvider = ({ children }) => {
 						if (mounted && currentInit === initializationCount.current) {
 							setLoading(false);
 							setSessionChecked(true);
-
-							console.log("📊 Estado final da inicialização:", {
-								user: !!session.user,
-								profile: !!profileData,
-								isAdmin: profileData?.role === "admin",
-								initCount: currentInit,
-							});
 						}
 					}
 				} else {
-					console.log("ℹ️ Nenhuma sessão encontrada");
-					clearAuthState();
+					// MUDANÇA: Setar sessionChecked imediatamente quando não há usuário
+					setUser(null);
+					setProfile(null);
+					setLoading(false);
+					setProfileLoading(false);
 					setSessionChecked(true);
 				}
 			} catch (error) {
@@ -258,8 +231,8 @@ export const AuthProvider = ({ children }) => {
 			}
 		};
 
-		// Debounce para evitar múltiplas inicializações
-		timeoutId = setTimeout(initializeAuth, 50);
+		// REDUZIR timeout inicial
+		timeoutId = setTimeout(initializeAuth, 25);
 
 		return () => {
 			mounted = false;
@@ -281,58 +254,29 @@ export const AuthProvider = ({ children }) => {
 			debounceTimeout = setTimeout(async () => {
 				if (!mounted) return;
 
-				console.log(
-					"🔄 Auth state change:",
-					event,
-					session?.user?.email || "no user"
-				);
-
 				switch (event) {
 					case "SIGNED_OUT":
-						console.log("👋 Usuário deslogado");
 						clearAuthState();
 						setSessionChecked(true);
 						break;
 
 					case "SIGNED_IN":
-						console.log("👤 Usuário logado");
 						if (session?.user && mounted) {
 							setUser(session.user);
 							setLoading(true);
 
-							const profileData = await fetchUserProfile(
-								session.user.id,
-								session.user.email
-							);
-
 							if (mounted) {
 								setLoading(false);
 								setSessionChecked(true);
-
-								console.log("📊 Estado após login:", {
-									user: !!session.user,
-									profile: !!profileData,
-									isAdmin: profileData?.role === "admin",
-								});
 							}
 						}
 						break;
 
 					case "TOKEN_REFRESHED":
-						console.log("🔄 Token renovado");
 						if (session?.user && user?.id !== session.user.id && mounted) {
 							setUser(session.user);
-							const profileData = await fetchUserProfile(
-								session.user.id,
-								session.user.email
-							);
 
 							if (mounted) {
-								console.log("📊 Estado após refresh:", {
-									user: !!session.user,
-									profile: !!profileData,
-									isAdmin: profileData?.role === "admin",
-								});
 							}
 						}
 						break;
@@ -364,7 +308,6 @@ export const AuthProvider = ({ children }) => {
 	const signIn = async (email, password) => {
 		try {
 			setLoading(true);
-			console.log("🔐 Tentando fazer login...");
 
 			const { data, error } = await supabase.auth.signInWithPassword({
 				email,
@@ -375,7 +318,6 @@ export const AuthProvider = ({ children }) => {
 				throw error;
 			}
 
-			console.log("✅ Login realizado com sucesso!");
 			toast.success("Login realizado com sucesso!");
 			return { data, error: null };
 		} catch (error) {
@@ -390,7 +332,6 @@ export const AuthProvider = ({ children }) => {
 	// SignOut - VERSÃO FINAL
 	const signOut = async () => {
 		try {
-			console.log("🚪 Iniciando logout...");
 			setLoading(true);
 
 			// Reset refs imediatamente
@@ -403,7 +344,6 @@ export const AuthProvider = ({ children }) => {
 			// 2. Logout no Supabase (não importa se falhar)
 			try {
 				await supabase.auth.signOut();
-				console.log("✅ Supabase logout OK");
 			} catch (error) {
 				console.warn("⚠️ Supabase logout falhou, mas continuando:", error);
 			}
@@ -411,7 +351,6 @@ export const AuthProvider = ({ children }) => {
 			// 3. Força limpeza total
 			forceClearAllCaches();
 
-			console.log("✅ Logout realizado com sucesso");
 			toast.success("Logout realizado com sucesso!");
 
 			// 4. Redirecionar com delay mínimo para garantir limpeza
@@ -462,7 +401,6 @@ export const AuthProvider = ({ children }) => {
 	const updateProfile = async (updates) => {
 		try {
 			setLoading(true);
-			console.log("📝 Atualizando perfil...", updates);
 
 			if (!user) {
 				throw new Error("Usuário não autenticado");
@@ -482,7 +420,6 @@ export const AuthProvider = ({ children }) => {
 			// Recarregar perfil imediatamente
 			await fetchUserProfile(user.id, user.email);
 
-			console.log("✅ Perfil atualizado com sucesso!");
 			toast.success("Perfil atualizado com sucesso!");
 			return { error: null };
 		} catch (error) {
