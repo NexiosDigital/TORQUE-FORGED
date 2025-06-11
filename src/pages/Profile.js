@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import {
 	User,
@@ -9,14 +9,12 @@ import {
 	ArrowLeft,
 	Eye,
 	EyeOff,
-	Camera,
-	Upload,
-	X,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import toast from "react-hot-toast";
 import { Link, Navigate } from "react-router-dom";
+import AvatarUpload from "../components/AvatarUpload";
 
 const Profile = () => {
 	const {
@@ -34,11 +32,7 @@ const Profile = () => {
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [activeTab, setActiveTab] = useState("profile");
-	const [avatarFile, setAvatarFile] = useState(null);
-	const [avatarPreview, setAvatarPreview] = useState(null);
-	const [uploadingAvatar, setUploadingAvatar] = useState(false);
 	const [formInitialized, setFormInitialized] = useState(false);
-	const fileInputRef = useRef(null);
 
 	const {
 		register,
@@ -74,12 +68,6 @@ const Profile = () => {
 
 	// Preencher formulário quando dados estiverem COMPLETAMENTE disponíveis
 	useEffect(() => {
-		// Só preencher se:
-		// 1. Sessão foi verificada
-		// 2. Usuário existe
-		// 3. Não está carregando auth
-		// 4. Não está carregando profile
-		// 5. Formulário ainda não foi inicializado
 		if (
 			sessionChecked &&
 			user &&
@@ -89,16 +77,11 @@ const Profile = () => {
 		) {
 			console.log("📝 Inicializando formulário com dados disponíveis");
 
-			// Usar dados do profile se disponível, senão usar dados do user
 			const name = profile?.full_name || user.email?.split("@")[0] || "";
 			const email = profile?.email || user.email || "";
 
 			setValue("full_name", name);
 			setValue("email", email);
-
-			if (profile?.avatar_url) {
-				setAvatarPreview(profile.avatar_url);
-			}
 
 			setFormInitialized(true);
 			console.log("✅ Formulário inicializado:", { name, email });
@@ -113,98 +96,14 @@ const Profile = () => {
 		setValue,
 	]);
 
-	const handleAvatarChange = (event) => {
-		const file = event.target.files[0];
-		if (file) {
-			// Verificar tamanho do arquivo (max 5MB)
-			if (file.size > 5 * 1024 * 1024) {
-				toast.error("A imagem deve ter no máximo 5MB");
-				return;
-			}
-
-			// Verificar tipo do arquivo
-			if (!file.type.startsWith("image/")) {
-				toast.error("Apenas arquivos de imagem são permitidos");
-				return;
-			}
-
-			setAvatarFile(file);
-
-			// Criar preview
-			const reader = new FileReader();
-			reader.onload = (e) => {
-				setAvatarPreview(e.target.result);
-			};
-			reader.readAsDataURL(file);
-		}
-	};
-
-	const uploadAvatar = async () => {
-		if (!avatarFile) return null;
-
-		try {
-			setUploadingAvatar(true);
-
-			// Gerar nome único para o arquivo
-			const fileExt = avatarFile.name.split(".").pop();
-			const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-			const filePath = `avatars/${fileName}`;
-
-			// Upload do arquivo
-			const { error: uploadError } = await supabase.storage
-				.from("avatars")
-				.upload(filePath, avatarFile);
-
-			if (uploadError) {
-				console.error("Upload error:", uploadError);
-				throw uploadError;
-			}
-
-			// Obter URL pública
-			const {
-				data: { publicUrl },
-			} = supabase.storage.from("avatars").getPublicUrl(filePath);
-
-			return publicUrl;
-		} catch (error) {
-			console.error("Error uploading avatar:", error);
-			toast.error("Erro ao fazer upload da imagem");
-			return null;
-		} finally {
-			setUploadingAvatar(false);
-		}
-	};
-
-	const removeAvatar = () => {
-		setAvatarFile(null);
-		setAvatarPreview(null);
-		if (fileInputRef.current) {
-			fileInputRef.current.value = "";
-		}
-	};
-
 	const onSubmitProfile = async (data) => {
 		try {
 			setLoading(true);
 			console.log("💾 Salvando perfil:", data);
 
-			let avatarUrl = profile?.avatar_url;
-
-			// Upload avatar se houver um novo arquivo
-			if (avatarFile) {
-				const uploadedUrl = await uploadAvatar();
-				if (uploadedUrl) {
-					avatarUrl = uploadedUrl;
-				}
-			} else if (avatarPreview === null) {
-				// Usuário removeu o avatar
-				avatarUrl = null;
-			}
-
 			const updateData = {
 				email: data.email,
 				full_name: data.full_name,
-				avatar_url: avatarUrl,
 			};
 
 			console.log("📤 Enviando dados:", updateData);
@@ -212,7 +111,6 @@ const Profile = () => {
 			const { error } = await updateProfile(updateData);
 
 			if (!error) {
-				setAvatarFile(null); // Limpar arquivo após sucesso
 				console.log("✅ Perfil atualizado com sucesso");
 			}
 		} catch (error) {
@@ -248,12 +146,23 @@ const Profile = () => {
 		}
 	};
 
+	// Callback para sucesso no upload do avatar
+	const handleAvatarUploadSuccess = (result) => {
+		console.log("✅ Avatar upload success:", result);
+		// O componente AvatarUpload já chama updateProfile automaticamente
+		// Não precisamos fazer nada aqui, apenas log para debug
+	};
+
+	// Callback para erro no upload do avatar
+	const handleAvatarUploadError = (error) => {
+		console.error("❌ Avatar upload error:", error);
+		// Toast já é mostrado pelo componente AvatarUpload
+	};
+
 	const tabs = [
 		{ id: "profile", name: "Perfil", icon: User },
 		{ id: "security", name: "Segurança", icon: Lock },
 	];
-
-	const currentAvatar = avatarPreview || profile?.avatar_url;
 
 	// Aguardar verificação da sessão PRIMEIRO
 	if (!sessionChecked) {
@@ -343,10 +252,11 @@ const Profile = () => {
 					</Link>
 
 					<div className="flex items-center space-x-6">
+						{/* Avatar usando AvatarService (otimizado) */}
 						<div className="relative w-20 h-20">
-							{currentAvatar ? (
+							{profile?.avatar_url ? (
 								<img
-									src={currentAvatar}
+									src={profile.avatar_url}
 									alt={getDisplayName()}
 									className="w-20 h-20 rounded-2xl object-cover shadow-lg"
 									onError={(e) => {
@@ -356,7 +266,7 @@ const Profile = () => {
 									}}
 								/>
 							) : null}
-							{!currentAvatar && (
+							{!profile?.avatar_url && (
 								<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl flex items-center justify-center shadow-lg">
 									<User className="w-10 h-10 text-white" />
 								</div>
@@ -405,168 +315,121 @@ const Profile = () => {
 
 					<div className="p-8">
 						{activeTab === "profile" && (
-							<form
-								onSubmit={handleSubmit(onSubmitProfile)}
-								className="space-y-6"
-							>
-								{/* Avatar Upload */}
+							<div className="space-y-8">
+								{/* Avatar Upload Section */}
 								<div>
-									<label className="block text-white font-semibold mb-3">
+									<h3 className="text-xl font-bold text-white mb-6">
 										Foto de Perfil
-									</label>
-									<div className="flex items-center space-x-6">
-										<div className="relative">
-											{currentAvatar ? (
-												<img
-													src={currentAvatar}
-													alt="Avatar preview"
-													className="w-24 h-24 rounded-2xl object-cover border-2 border-gray-600"
-													onError={(e) => {
-														console.warn("Erro ao carregar avatar preview:", e);
-														e.target.style.display = "none";
-														e.target.nextSibling.style.display = "flex";
-													}}
-												/>
-											) : null}
-											{!currentAvatar && (
-												<div className="w-24 h-24 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl flex items-center justify-center border-2 border-gray-600">
-													<User className="w-12 h-12 text-white" />
-												</div>
-											)}
-											{avatarFile && (
-												<div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center">
-													<Upload className="w-6 h-6 text-white" />
-												</div>
-											)}
-										</div>
-
-										<div className="flex flex-col space-y-3">
-											<input
-												ref={fileInputRef}
-												type="file"
-												accept="image/*"
-												onChange={handleAvatarChange}
-												className="hidden"
-											/>
-											<button
-												type="button"
-												onClick={() => fileInputRef.current?.click()}
-												className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-xl transition-colors duration-300"
-											>
-												<Camera className="w-4 h-4" />
-												<span>Escolher Foto</span>
-											</button>
-
-											{(currentAvatar || avatarFile) && (
-												<button
-													type="button"
-													onClick={removeAvatar}
-													className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl transition-colors duration-300"
-												>
-													<X className="w-4 h-4" />
-													<span>Remover</span>
-												</button>
-											)}
-										</div>
-									</div>
-									<p className="text-gray-400 text-sm mt-2">
-										Formatos aceitos: JPG, PNG, GIF. Tamanho máximo: 5MB.
-									</p>
-								</div>
-
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-									<div>
-										<label className="block text-white font-semibold mb-3">
-											Nome Completo
-										</label>
-										<div className="relative">
-											<User className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-											<input
-												type="text"
-												{...register("full_name")}
-												className="w-full pl-12 pr-4 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
-												placeholder="Seu nome completo"
-											/>
-										</div>
-									</div>
-
-									<div>
-										<label className="block text-white font-semibold mb-3">
-											Email
-										</label>
-										<div className="relative">
-											<Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-											<input
-												type="email"
-												{...register("email", {
-													required: "Email é obrigatório",
-													pattern: {
-														value: /^\S+@\S+$/i,
-														message: "Email inválido",
-													},
-												})}
-												className="w-full pl-12 pr-4 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
-												placeholder="seu@email.com"
-											/>
-										</div>
-										{errors.email && (
-											<p className="text-red-400 text-sm mt-2">
-												{errors.email.message}
-											</p>
-										)}
-									</div>
-								</div>
-
-								{/* Role Info */}
-								<div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/30">
-									<h3 className="text-white font-semibold mb-2">
-										Informações da Conta
 									</h3>
-									<div className="space-y-2 text-gray-400">
-										<p>
-											<strong>Cadastrado em:</strong>{" "}
-											{user?.created_at
-												? new Date(user.created_at).toLocaleDateString("pt-BR")
-												: "N/A"}
-										</p>
-										<p>
-											<strong>Último acesso:</strong>{" "}
-											{user?.last_sign_in_at
-												? new Date(user.last_sign_in_at).toLocaleDateString(
-														"pt-BR"
-												  )
-												: "N/A"}
-										</p>
-										<p>
-											<strong>Função:</strong>{" "}
-											<span
-												className={
-													isAdmin
-														? "text-orange-400 font-semibold"
-														: "text-gray-400"
-												}
-											>
-												{isAdmin ? "Administrador" : "Usuário"}
-											</span>
-										</p>
-									</div>
+									<AvatarUpload
+										size={150}
+										onUploadSuccess={handleAvatarUploadSuccess}
+										onUploadError={handleAvatarUploadError}
+										showRemoveButton={true}
+									/>
 								</div>
 
-								<button
-									type="submit"
-									disabled={loading || uploadingAvatar}
-									className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white py-4 rounded-2xl font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3"
+								{/* Profile Form */}
+								<form
+									onSubmit={handleSubmit(onSubmitProfile)}
+									className="space-y-6"
 								>
-									{loading || uploadingAvatar ? (
-										<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-									) : (
-										<>
-											<Save className="w-5 h-5" />
-											<span>Salvar Alterações</span>
-										</>
-									)}
-								</button>
-							</form>
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+										<div>
+											<label className="block text-white font-semibold mb-3">
+												Nome Completo
+											</label>
+											<div className="relative">
+												<User className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+												<input
+													type="text"
+													{...register("full_name")}
+													className="w-full pl-12 pr-4 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
+													placeholder="Seu nome completo"
+												/>
+											</div>
+										</div>
+
+										<div>
+											<label className="block text-white font-semibold mb-3">
+												Email
+											</label>
+											<div className="relative">
+												<Mail className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+												<input
+													type="email"
+													{...register("email", {
+														required: "Email é obrigatório",
+														pattern: {
+															value: /^\S+@\S+$/i,
+															message: "Email inválido",
+														},
+													})}
+													className="w-full pl-12 pr-4 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
+													placeholder="seu@email.com"
+												/>
+											</div>
+											{errors.email && (
+												<p className="text-red-400 text-sm mt-2">
+													{errors.email.message}
+												</p>
+											)}
+										</div>
+									</div>
+
+									{/* Role Info */}
+									<div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/30">
+										<h3 className="text-white font-semibold mb-2">
+											Informações da Conta
+										</h3>
+										<div className="space-y-2 text-gray-400">
+											<p>
+												<strong>Cadastrado em:</strong>{" "}
+												{user?.created_at
+													? new Date(user.created_at).toLocaleDateString(
+															"pt-BR"
+													  )
+													: "N/A"}
+											</p>
+											<p>
+												<strong>Último acesso:</strong>{" "}
+												{user?.last_sign_in_at
+													? new Date(user.last_sign_in_at).toLocaleDateString(
+															"pt-BR"
+													  )
+													: "N/A"}
+											</p>
+											<p>
+												<strong>Função:</strong>{" "}
+												<span
+													className={
+														isAdmin
+															? "text-orange-400 font-semibold"
+															: "text-gray-400"
+													}
+												>
+													{isAdmin ? "Administrador" : "Usuário"}
+												</span>
+											</p>
+										</div>
+									</div>
+
+									<button
+										type="submit"
+										disabled={loading}
+										className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white py-4 rounded-2xl font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3"
+									>
+										{loading ? (
+											<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+										) : (
+											<>
+												<Save className="w-5 h-5" />
+												<span>Salvar Alterações</span>
+											</>
+										)}
+									</button>
+								</form>
+							</div>
 						)}
 
 						{activeTab === "security" && (
