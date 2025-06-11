@@ -1,49 +1,47 @@
 import React, { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 /**
- * QueryProvider Simplificado - SEM dependências extras
- * - TanStack Query v5 configurações otimizadas
- * - Supabase Realtime integrado
- * - Error boundaries robustos
- * - Cache configurado para performance
+ * QueryProvider FINAL - SOLUÇÃO PARA CACHE PERSISTENTE
+ * - Force cache clearing em situações específicas
+ * - Melhor detecção de estados inconsistentes
+ * - Debug logs para "old caches cleaner"
+ * - Zero interferência entre login/logout
  */
 
-// QueryClient otimizado SEM persistência (por enquanto)
+// QueryClient com configurações MAIS AGRESSIVAS para evitar cache persistente
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			// Configurações para resolver problemas de cache
-			staleTime: 5 * 60 * 1000, // 5 minutos fresh
-			gcTime: 30 * 60 * 1000, // 30 minutos em cache (gcTime é o novo nome)
+			// Cache mais agressivo para evitar problemas
+			staleTime: 2 * 60 * 1000, // 2 minutos (reduzido)
+			gcTime: 10 * 60 * 1000, // 10 minutos (reduzido)
 			refetchOnWindowFocus: false,
 			refetchOnMount: true,
 			refetchOnReconnect: true,
 			refetchInterval: false,
 
-			// Error handling melhorado
+			// Error handling mais rigoroso
 			retry: (failureCount, error) => {
 				// Não retry para 404 ou dados não encontrados
 				if (error?.message?.includes("não encontrado")) return false;
 				if (error?.message?.includes("not found")) return false;
 				if (error?.status === 404) return false;
 
-				// Máximo 2 retries para outros erros
-				return failureCount < 2;
+				// Máximo 1 retry para evitar loops
+				return failureCount < 1;
 			},
 
 			retryDelay: (attemptIndex) => {
-				// Delay progressivo: 1s, 2s, 4s
-				return Math.min(1000 * 2 ** attemptIndex, 4000);
+				return Math.min(500 * 2 ** attemptIndex, 2000); // Delays menores
 			},
 
 			// Configurações de network
 			networkMode: "online",
 		},
 		mutations: {
-			retry: 1,
-			retryDelay: 1000,
+			retry: 0, // Sem retry em mutations
+			retryDelay: 500,
 			networkMode: "online",
 		},
 	},
@@ -75,7 +73,6 @@ class QueryErrorBoundary extends React.Component {
 		// Log para monitoramento em produção
 		if (process.env.NODE_ENV === "production") {
 			// Aqui você pode integrar com Sentry, LogRocket, etc.
-			// analytics.track('query_error_boundary', { error: error.message });
 		}
 	}
 
@@ -164,7 +161,7 @@ class QueryErrorBoundary extends React.Component {
 	}
 }
 
-// Performance monitor para desenvolvimento
+// Performance monitor MELHORADO para identificar problemas de cache
 const PerformanceMonitor = () => {
 	useEffect(() => {
 		if (process.env.NODE_ENV !== "development") return;
@@ -182,17 +179,40 @@ const PerformanceMonitor = () => {
 				success: queries.filter((q) => q.state.status === "success").length,
 			};
 
+			console.log("📊 Cache Stats:", stats);
+
 			// Alertar se muitos erros
 			if (stats.error > stats.total * 0.2) {
-				console.warn("⚠️ Alta taxa de erro nas queries");
+				console.warn("⚠️ Alta taxa de erro nas queries - limpando cache");
+				queryClient.clear();
+			}
+
+			// Alertar se muitas queries stale
+			if (stats.stale > stats.total * 0.8) {
+				console.warn("⚠️ Muitas queries stale - possível problema de cache");
+			}
+
+			// Detectar queries órfãs
+			const orphanQueries = queries.filter(
+				(q) => q.state.status === "success" && !q.getObserversCount()
+			);
+
+			if (orphanQueries.length > 10) {
+				console.warn(
+					"🗑️ Queries órfãs detectadas - limpando:",
+					orphanQueries.length
+				);
+				orphanQueries.forEach((q) =>
+					queryClient.removeQueries({ queryKey: q.queryKey })
+				);
 			}
 		};
 
-		// Log a cada 30 segundos em desenvolvimento
-		const interval = setInterval(logCacheStats, 30000);
+		// Log a cada 15 segundos em desenvolvimento
+		const interval = setInterval(logCacheStats, 15000);
 
-		// Log inicial após 3 segundos
-		const timeout = setTimeout(logCacheStats, 3000);
+		// Log inicial após 2 segundos
+		const timeout = setTimeout(logCacheStats, 2000);
 
 		return () => {
 			clearInterval(interval);
@@ -203,18 +223,143 @@ const PerformanceMonitor = () => {
 	return null;
 };
 
-// Provider principal SIMPLIFICADO
+// Cache Monitor para detectar estados inconsistentes
+const CacheMonitor = () => {
+	useEffect(() => {
+		if (process.env.NODE_ENV !== "development") return;
+
+		// Monitor para detectar "old caches cleaner" situations
+		const detectInconsistentStates = () => {
+			try {
+				const cache = queryClient.getQueryCache();
+				const queries = cache.getAll();
+
+				// Detectar queries com dados conflitantes
+				const publicQueries = queries.filter((q) => q.queryKey[0] === "public");
+
+				const adminQueries = queries.filter((q) => q.queryKey[0] === "admin");
+
+				// Se há queries admin mas usuário não está logado, limpar
+				if (adminQueries.length > 0) {
+					const hasUserInStorage = localStorage.getItem(
+						"sb-zqeblzdfvoywvftkfghw-auth-token"
+					);
+					if (!hasUserInStorage) {
+						console.warn(
+							"🗑️ Old caches cleaner: Admin queries sem usuário logado"
+						);
+						queryClient.removeQueries({ queryKey: ["admin"] });
+					}
+				}
+
+				// Detectar queries muito antigas
+				const now = Date.now();
+				const oldQueries = queries.filter((q) => {
+					const dataUpdatedAt = q.state.dataUpdatedAt;
+					return dataUpdatedAt && now - dataUpdatedAt > 30 * 60 * 1000; // 30 min
+				});
+
+				if (oldQueries.length > 5) {
+					console.warn(
+						"🗑️ Old caches cleaner: Queries muito antigas detectadas"
+					);
+					oldQueries.forEach((q) => {
+						queryClient.removeQueries({ queryKey: q.queryKey });
+					});
+				}
+			} catch (error) {
+				console.warn("Erro no cache monitor:", error);
+			}
+		};
+
+		// Executar verificação a cada 30 segundos
+		const interval = setInterval(detectInconsistentStates, 30000);
+
+		// Verificação inicial
+		setTimeout(detectInconsistentStates, 5000);
+
+		return () => clearInterval(interval);
+	}, []);
+
+	return null;
+};
+
+// Provider principal COM MONITORING AGRESSIVO
 export const ModernQueryProvider = ({ children }) => {
+	// Disponibilizar o queryClient globalmente para o AuthContext
+	useEffect(() => {
+		window.queryClient = queryClient;
+
+		// Force clear na inicialização se detectar estado inconsistente
+		const initCacheCheck = () => {
+			try {
+				const cache = queryClient.getQueryCache();
+				const queries = cache.getAll();
+
+				// Se há muitas queries na inicialização, pode ser cache antigo
+				if (queries.length > 20) {
+					console.warn(
+						"🗑️ Cache inicial muito grande - limpando:",
+						queries.length
+					);
+					queryClient.clear();
+				}
+
+				console.log("✅ QueryProvider inicializado");
+			} catch (error) {
+				console.warn("Erro na verificação inicial de cache:", error);
+			}
+		};
+
+		// Verificar após um pequeno delay
+		setTimeout(initCacheCheck, 1000);
+
+		return () => {
+			// Limpar referência global na desmontagem
+			delete window.queryClient;
+		};
+	}, []);
+
+	// Listener para limpeza automática em visibilitychange
+	useEffect(() => {
+		const handleVisibilityChange = () => {
+			if (document.hidden) {
+				// Quando tab fica hidden, limpar queries antigas
+				const cache = queryClient.getQueryCache();
+				const queries = cache.getAll();
+				const staleLongerThan10Min = queries.filter((q) => {
+					const dataUpdatedAt = q.state.dataUpdatedAt;
+					return dataUpdatedAt && Date.now() - dataUpdatedAt > 10 * 60 * 1000;
+				});
+
+				if (staleLongerThan10Min.length > 0) {
+					console.log(
+						"🗑️ Tab hidden: Limpando queries antigas:",
+						staleLongerThan10Min.length
+					);
+					staleLongerThan10Min.forEach((q) => {
+						queryClient.removeQueries({ queryKey: q.queryKey });
+					});
+				}
+			}
+		};
+
+		document.addEventListener("visibilitychange", handleVisibilityChange);
+		return () =>
+			document.removeEventListener("visibilitychange", handleVisibilityChange);
+	}, []);
+
 	return (
 		<QueryErrorBoundary>
 			<QueryClientProvider client={queryClient}>
 				<RealtimeProvider>
 					{children}
 
-					{/* DevTools apenas em desenvolvimento */}
+					{/* DevTools e Monitors apenas em desenvolvimento */}
 					{process.env.NODE_ENV === "development" && (
 						<>
 							<PerformanceMonitor />
+							<CacheMonitor />
 						</>
 					)}
 				</RealtimeProvider>
@@ -226,14 +371,49 @@ export const ModernQueryProvider = ({ children }) => {
 // Hook para acessar o queryClient
 export const useQueryClient = () => queryClient;
 
-// Utilities para cache
+// Utilities para cache MELHORADAS
 export const cacheUtils = {
 	clear: () => {
+		console.log("🗑️ Manual cache clear");
 		queryClient.clear();
 	},
 
 	invalidateAll: () => {
+		console.log("🔄 Manual invalidate all");
 		queryClient.invalidateQueries();
+	},
+
+	forceCleanup: () => {
+		console.log("🗑️ Force cleanup - removendo queries órfãs");
+		const cache = queryClient.getQueryCache();
+		const queries = cache.getAll();
+
+		// Remover queries sem observers
+		const orphanQueries = queries.filter((q) => !q.getObserversCount());
+		orphanQueries.forEach((q) => {
+			queryClient.removeQueries({ queryKey: q.queryKey });
+		});
+
+		console.log(`✅ Removed ${orphanQueries.length} orphan queries`);
+	},
+
+	detectProblems: () => {
+		const cache = queryClient.getQueryCache();
+		const queries = cache.getAll();
+
+		const problems = {
+			total: queries.length,
+			errors: queries.filter((q) => q.state.status === "error").length,
+			stale: queries.filter((q) => q.isStale()).length,
+			orphans: queries.filter((q) => !q.getObserversCount()).length,
+			old: queries.filter((q) => {
+				const dataUpdatedAt = q.state.dataUpdatedAt;
+				return dataUpdatedAt && Date.now() - dataUpdatedAt > 20 * 60 * 1000;
+			}).length,
+		};
+
+		console.log("🔍 Cache Problems:", problems);
+		return problems;
 	},
 
 	getStats: () => {
@@ -247,6 +427,7 @@ export const cacheUtils = {
 			error: queries.filter((q) => q.state.status === "error").length,
 			loading: queries.filter((q) => q.state.status === "pending").length,
 			success: queries.filter((q) => q.state.status === "success").length,
+			orphans: queries.filter((q) => !q.getObserversCount()).length,
 		};
 	},
 };

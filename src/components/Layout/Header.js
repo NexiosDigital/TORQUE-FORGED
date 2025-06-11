@@ -19,7 +19,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useSearchPosts, usePrefetch } from "../../hooks/usePostsQuery";
 
-// Componente do Modal de Busca (mantido igual como estava no código original)
+// Componente do Modal de Busca (mantido igual)
 const SearchModal = ({ isOpen, onClose }) => {
 	const [searchTerm, setSearchTerm] = useState("");
 	const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -28,12 +28,10 @@ const SearchModal = ({ isOpen, onClose }) => {
 	const navigate = useNavigate();
 	const { prefetchPost } = usePrefetch();
 
-	// Hook de busca com debounce
 	const { data: searchResults = [], isLoading } = useSearchPosts(searchTerm, {
 		enabled: searchTerm.length >= 2,
 	});
 
-	// Focus no input quando modal abre
 	useEffect(() => {
 		if (isOpen && searchInputRef.current) {
 			setTimeout(() => {
@@ -42,7 +40,6 @@ const SearchModal = ({ isOpen, onClose }) => {
 		}
 	}, [isOpen]);
 
-	// Reset quando modal fecha
 	useEffect(() => {
 		if (!isOpen) {
 			setSearchTerm("");
@@ -50,7 +47,6 @@ const SearchModal = ({ isOpen, onClose }) => {
 		}
 	}, [isOpen]);
 
-	// Navegação por teclado
 	useEffect(() => {
 		const handleKeyDown = (e) => {
 			if (!isOpen) return;
@@ -84,7 +80,6 @@ const SearchModal = ({ isOpen, onClose }) => {
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, [isOpen, selectedIndex, searchResults, searchTerm]);
 
-	// Scroll para item selecionado
 	useEffect(() => {
 		if (selectedIndex >= 0 && resultsRef.current) {
 			const selectedElement = resultsRef.current.children[selectedIndex];
@@ -119,16 +114,13 @@ const SearchModal = ({ isOpen, onClose }) => {
 
 	return (
 		<div className="fixed inset-0 z-50 overflow-hidden">
-			{/* Backdrop */}
 			<div
 				className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300"
 				onClick={onClose}
 			></div>
 
-			{/* Modal */}
 			<div className="relative flex min-h-full items-start justify-center p-4 pt-16 sm:pt-24">
 				<div className="w-full max-w-2xl transform overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700/50 shadow-2xl transition-all duration-300">
-					{/* Header */}
 					<div className="border-b border-gray-700/50 p-6">
 						<div className="flex items-center space-x-4">
 							<div className="relative flex-1">
@@ -150,7 +142,6 @@ const SearchModal = ({ isOpen, onClose }) => {
 							</button>
 						</div>
 
-						{/* Dicas de busca */}
 						{searchTerm.length === 0 && (
 							<div className="mt-4 flex flex-wrap gap-2">
 								<span className="text-gray-400 text-sm">Tente buscar:</span>
@@ -168,7 +159,6 @@ const SearchModal = ({ isOpen, onClose }) => {
 							</div>
 						)}
 
-						{/* Status da busca */}
 						{searchTerm.length > 0 && searchTerm.length < 2 && (
 							<p className="mt-4 text-gray-400 text-sm">
 								Digite pelo menos 2 caracteres para buscar
@@ -176,7 +166,6 @@ const SearchModal = ({ isOpen, onClose }) => {
 						)}
 					</div>
 
-					{/* Resultados */}
 					<div className="max-h-96 overflow-y-auto">
 						{isLoading && searchTerm.length >= 2 && (
 							<div className="p-8 text-center">
@@ -261,7 +250,6 @@ const SearchModal = ({ isOpen, onClose }) => {
 									</div>
 								))}
 
-								{/* Ver todos os resultados */}
 								{searchResults.length > 8 && (
 									<div className="p-4">
 										<button
@@ -276,7 +264,6 @@ const SearchModal = ({ isOpen, onClose }) => {
 						)}
 					</div>
 
-					{/* Footer com dicas de teclado */}
 					<div className="border-t border-gray-700/50 p-4 bg-gray-800/30">
 						<div className="flex flex-wrap gap-4 text-xs text-gray-500">
 							<div className="flex items-center space-x-2">
@@ -308,8 +295,44 @@ const Header = () => {
 	const [scrollY, setScrollY] = useState(0);
 	const [isLoggingOut, setIsLoggingOut] = useState(false);
 	const location = useLocation();
-	const { user, profile, signOut, isAdmin, getDisplayName } = useAuth();
+
+	// USAR TODOS OS ESTADOS DO AUTH + DEBUG
+	const {
+		user,
+		profile,
+		signOut,
+		isAdmin,
+		getDisplayName,
+		loading: authLoading,
+		profileLoading,
+		sessionChecked,
+		debugState,
+	} = useAuth();
+
 	const userMenuRef = useRef(null);
+
+	// Debug melhorado
+	useEffect(() => {
+		if (process.env.NODE_ENV === "development") {
+			console.log("🎛️ Header Auth State:", {
+				sessionChecked,
+				user: !!user,
+				profile: !!profile,
+				isAdmin,
+				authLoading,
+				profileLoading,
+				...(debugState || {}),
+			});
+		}
+	}, [
+		sessionChecked,
+		user,
+		profile,
+		isAdmin,
+		authLoading,
+		profileLoading,
+		debugState,
+	]);
 
 	useEffect(() => {
 		const handleScroll = () => setScrollY(window.scrollY);
@@ -327,10 +350,8 @@ const Header = () => {
 		return () => document.removeEventListener("mousedown", handleClickOutside);
 	}, []);
 
-	// Atalho de teclado para busca
 	useEffect(() => {
 		const handleKeyDown = (e) => {
-			// Ctrl/Cmd + K para abrir busca
 			if ((e.ctrlKey || e.metaKey) && e.key === "k") {
 				e.preventDefault();
 				setIsSearchOpen(true);
@@ -355,33 +376,26 @@ const Header = () => {
 		{ name: "Contato", href: "/contact" },
 	];
 
+	// SIGNOUT SIMPLIFICADO - usa o do AuthContext
 	const handleSignOut = async () => {
+		if (isLoggingOut) return;
+
 		try {
 			setIsLoggingOut(true);
 			setIsUserMenuOpen(false);
-
-			console.log("🚪 Iniciando logout do header...");
-
-			const result = await signOut();
-
-			if (result?.error) {
-				console.error("Erro no logout:", result.error);
-			} else {
-				console.log("✅ Logout realizado com sucesso no header");
-			}
+			console.log("🚪 Header: Iniciando logout...");
+			await signOut();
 		} catch (error) {
-			console.error("Erro inesperado no logout:", error);
-		} finally {
+			console.error("Header: Erro no logout:", error);
 			setIsLoggingOut(false);
 		}
 	};
 
-	// Componente UserAvatar CORRIGIDO - sem problemas de onError
+	// UserAvatar MELHORADO
 	const UserAvatar = React.memo(() => {
 		const [imageError, setImageError] = useState(false);
 		const avatarUrl = profile?.avatar_url;
 
-		// Reset error quando URL muda
 		useEffect(() => {
 			setImageError(false);
 		}, [avatarUrl]);
@@ -393,14 +407,13 @@ const Header = () => {
 					alt={getDisplayName()}
 					className="w-8 h-8 rounded-lg object-cover"
 					onError={() => {
-						console.warn("Erro ao carregar avatar no header, usando fallback");
+						console.warn("Header: Erro ao carregar avatar, usando fallback");
 						setImageError(true);
 					}}
 				/>
 			);
 		}
 
-		// Fallback - ícone padrão
 		return (
 			<div className="w-8 h-8 bg-gradient-to-r from-red-600 to-red-500 rounded-lg flex items-center justify-center">
 				<User className="w-4 h-4 text-white" />
@@ -408,8 +421,38 @@ const Header = () => {
 		);
 	});
 
+	// UserMenu COM ESTADOS CORRIGIDOS
 	const UserMenu = () => {
-		// Só renderizar se user existir
+		// Estado 1: Sessão ainda não verificada
+		if (!sessionChecked) {
+			return (
+				<div className="flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50">
+					<div className="w-8 h-8 bg-gray-700 rounded-lg animate-pulse"></div>
+					<span className="text-gray-400 text-sm hidden md:block">
+						Verificando...
+					</span>
+				</div>
+			);
+		}
+
+		// Estado 2: Sessão verificada, mas não há usuário
+		if (sessionChecked && !user) {
+			return null; // Não mostrar menu
+		}
+
+		// Estado 3: Há usuário, mas ainda carregando auth ou profile
+		if (user && (authLoading || profileLoading)) {
+			return (
+				<div className="flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50">
+					<div className="w-8 h-8 bg-gray-700 rounded-lg animate-pulse"></div>
+					<span className="text-gray-400 text-sm hidden md:block">
+						Carregando...
+					</span>
+				</div>
+			);
+		}
+
+		// Estado 4: Tudo carregado - mostrar menu completo
 		if (!user) return null;
 
 		return (
@@ -420,7 +463,8 @@ const Header = () => {
 						e.stopPropagation();
 						setIsUserMenuOpen(!isUserMenuOpen);
 					}}
-					className="user-menu-button flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 border border-gray-600/30 cursor-pointer"
+					disabled={isLoggingOut}
+					className="user-menu-button flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 border border-gray-600/30 cursor-pointer disabled:opacity-50"
 					style={{ pointerEvents: "auto", zIndex: 10 }}
 				>
 					<UserAvatar />
@@ -434,7 +478,7 @@ const Header = () => {
 					/>
 				</button>
 
-				{isUserMenuOpen && (
+				{isUserMenuOpen && !isLoggingOut && (
 					<div className="user-menu-dropdown absolute right-0 top-full mt-2 w-64 bg-gray-900/95 backdrop-blur-md rounded-2xl border border-gray-700/50 shadow-2xl z-[100]">
 						<div className="p-4 border-b border-gray-700/50">
 							<div className="flex items-center space-x-3">
@@ -509,7 +553,6 @@ const Header = () => {
 						: "bg-transparent"
 				}`}
 			>
-				{/* Main Navigation */}
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="flex items-center justify-between h-20">
 						{/* Logo */}
@@ -600,7 +643,7 @@ const Header = () => {
 								</a>
 							</div>
 
-							{/* Search Button - Compacto para medium navbar */}
+							{/* Search Button */}
 							<button
 								onClick={() => setIsSearchOpen(true)}
 								className="flex items-center space-x-2 bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-white px-3 py-2 rounded-xl text-sm transition-all duration-300 border border-gray-600/30 group
@@ -613,10 +656,8 @@ const Header = () => {
 								</span>
 							</button>
 
-							{/* User Menu or Login */}
-							{user ? (
-								<UserMenu />
-							) : (
+							{/* User Menu or Login - SEMPRE mostrar algo */}
+							{sessionChecked && !user ? (
 								<Link
 									to="/admin/login"
 									className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105
@@ -624,6 +665,8 @@ const Header = () => {
 								>
 									Login
 								</Link>
+							) : (
+								<UserMenu />
 							)}
 
 							{/* Mobile Menu Button */}

@@ -26,6 +26,7 @@ const Profile = () => {
 		updateProfile,
 		getDisplayName,
 		loading: authLoading,
+		profileLoading,
 		sessionChecked,
 	} = useAuth();
 
@@ -36,6 +37,7 @@ const Profile = () => {
 	const [avatarFile, setAvatarFile] = useState(null);
 	const [avatarPreview, setAvatarPreview] = useState(null);
 	const [uploadingAvatar, setUploadingAvatar] = useState(false);
+	const [formInitialized, setFormInitialized] = useState(false);
 	const fileInputRef = useRef(null);
 
 	const {
@@ -47,12 +49,45 @@ const Profile = () => {
 
 	const passwordForm = useForm();
 
-	// Preencher formulário quando dados estiverem disponíveis
-	// SEMPRE chamar useEffect - não condicionalmente
+	// Debug logs em desenvolvimento
 	useEffect(() => {
-		// Só preencher se tiver usuário e não estiver carregando
-		if (user && sessionChecked && !authLoading) {
-			console.log("📝 Preenchendo formulário com dados disponíveis");
+		if (process.env.NODE_ENV === "development") {
+			console.log("🏠 Profile Component State:", {
+				sessionChecked,
+				user: !!user,
+				profile: !!profile,
+				authLoading,
+				profileLoading,
+				formInitialized,
+				isAdmin,
+			});
+		}
+	}, [
+		sessionChecked,
+		user,
+		profile,
+		authLoading,
+		profileLoading,
+		formInitialized,
+		isAdmin,
+	]);
+
+	// Preencher formulário quando dados estiverem COMPLETAMENTE disponíveis
+	useEffect(() => {
+		// Só preencher se:
+		// 1. Sessão foi verificada
+		// 2. Usuário existe
+		// 3. Não está carregando auth
+		// 4. Não está carregando profile
+		// 5. Formulário ainda não foi inicializado
+		if (
+			sessionChecked &&
+			user &&
+			!authLoading &&
+			!profileLoading &&
+			!formInitialized
+		) {
+			console.log("📝 Inicializando formulário com dados disponíveis");
 
 			// Usar dados do profile se disponível, senão usar dados do user
 			const name = profile?.full_name || user.email?.split("@")[0] || "";
@@ -64,8 +99,19 @@ const Profile = () => {
 			if (profile?.avatar_url) {
 				setAvatarPreview(profile.avatar_url);
 			}
+
+			setFormInitialized(true);
+			console.log("✅ Formulário inicializado:", { name, email });
 		}
-	}, [user, profile, authLoading, sessionChecked, setValue]); // Dependências corretas
+	}, [
+		sessionChecked,
+		user,
+		profile,
+		authLoading,
+		profileLoading,
+		formInitialized,
+		setValue,
+	]);
 
 	const handleAvatarChange = (event) => {
 		const file = event.target.files[0];
@@ -209,7 +255,7 @@ const Profile = () => {
 
 	const currentAvatar = avatarPreview || profile?.avatar_url;
 
-	// Aguardar verificação da sessão
+	// Aguardar verificação da sessão PRIMEIRO
 	if (!sessionChecked) {
 		return (
 			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
@@ -221,18 +267,26 @@ const Profile = () => {
 						<div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl mx-auto animate-ping opacity-20"></div>
 					</div>
 					<h2 className="text-2xl font-bold text-white mb-2">
-						Verificando autenticação
+						Verificando sessão
 					</h2>
 					<p className="text-gray-400 mb-4">
-						Aguarde enquanto verificamos sua sessão...
+						Aguarde enquanto verificamos sua autenticação...
 					</p>
+					{process.env.NODE_ENV === "development" && (
+						<p className="text-xs text-gray-500">
+							🔧 Dev: sessionChecked = {sessionChecked.toString()}
+						</p>
+					)}
 				</div>
 			</div>
 		);
 	}
 
-	// Redirecionar se não autenticado
-	if (!authLoading && !user) {
+	// SE sessão verificada E não há usuário = redirecionar
+	if (sessionChecked && !user) {
+		console.log(
+			"🔒 Profile: Usuário não autenticado, redirecionando para login"
+		);
 		return (
 			<Navigate
 				to="/admin/login"
@@ -242,8 +296,8 @@ const Profile = () => {
 		);
 	}
 
-	// Loading se ainda estiver carregando auth
-	if (authLoading) {
+	// SE há usuário MAS ainda está carregando auth ou profile = mostrar loading
+	if (user && (authLoading || profileLoading)) {
 		return (
 			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 				<div className="text-center">
@@ -255,13 +309,26 @@ const Profile = () => {
 					<h2 className="text-2xl font-bold text-white mb-2">
 						Carregando perfil
 					</h2>
-					<p className="text-gray-400">Buscando informações da sua conta...</p>
+					<p className="text-gray-400">
+						{authLoading
+							? "Verificando autenticação..."
+							: "Carregando dados do perfil..."}
+					</p>
+					{process.env.NODE_ENV === "development" && (
+						<div className="text-xs text-gray-500 mt-4 space-y-1">
+							<p>🔧 Dev Debug:</p>
+							<p>authLoading: {authLoading.toString()}</p>
+							<p>profileLoading: {profileLoading.toString()}</p>
+							<p>user: {user ? "present" : "null"}</p>
+							<p>profile: {profile ? "present" : "null"}</p>
+						</div>
+					)}
 				</div>
 			</div>
 		);
 	}
 
-	// Se chegou até aqui, usuário está autenticado
+	// Se chegou até aqui, usuário está autenticado e dados carregados
 	return (
 		<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 			<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -475,7 +542,15 @@ const Profile = () => {
 										</p>
 										<p>
 											<strong>Função:</strong>{" "}
-											{isAdmin ? "Administrador" : "Usuário"}
+											<span
+												className={
+													isAdmin
+														? "text-orange-400 font-semibold"
+														: "text-gray-400"
+												}
+											>
+												{isAdmin ? "Administrador" : "Usuário"}
+											</span>
 										</p>
 									</div>
 								</div>
@@ -608,13 +683,20 @@ const Profile = () => {
 					<div className="mt-8 p-4 bg-gray-900/50 rounded-xl border border-gray-700/30">
 						<h3 className="text-white font-semibold mb-2">🔧 Debug Info</h3>
 						<div className="text-sm text-gray-400 space-y-1">
-							<p>Auth Loading: {authLoading ? "true" : "false"}</p>
-							<p>Session Checked: {sessionChecked ? "true" : "false"}</p>
-							<p>User ID: {user?.id || "null"}</p>
-							<p>User Email: {user?.email || "null"}</p>
-							<p>Profile ID: {profile?.id || "null"}</p>
-							<p>Profile Email: {profile?.email || "null"}</p>
-							<p>Is Admin: {isAdmin ? "true" : "false"}</p>
+							<p>Session Checked: {sessionChecked ? "✅" : "❌"}</p>
+							<p>Auth Loading: {authLoading ? "⏳" : "✅"}</p>
+							<p>Profile Loading: {profileLoading ? "⏳" : "✅"}</p>
+							<p>Form Initialized: {formInitialized ? "✅" : "❌"}</p>
+							<p>
+								User: {user ? "✅" : "❌"} {user?.email}
+							</p>
+							<p>
+								Profile: {profile ? "✅" : "❌"} {profile?.email}
+							</p>
+							<p>
+								Is Admin: {isAdmin ? "✅ ADMIN" : "❌ USER"} (role:{" "}
+								{profile?.role})
+							</p>
 						</div>
 					</div>
 				)}
