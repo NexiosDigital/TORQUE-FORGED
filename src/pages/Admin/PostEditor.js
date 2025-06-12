@@ -1,22 +1,29 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import { Save, ArrowLeft, Eye, EyeOff, TrendingUp } from "lucide-react";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import {
+	Save,
+	ArrowLeft,
+	Eye,
+	EyeOff,
+	TrendingUp,
+	FileText,
+} from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
 	useCreatePost,
 	useUpdatePost,
-	usePostByIdAdmin, // Hook admin para buscar post incluindo rascunhos
+	usePostByIdAdmin,
 	useCategories,
 } from "../../hooks/usePostsQuery";
 import toast from "react-hot-toast";
 
 /**
- * PostEditor Corrigido - Usando hooks administrativos
- * - usePostByIdAdmin para edição (inclui rascunhos)
- * - Separado da visualização pública
- * - Cache específico para admin
+ * PostEditor com Suporte a Markdown
+ * - Editor Markdown com preview em tempo real
+ * - Sintaxe highlighting visual
+ * - Toolbar com atalhos comuns
  */
 
 const PostEditor = () => {
@@ -27,12 +34,10 @@ const PostEditor = () => {
 	const createPostMutation = useCreatePost();
 	const updatePostMutation = useUpdatePost();
 
-	// USANDO HOOK ADMIN para buscar post (inclui rascunhos)
 	const { data: existingPost, isLoading: loadingPost } = usePostByIdAdmin(id, {
 		enabled: isEditing,
 	});
 
-	// Hook público para categorias
 	const { data: categories = [] } = useCategories();
 
 	const {
@@ -45,6 +50,7 @@ const PostEditor = () => {
 
 	const [content, setContent] = useState("");
 	const [loading, setLoading] = useState(false);
+	const [showPreview, setShowPreview] = useState(false);
 
 	const watchTitle = watch("title");
 	const watchPublished = watch("published");
@@ -63,11 +69,11 @@ const PostEditor = () => {
 			setValue("published", existingPost.published);
 			setValue("trending", existingPost.trending);
 			setValue("tags", existingPost.tags?.join(", ") || "");
-			setContent(existingPost.content);
+			setContent(existingPost.content || "");
 		}
 	}, [existingPost, isEditing, setValue]);
 
-	// Gerar slug automaticamente (otimizado)
+	// Gerar slug automaticamente
 	useEffect(() => {
 		if (watchTitle && !isEditing) {
 			const slug = watchTitle
@@ -116,16 +122,166 @@ const PostEditor = () => {
 		}
 	};
 
-	const modules = {
-		toolbar: [
-			[{ header: [1, 2, 3, false] }],
-			["bold", "italic", "underline", "strike"],
-			[{ list: "ordered" }, { list: "bullet" }],
-			["blockquote", "code-block"],
-			["link", "image"],
-			["clean"],
-		],
+	// Inserir texto na posição do cursor
+	const insertText = (textToInsert, wrapSelection = false) => {
+		const textarea = document.getElementById("markdown-editor");
+		if (!textarea) return;
+
+		const start = textarea.selectionStart;
+		const end = textarea.selectionEnd;
+		const selectedText = textarea.value.substring(start, end);
+
+		let newText;
+		if (wrapSelection && selectedText) {
+			newText = textToInsert.replace("{text}", selectedText);
+		} else {
+			newText = textToInsert;
+		}
+
+		const newContent =
+			content.substring(0, start) + newText + content.substring(end);
+
+		setContent(newContent);
+
+		// Focar no textarea após inserção
+		setTimeout(() => {
+			textarea.focus();
+			const newPosition = start + newText.length;
+			textarea.setSelectionRange(newPosition, newPosition);
+		}, 10);
 	};
+
+	// Toolbar com atalhos Markdown
+	const MarkdownToolbar = () => (
+		<div className="flex flex-wrap items-center gap-2 p-4 bg-gray-800/30 border-b border-gray-700/30">
+			<button
+				type="button"
+				onClick={() => insertText("**{text}**", true)}
+				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors duration-300"
+				title="Negrito"
+			>
+				<strong>B</strong>
+			</button>
+			<button
+				type="button"
+				onClick={() => insertText("*{text}*", true)}
+				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm italic transition-colors duration-300"
+				title="Itálico"
+			>
+				I
+			</button>
+			<button
+				type="button"
+				onClick={() => insertText("## {text}", true)}
+				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors duration-300"
+				title="Título"
+			>
+				H2
+			</button>
+			<button
+				type="button"
+				onClick={() => insertText("[{text}](url)", true)}
+				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors duration-300"
+				title="Link"
+			>
+				Link
+			</button>
+			<button
+				type="button"
+				onClick={() => insertText("![alt]({text})", true)}
+				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors duration-300"
+				title="Imagem"
+			>
+				Img
+			</button>
+			<button
+				type="button"
+				onClick={() => insertText("```\n{text}\n```", true)}
+				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors duration-300"
+				title="Código"
+			>
+				Code
+			</button>
+			<button
+				type="button"
+				onClick={() => insertText("> {text}", true)}
+				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors duration-300"
+				title="Citação"
+			>
+				Quote
+			</button>
+			<button
+				type="button"
+				onClick={() => insertText("- {text}", true)}
+				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors duration-300"
+				title="Lista"
+			>
+				List
+			</button>
+
+			<div className="ml-auto flex items-center space-x-2">
+				<button
+					type="button"
+					onClick={() => setShowPreview(!showPreview)}
+					className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors duration-300 ${
+						showPreview
+							? "bg-red-600 hover:bg-red-700 text-white"
+							: "bg-gray-700 hover:bg-gray-600 text-white"
+					}`}
+				>
+					{showPreview ? (
+						<EyeOff className="w-4 h-4" />
+					) : (
+						<Eye className="w-4 h-4" />
+					)}
+					<span>{showPreview ? "Ocultar Preview" : "Mostrar Preview"}</span>
+				</button>
+			</div>
+		</div>
+	);
+
+	// Guia de sintaxe Markdown
+	const MarkdownGuide = () => (
+		<div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/30">
+			<h4 className="text-white font-semibold mb-4 flex items-center space-x-2">
+				<FileText className="w-4 h-4" />
+				<span>Guia Markdown</span>
+			</h4>
+			<div className="space-y-2 text-sm text-gray-400">
+				<div>
+					<code className="text-red-400">**texto**</code> -{" "}
+					<strong>Negrito</strong>
+				</div>
+				<div>
+					<code className="text-red-400">*texto*</code> - <em>Itálico</em>
+				</div>
+				<div>
+					<code className="text-red-400"># Título</code> - Título principal
+				</div>
+				<div>
+					<code className="text-red-400">## Subtítulo</code> - Subtítulo
+				</div>
+				<div>
+					<code className="text-red-400">[link](url)</code> - Link
+				</div>
+				<div>
+					<code className="text-red-400">![alt](img)</code> - Imagem
+				</div>
+				<div>
+					<code className="text-red-400">`código`</code> - Código inline
+				</div>
+				<div>
+					<code className="text-red-400">```código```</code> - Bloco de código
+				</div>
+				<div>
+					<code className="text-red-400">&gt; citação</code> - Citação
+				</div>
+				<div>
+					<code className="text-red-400">- item</code> - Lista
+				</div>
+			</div>
+		</div>
+	);
 
 	// Loading state
 	if (loadingPost) {
@@ -136,13 +292,12 @@ const PostEditor = () => {
 					<p className="text-gray-400 text-lg">
 						Carregando post para edição...
 					</p>
-					<p className="text-gray-500 text-sm">Sistema Admin | ID: {id}</p>
 				</div>
 			</div>
 		);
 	}
 
-	// Error state se não conseguir carregar o post
+	// Error state
 	if (isEditing && !loadingPost && !existingPost) {
 		return (
 			<div className="min-h-screen bg-black flex items-center justify-center">
@@ -154,17 +309,14 @@ const PostEditor = () => {
 						Post não encontrado
 					</h1>
 					<p className="text-gray-400 mb-8">
-						O post que você está tentando editar não foi encontrado ou você não
-						tem permissão para acessá-lo.
+						O post que você está tentando editar não foi encontrado.
 					</p>
-					<div className="space-y-4">
-						<button
-							onClick={() => navigate("/admin/dashboard")}
-							className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
-						>
-							Voltar ao Dashboard
-						</button>
-					</div>
+					<button
+						onClick={() => navigate("/admin/dashboard")}
+						className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300"
+					>
+						Voltar ao Dashboard
+					</button>
 				</div>
 			</div>
 		);
@@ -172,8 +324,8 @@ const PostEditor = () => {
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black pt-20">
-			<div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-				{/* Header otimizado */}
+			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+				{/* Header */}
 				<div className="flex items-center justify-between mb-8">
 					<div className="flex items-center space-x-4">
 						<button
@@ -189,13 +341,8 @@ const PostEditor = () => {
 							<p className="text-gray-400">
 								{isEditing
 									? `Editando: ${existingPost?.title || "Carregando..."}`
-									: "Crie um novo post para o blog"}
+									: "Crie um novo post em Markdown"}
 							</p>
-							{process.env.NODE_ENV === "development" && (
-								<p className="text-xs text-gray-500 mt-1">
-									🔧 Admin Editor | {isEditing ? `ID: ${id}` : "Novo post"}
-								</p>
-							)}
 						</div>
 					</div>
 
@@ -226,7 +373,7 @@ const PostEditor = () => {
 					</div>
 				</div>
 
-				{/* Form otimizado */}
+				{/* Form */}
 				<form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 						{/* Main Content */}
@@ -283,24 +430,160 @@ const PostEditor = () => {
 								)}
 							</div>
 
-							{/* Content */}
-							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
-								<label className="block text-white font-semibold mb-3">
-									Conteúdo *
-								</label>
-								<div className="bg-white rounded-2xl overflow-hidden">
-									<ReactQuill
-										theme="snow"
-										value={content}
-										onChange={setContent}
-										modules={modules}
-										style={{ minHeight: "400px" }}
-									/>
+							{/* Markdown Editor */}
+							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl border border-gray-700/50 overflow-hidden">
+								<div className="p-6 border-b border-gray-700/50">
+									<label className="block text-white font-semibold mb-0">
+										Conteúdo em Markdown *
+									</label>
+								</div>
+
+								<MarkdownToolbar />
+
+								<div
+									className={`grid ${
+										showPreview ? "grid-cols-2" : "grid-cols-1"
+									} min-h-[500px]`}
+								>
+									{/* Editor */}
+									<div
+										className={`${
+											showPreview ? "border-r border-gray-700/30" : ""
+										}`}
+									>
+										<textarea
+											id="markdown-editor"
+											value={content}
+											onChange={(e) => setContent(e.target.value)}
+											className="w-full h-full min-h-[500px] p-6 bg-transparent border-none text-white placeholder-gray-500 focus:outline-none resize-none font-mono text-sm leading-relaxed"
+											placeholder="Digite seu conteúdo em Markdown aqui...
+
+Exemplo:
+# Título Principal
+
+## Subtítulo
+
+**Texto em negrito** e *texto em itálico*.
+
+### Lista:
+- Item 1
+- Item 2
+- Item 3
+
+### Código:
+```javascript
+console.log('Hello World!');
+```
+
+### Citação:
+> Esta é uma citação importante.
+
+### Link:
+[Visite nosso site](https://example.com)
+
+### Imagem:
+![Descrição da imagem](https://example.com/image.jpg)"
+										/>
+									</div>
+
+									{/* Preview */}
+									{showPreview && (
+										<div className="overflow-auto">
+											<div className="p-6 prose prose-invert prose-lg max-w-none">
+												<ReactMarkdown
+													remarkPlugins={[remarkGfm]}
+													components={{
+														h1: ({ node, ...props }) => (
+															<h1
+																className="text-3xl font-bold text-white mb-4"
+																{...props}
+															/>
+														),
+														h2: ({ node, ...props }) => (
+															<h2
+																className="text-2xl font-bold text-white mb-3 mt-6"
+																{...props}
+															/>
+														),
+														h3: ({ node, ...props }) => (
+															<h3
+																className="text-xl font-bold text-white mb-2 mt-5"
+																{...props}
+															/>
+														),
+														p: ({ node, ...props }) => (
+															<p
+																className="text-gray-300 mb-4 leading-relaxed"
+																{...props}
+															/>
+														),
+														strong: ({ node, ...props }) => (
+															<strong
+																className="text-white font-bold"
+																{...props}
+															/>
+														),
+														em: ({ node, ...props }) => (
+															<em className="text-gray-300 italic" {...props} />
+														),
+														a: ({ node, ...props }) => (
+															<a
+																className="text-red-400 hover:text-red-300 underline"
+																{...props}
+															/>
+														),
+														code: ({ node, ...props }) => (
+															<code
+																className="bg-gray-800 text-red-400 px-2 py-1 rounded text-sm"
+																{...props}
+															/>
+														),
+														pre: ({ node, ...props }) => (
+															<pre
+																className="bg-gray-800 p-4 rounded-lg overflow-x-auto mb-4"
+																{...props}
+															/>
+														),
+														blockquote: ({ node, ...props }) => (
+															<blockquote
+																className="border-l-4 border-red-500 pl-4 italic text-gray-400 my-4"
+																{...props}
+															/>
+														),
+														ul: ({ node, ...props }) => (
+															<ul
+																className="list-disc list-inside text-gray-300 mb-4 space-y-1"
+																{...props}
+															/>
+														),
+														ol: ({ node, ...props }) => (
+															<ol
+																className="list-decimal list-inside text-gray-300 mb-4 space-y-1"
+																{...props}
+															/>
+														),
+														li: ({ node, ...props }) => (
+															<li className="text-gray-300" {...props} />
+														),
+														img: ({ node, ...props }) => (
+															<img
+																className="rounded-lg max-w-full h-auto mb-4"
+																{...props}
+															/>
+														),
+													}}
+												>
+													{content ||
+														"*Preview aparecerá aqui conforme você digita...*"}
+												</ReactMarkdown>
+											</div>
+										</div>
+									)}
 								</div>
 							</div>
 						</div>
 
-						{/* Sidebar otimizada */}
+						{/* Sidebar */}
 						<div className="lg:col-span-1 space-y-6">
 							{/* Publish Settings */}
 							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
@@ -370,7 +653,7 @@ const PostEditor = () => {
 								/>
 							</div>
 
-							{/* Meta */}
+							{/* Meta Info */}
 							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
 								<h3 className="text-xl font-bold text-white mb-4">
 									Meta Informações
@@ -417,6 +700,9 @@ const PostEditor = () => {
 									Separe as tags com vírgulas
 								</p>
 							</div>
+
+							{/* Markdown Guide */}
+							<MarkdownGuide />
 
 							{/* Save Button */}
 							<button

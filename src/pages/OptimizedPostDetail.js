@@ -9,6 +9,8 @@ import {
 	Share2,
 	AlertCircle,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
 	usePostByIdSuspense,
 	usePostsByCategory,
@@ -17,10 +19,10 @@ import {
 import { ErrorBoundary } from "react-error-boundary";
 
 /**
- * OptimizedPostDetail - Limpo e Sem Debug
- * - 100% dinâmico do banco
- * - Error handling robusto
- * - Performance otimizada
+ * OptimizedPostDetail com Suporte a Markdown
+ * - Renderização otimizada de Markdown
+ * - Sintaxe highlighting
+ * - Componentes customizados para elementos Markdown
  */
 
 // Loading skeleton para post
@@ -154,32 +156,215 @@ const ShareButton = React.memo(({ post }) => {
 	);
 });
 
-// Componente de conteúdo renderizado
-const PostContent = React.memo(({ content }) => {
-	const renderedContent = useMemo(() => {
-		if (!content || typeof content !== "string") {
-			return <p className="text-gray-400 italic">Conteúdo não disponível.</p>;
-		}
+// Componente de conteúdo Markdown renderizado
+const MarkdownContent = React.memo(({ content }) => {
+	const markdownComponents = useMemo(
+		() => ({
+			// Títulos
+			h1: ({ node, ...props }) => (
+				<h1
+					className="text-4xl font-black text-white mb-6 mt-8 first:mt-0 leading-tight"
+					{...props}
+				/>
+			),
+			h2: ({ node, ...props }) => (
+				<h2
+					className="text-3xl font-bold text-white mb-5 mt-8 first:mt-0 leading-tight"
+					{...props}
+				/>
+			),
+			h3: ({ node, ...props }) => (
+				<h3
+					className="text-2xl font-bold text-white mb-4 mt-6 first:mt-0 leading-tight"
+					{...props}
+				/>
+			),
+			h4: ({ node, ...props }) => (
+				<h4
+					className="text-xl font-bold text-white mb-3 mt-5 first:mt-0 leading-tight"
+					{...props}
+				/>
+			),
+			h5: ({ node, ...props }) => (
+				<h5
+					className="text-lg font-bold text-white mb-3 mt-4 first:mt-0 leading-tight"
+					{...props}
+				/>
+			),
+			h6: ({ node, ...props }) => (
+				<h6
+					className="text-base font-bold text-white mb-2 mt-4 first:mt-0 leading-tight"
+					{...props}
+				/>
+			),
 
-		const paragraphs = content.split("\n\n").filter((p) => p.trim());
+			// Parágrafos
+			p: ({ node, ...props }) => (
+				<p className="text-lg leading-relaxed mb-6 text-gray-300" {...props} />
+			),
 
-		if (paragraphs.length === 0) {
-			return <p className="text-gray-400 italic">Conteúdo vazio.</p>;
-		}
+			// Texto formatado
+			strong: ({ node, ...props }) => (
+				<strong className="text-white font-bold" {...props} />
+			),
+			em: ({ node, ...props }) => (
+				<em className="text-gray-300 italic" {...props} />
+			),
 
-		return paragraphs.map((paragraph, index) => (
-			<p
-				key={`paragraph-${index}`}
-				className="text-lg leading-relaxed mb-6 text-gray-300"
-			>
-				{paragraph}
-			</p>
-		));
-	}, [content]);
+			// Links
+			a: ({ node, ...props }) => (
+				<a
+					className="text-red-400 hover:text-red-300 underline decoration-red-400/50 hover:decoration-red-300 transition-colors duration-300 font-medium"
+					target={props.href?.startsWith("http") ? "_blank" : undefined}
+					rel={
+						props.href?.startsWith("http") ? "noopener noreferrer" : undefined
+					}
+					{...props}
+				/>
+			),
+
+			// Código
+			code: ({ node, inline, ...props }) => {
+				if (inline) {
+					return (
+						<code
+							className="bg-gray-800 text-red-400 px-2 py-1 rounded-md text-sm font-mono border border-gray-700/50"
+							{...props}
+						/>
+					);
+				}
+				return <code className="text-gray-300 font-mono text-sm" {...props} />;
+			},
+			pre: ({ node, ...props }) => (
+				<pre className="bg-gray-900 border border-gray-700/50 p-6 rounded-2xl overflow-x-auto mb-6 shadow-xl">
+					<div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-700/50">
+						<span className="text-gray-400 text-sm font-medium">Código</span>
+						<div className="flex space-x-2">
+							<div className="w-3 h-3 bg-red-500 rounded-full"></div>
+							<div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+							<div className="w-3 h-3 bg-green-500 rounded-full"></div>
+						</div>
+					</div>
+					{props.children}
+				</pre>
+			),
+
+			// Citações
+			blockquote: ({ node, ...props }) => (
+				<blockquote className="border-l-4 border-red-500 bg-gray-900/50 pl-6 pr-4 py-4 rounded-r-2xl my-6 italic">
+					<div className="text-gray-400" {...props} />
+				</blockquote>
+			),
+
+			// Listas
+			ul: ({ node, ...props }) => (
+				<ul className="list-none space-y-2 mb-6 pl-0" {...props} />
+			),
+			ol: ({ node, ...props }) => (
+				<ol
+					className="list-none space-y-2 mb-6 pl-0 counter-reset-[item]"
+					{...props}
+				/>
+			),
+			li: ({ node, ordered, ...props }) => {
+				if (ordered) {
+					return (
+						<li
+							className="text-gray-300 relative pl-8 counter-increment-[item] before:content-[counter(item)] before:absolute before:left-0 before:bg-red-600 before:text-white before:w-6 before:h-6 before:rounded-full before:flex before:items-center before:justify-center before:text-sm before:font-bold"
+							{...props}
+						/>
+					);
+				}
+				return (
+					<li
+						className="text-gray-300 relative pl-8 before:content-['•'] before:absolute before:left-0 before:text-red-500 before:font-bold before:text-xl"
+						{...props}
+					/>
+				);
+			},
+
+			// Imagens
+			img: ({ node, ...props }) => (
+				<div className="my-8">
+					<img
+						className="rounded-2xl max-w-full h-auto shadow-2xl border border-gray-700/50"
+						loading="lazy"
+						{...props}
+					/>
+					{props.alt && (
+						<p className="text-center text-gray-500 text-sm mt-3 italic">
+							{props.alt}
+						</p>
+					)}
+				</div>
+			),
+
+			// Tabelas
+			table: ({ node, ...props }) => (
+				<div className="overflow-x-auto my-6">
+					<table
+						className="min-w-full bg-gray-900/50 border border-gray-700/50 rounded-2xl overflow-hidden"
+						{...props}
+					/>
+				</div>
+			),
+			thead: ({ node, ...props }) => (
+				<thead className="bg-gray-800/50" {...props} />
+			),
+			tbody: ({ node, ...props }) => (
+				<tbody className="divide-y divide-gray-700/50" {...props} />
+			),
+			tr: ({ node, ...props }) => (
+				<tr
+					className="hover:bg-gray-800/30 transition-colors duration-300"
+					{...props}
+				/>
+			),
+			th: ({ node, ...props }) => (
+				<th
+					className="px-6 py-4 text-left text-sm font-semibold text-white"
+					{...props}
+				/>
+			),
+			td: ({ node, ...props }) => (
+				<td className="px-6 py-4 text-sm text-gray-300" {...props} />
+			),
+
+			// Linha horizontal
+			hr: ({ node, ...props }) => (
+				<hr
+					className="border-0 h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent my-8"
+					{...props}
+				/>
+			),
+		}),
+		[]
+	);
+
+	if (!content || typeof content !== "string") {
+		return (
+			<div className="text-center py-12">
+				<p className="text-gray-400 italic text-lg">Conteúdo não disponível.</p>
+			</div>
+		);
+	}
+
+	if (content.trim() === "") {
+		return (
+			<div className="text-center py-12">
+				<p className="text-gray-400 italic text-lg">Post sem conteúdo.</p>
+			</div>
+		);
+	}
 
 	return (
 		<div className="prose prose-invert prose-lg max-w-none">
-			<div className="text-gray-300 leading-relaxed">{renderedContent}</div>
+			<ReactMarkdown
+				remarkPlugins={[remarkGfm]}
+				components={markdownComponents}
+			>
+				{content}
+			</ReactMarkdown>
 		</div>
 	);
 });
@@ -371,8 +556,8 @@ const PostDetailContent = () => {
 						<ShareButton post={post} />
 					</div>
 
-					{/* Article Body */}
-					<PostContent content={post.content} />
+					{/* Article Body - Renderização Markdown */}
+					<MarkdownContent content={post.content} />
 
 					{/* Tags */}
 					{post.tags && post.tags.length > 0 && (

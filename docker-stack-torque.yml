@@ -1,9 +1,7 @@
 version: '3.8'
-
 networks:
   NexiosNet:
     external: true
-
 services:
   torque-forged:
     image: torque-forged:latest
@@ -16,29 +14,24 @@ services:
       labels:
         # Habilitar Traefik
         - "traefik.enable=true"
-        
         # Configuração de rede
         - "traefik.docker.network=NexiosNet"
-        
         # Roteamento HTTP (redirecionamento)
         - "traefik.http.routers.torque-forged.rule=Host(`torqueforgedmotorsport.com`) || Host(`www.torqueforgedmotorsport.com`)"
         - "traefik.http.routers.torque-forged.entrypoints=web"
         - "traefik.http.routers.torque-forged.middlewares=redirect-to-https"
-        
         # Middleware de redirecionamento
         - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
         - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
-        
         # Roteamento HTTPS
         - "traefik.http.routers.torque-forged-secure.rule=Host(`torqueforgedmotorsport.com`) || Host(`www.torqueforgedmotorsport.com`)"
         - "traefik.http.routers.torque-forged-secure.entrypoints=websecure"
         - "traefik.http.routers.torque-forged-secure.tls=true"
-        
+        - "traefik.http.routers.torque-forged-secure.tls.certresolver=letsencryptresolver"
         # Middleware www redirect
         - "traefik.http.routers.torque-forged-secure.middlewares=www-redirect"
         - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www\\.(.*)"
         - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://$${1}"
         - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
-        
         # Configuração do serviço
         - "traefik.http.services.torque-forged.loadbalancer.server.port=80"
