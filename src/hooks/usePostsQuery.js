@@ -9,13 +9,13 @@ import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 
 /**
- * Hooks com Cache Separado
- * - QUERY_KEYS separados para public vs admin
- * - Zero interferência entre estados de auth
- * - Cliente específico por contexto
+ * Hooks com Cache Otimizado para Data API
+ * - QUERY_KEYS mantidos iguais (compatibilidade)
+ * - Cache configurado para aproveitar Data API
+ * - Fallback automático
  */
 
-// Query keys SEPARADOS por contexto
+// Query keys INALTERADOS (compatibilidade total)
 export const QUERY_KEYS = {
 	// Posts públicos - SEMPRE as mesmas keys independente de auth
 	public: {
@@ -33,17 +33,17 @@ export const QUERY_KEYS = {
 	},
 };
 
-// Configurações otimizadas
+// Configurações OTIMIZADAS para Data API
 const PUBLIC_CACHE_CONFIG = {
-	staleTime: 5 * 60 * 1000, // 5 minutos
-	gcTime: 30 * 60 * 1000, // 30 minutos
+	staleTime: 10 * 60 * 1000, // 10 minutos (aumentado devido ao cache HTTP)
+	gcTime: 60 * 60 * 1000, // 1 hora (aumentado)
 	refetchOnWindowFocus: false,
-	refetchOnMount: true,
+	refetchOnMount: false, // MUDANÇA: confiar mais no cache HTTP nativo
 	retry: (failureCount, error) => {
 		if (error?.message?.includes("não encontrado")) return false;
-		return failureCount < 2;
+		return failureCount < 1; // Menos retries devido à velocidade da Data API
 	},
-	retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000),
+	retryDelay: 500, // Delay menor
 };
 
 const ADMIN_CACHE_CONFIG = {
@@ -56,16 +56,16 @@ const ADMIN_CACHE_CONFIG = {
 
 /**
  * ======================================
- * HOOKS PÚBLICOS - SEMPRE ANÔNIMO
+ * HOOKS PÚBLICOS - OTIMIZADOS PARA DATA API
  * ======================================
  */
 
-// Posts em destaque - SEMPRE usa cliente público
+// Posts em destaque - AGORA usa Data API
 export const useFeaturedPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.featured,
 		queryFn: () => {
-			return PostService.getFeaturedPosts();
+			return PostService.getFeaturedPosts(); // Agora usa Data API com fallback
 		},
 		...PUBLIC_CACHE_CONFIG,
 		meta: {
@@ -75,12 +75,12 @@ export const useFeaturedPosts = (options = {}) => {
 	});
 };
 
-// Todos os posts - SEMPRE usa cliente público
+// Todos os posts - AGORA usa Data API
 export const useAllPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.posts,
 		queryFn: () => {
-			return PostService.getAllPosts();
+			return PostService.getAllPosts(); // Agora usa Data API com fallback
 		},
 		...PUBLIC_CACHE_CONFIG,
 		meta: {
@@ -90,12 +90,12 @@ export const useAllPosts = (options = {}) => {
 	});
 };
 
-// Posts por categoria - SEMPRE usa cliente público
+// Posts por categoria - AGORA usa Data API
 export const usePostsByCategory = (categoryId, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byCategory(categoryId),
 		queryFn: () => {
-			return PostService.getPostsByCategory(categoryId);
+			return PostService.getPostsByCategory(categoryId); // Agora usa Data API com fallback
 		},
 		enabled: !!categoryId && typeof categoryId === "string",
 		...PUBLIC_CACHE_CONFIG,
@@ -106,15 +106,16 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 	});
 };
 
-// Post individual - SEMPRE usa cliente público
+// Post individual - AGORA usa Data API
 export const usePostById = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
 		queryFn: () => {
-			return PostService.getPostById(id);
+			return PostService.getPostById(id); // Agora usa Data API com fallback
 		},
 		enabled: !!id,
 		...PUBLIC_CACHE_CONFIG,
+		staleTime: 30 * 60 * 1000, // Cache mais longo para posts individuais
 		meta: {
 			errorMessage: `Erro ao carregar post ${id}`,
 		},
@@ -122,16 +123,17 @@ export const usePostById = (id, options = {}) => {
 	});
 };
 
-// Categorias - SEMPRE usa cliente público
+// Categorias - AGORA usa Data API
 export const useCategories = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.categories,
 		queryFn: () => {
-			return PostService.getCategories();
+			return PostService.getCategories(); // Agora usa Data API com fallback
 		},
-		staleTime: 15 * 60 * 1000, // 15 minutos (categorias são estáveis)
-		gcTime: 60 * 60 * 1000, // 1 hora
+		staleTime: 60 * 60 * 1000, // 1 hora (categorias são muito estáveis)
+		gcTime: 2 * 60 * 60 * 1000, // 2 horas
 		refetchOnWindowFocus: false,
+		refetchOnMount: false, // Categorias raramente mudam
 		meta: {
 			errorMessage: "Erro ao carregar categorias",
 		},
@@ -139,22 +141,24 @@ export const useCategories = (options = {}) => {
 	});
 };
 
-// Busca - SEMPRE usa cliente público
+// Busca - AGORA usa Data API
 export const useSearchPosts = (query, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.search(query),
 		queryFn: () => {
-			return PostService.searchPosts(query);
+			return PostService.searchPosts(query); // Agora usa Data API com fallback
 		},
 		enabled: !!query && query.length >= 2,
-		...PUBLIC_CACHE_CONFIG,
+		staleTime: 2 * 60 * 1000, // Cache curto para buscas
+		gcTime: 5 * 60 * 1000,
+		refetchOnWindowFocus: false,
 		...options,
 	});
 };
 
 /**
  * ======================================
- * HOOKS ADMIN - SEMPRE AUTENTICADO
+ * HOOKS ADMIN - MANTÉM SDK (inalterado)
  * ======================================
  */
 
@@ -196,7 +200,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 
 /**
  * ======================================
- * MUTATIONS - SEMPRE ADMIN
+ * MUTATIONS - MANTÉM INALTERADO
  * ======================================
  */
 export const useCreatePost = () => {
@@ -267,7 +271,7 @@ export const useDeletePost = () => {
 
 /**
  * ======================================
- * UTILITIES
+ * UTILITIES - MANTÉM INALTERADO
  * ======================================
  */
 export const usePrefetch = () => {
@@ -278,8 +282,8 @@ export const usePrefetch = () => {
 
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byId(id),
-			queryFn: () => PostService.getPostById(id),
-			staleTime: 5 * 60 * 1000,
+			queryFn: () => PostService.getPostById(id), // Agora usa Data API
+			staleTime: 30 * 60 * 1000, // Cache longo para prefetch
 		});
 	};
 
@@ -288,8 +292,8 @@ export const usePrefetch = () => {
 
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byCategory(categoryId),
-			queryFn: () => PostService.getPostsByCategory(categoryId),
-			staleTime: 5 * 60 * 1000,
+			queryFn: () => PostService.getPostsByCategory(categoryId), // Agora usa Data API
+			staleTime: 10 * 60 * 1000,
 		});
 	};
 
@@ -337,12 +341,12 @@ export const useCacheUtils = () => {
 	};
 };
 
-// Suspense hook - SEMPRE público
+// Suspense hook - AGORA usa Data API
 export const usePostByIdSuspense = (id) => {
 	return useSuspenseQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
 		queryFn: () => {
-			return PostService.getPostById(id);
+			return PostService.getPostById(id); // Agora usa Data API com fallback
 		},
 	});
 };

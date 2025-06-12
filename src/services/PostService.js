@@ -1,176 +1,87 @@
 import { createClient } from "@supabase/supabase-js";
+import { dataAPIService } from "./DataAPIService";
 
 /**
- * PostService - SOLUÇÃO RADICAL
- * - Cliente NOVO a cada request público
- * - ZERO possibilidade de contaminação
- * - Literalmente simula estar sempre deslogado
+ * PostService - IMPLEMENTAÇÃO HÍBRIDA
+ * - Data API para queries públicas (performance)
+ * - SDK para operações administrativas (type safety)
+ * - Fallback automático
  */
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-// Cliente admin (mantém como estava)
+// Cliente admin (mantém para operações administrativas)
 const adminClient = createClient(supabaseUrl, supabaseAnonKey);
-
-// Função para criar cliente SEMPRE novo e anônimo
-const createFreshAnonymousClient = () => {
-	if (process.env.NODE_ENV === "development") {
-		console.log("🆕 Criando cliente TOTALMENTE NOVO e anônimo");
-	}
-
-	return createClient(supabaseUrl, supabaseAnonKey, {
-		auth: {
-			persistSession: false,
-			autoRefreshToken: false,
-			detectSessionInUrl: false,
-			flowType: "implicit",
-			storageKey: `supabase.auth.token.anonymous.${Date.now()}`, // Key única
-		},
-		global: {
-			headers: {
-				"X-Client-Type": `fresh-anonymous-${Date.now()}`,
-				"X-Force-Anonymous": "true",
-			},
-		},
-	});
-};
 
 export class PostService {
 	/**
 	 * ======================================
-	 * MÉTODOS PÚBLICOS - CLIENTE NOVO SEMPRE
+	 * MÉTODOS PÚBLICOS - AGORA COM DATA API
 	 * ======================================
 	 */
 
-	// Posts em destaque - Cliente NOVO a cada chamada
+	// Posts em destaque - Data API com cache HTTP
 	static async getFeaturedPosts() {
 		try {
+			const data = await dataAPIService.getFeaturedPosts();
+
 			if (process.env.NODE_ENV === "development") {
-				console.log("🌟 getFeaturedPosts: Criando cliente NOVO e anônimo");
+				console.log("✅ getFeaturedPosts (Data API):", data?.length || 0);
 			}
 
-			// Cliente completamente novo
-			const freshClient = createFreshAnonymousClient();
-
-			const { data, error } = await freshClient
-				.from("posts")
-				.select("*")
-				.eq("published", true)
-				.eq("trending", true)
-				.order("created_at", { ascending: false })
-				.limit(6);
-
-			if (error) {
-				console.warn("Featured posts error, trying fallback:", error);
-
-				// Fallback com OUTRO cliente novo
-				const fallbackClient = createFreshAnonymousClient();
-				const { data: fallbackData, error: fallbackError } =
-					await fallbackClient
-						.from("posts")
-						.select("*")
-						.eq("published", true)
-						.order("created_at", { ascending: false })
-						.limit(6);
-
-				if (fallbackError) {
-					console.error("Fallback também falhou:", fallbackError);
-					throw fallbackError;
-				}
-				if (process.env.NODE_ENV === "development") {
-					console.log(
-						"✅ getFeaturedPosts fallback success:",
-						fallbackData?.length || 0
-					);
-				}
-				return fallbackData || [];
-			}
-			if (process.env.NODE_ENV === "development") {
-				console.log("✅ getFeaturedPosts success:", data?.length || 0);
-			}
 			return data || [];
 		} catch (error) {
-			console.error("❌ PostService.getFeaturedPosts error:", error);
-			throw new Error(`Erro ao carregar posts em destaque: ${error.message}`);
+			console.error("❌ PostService.getFeaturedPosts (Data API) error:", error);
+
+			// Fallback para método SDK se Data API falhar
+			return this.getFeaturedPostsSDK();
 		}
 	}
 
-	// Todos os posts - Cliente NOVO a cada chamada
+	// Todos os posts - Data API otimizada
 	static async getAllPosts() {
 		try {
+			const data = await dataAPIService.getAllPosts();
+
 			if (process.env.NODE_ENV === "development") {
-				console.log("📰 getAllPosts: Criando cliente NOVO e anônimo");
+				console.log("✅ getAllPosts (Data API):", data?.length || 0);
 			}
 
-			// Cliente completamente novo
-			const freshClient = createFreshAnonymousClient();
-
-			const { data, error } = await freshClient
-				.from("posts")
-				.select("*")
-				.eq("published", true)
-				.order("created_at", { ascending: false });
-
-			if (error) {
-				console.error("❌ getAllPosts error:", error);
-				throw error;
-			}
-			if (process.env.NODE_ENV === "development") {
-				console.log("✅ getAllPosts success:", data?.length || 0, "posts");
-			}
 			return data || [];
 		} catch (error) {
-			console.error("❌ PostService.getAllPosts error:", error);
-			throw new Error(`Erro ao carregar posts: ${error.message}`);
+			console.error("❌ PostService.getAllPosts (Data API) error:", error);
+			return this.getAllPostsSDK();
 		}
 	}
 
-	// Posts por categoria - Cliente NOVO a cada chamada
+	// Posts por categoria - Data API com cache
 	static async getPostsByCategory(categoryId) {
 		if (!categoryId) {
 			throw new Error("Category ID é obrigatório");
 		}
 
 		try {
-			if (process.env.NODE_ENV === "development") {
-				console.log(
-					`🏷️ getPostsByCategory(${categoryId}): Criando cliente NOVO e anônimo`
-				);
-			}
-
-			// Cliente completamente novo
-			const freshClient = createFreshAnonymousClient();
-
-			const { data, error } = await freshClient
-				.from("posts")
-				.select("*")
-				.eq("published", true)
-				.eq("category", categoryId)
-				.order("created_at", { ascending: false });
-
-			if (error) {
-				console.error(`❌ getPostsByCategory(${categoryId}) error:`, error);
-				throw error;
-			}
+			const data = await dataAPIService.getPostsByCategory(categoryId);
 
 			if (process.env.NODE_ENV === "development") {
 				console.log(
-					`✅ getPostsByCategory(${categoryId}) success:`,
-					data?.length || 0,
-					"posts"
+					`✅ getPostsByCategory(${categoryId}) (Data API):`,
+					data?.length || 0
 				);
 			}
+
 			return data || [];
 		} catch (error) {
-			console.error("❌ PostService.getPostsByCategory error:", error);
-			throw new Error(
-				`Erro ao carregar posts da categoria ${categoryId}: ${error.message}`
+			console.error(
+				`❌ PostService.getPostsByCategory (Data API) error:`,
+				error
 			);
+			return this.getPostsByCategorySDK(categoryId);
 		}
 	}
 
-	// Post individual - Cliente NOVO a cada chamada
+	// Post individual - Data API com cache longo
 	static async getPostById(id) {
 		if (!id) {
 			throw new Error("Post ID é obrigatório");
@@ -183,113 +94,146 @@ export class PostService {
 				throw new Error(`ID inválido: ${id}`);
 			}
 
+			const data = await dataAPIService.getPostById(postId);
+
 			if (process.env.NODE_ENV === "development") {
-				console.log(
-					`📖 getPostById(${postId}): Criando cliente NOVO e anônimo`
-				);
+				console.log(`✅ getPostById(${postId}) (Data API):`, data?.title);
 			}
 
-			// Cliente completamente novo
-			const freshClient = createFreshAnonymousClient();
+			return data;
+		} catch (error) {
+			console.error("❌ PostService.getPostById (Data API) error:", error);
 
-			const { data, error } = await freshClient
-				.from("posts")
-				.select("*")
-				.eq("id", postId)
-				.eq("published", true)
-				.single();
-
-			if (error) {
-				if (error.code === "PGRST116") {
-					throw new Error("Post não encontrado");
-				}
-				console.error(`❌ getPostById(${postId}) error:`, error);
+			if (error.message === "Post não encontrado") {
 				throw error;
 			}
 
-			if (process.env.NODE_ENV === "development") {
-				console.log(`✅ getPostById(${postId}) success:`, data.title);
-			}
-			return data;
-		} catch (error) {
-			console.error("❌ PostService.getPostById error:", error);
-			throw new Error(`Erro ao carregar post: ${error.message}`);
+			return this.getPostByIdSDK(id);
 		}
 	}
 
-	// Categorias - Cliente NOVO a cada chamada
+	// Categorias - Data API com cache longo
 	static async getCategories() {
 		try {
+			const data = await dataAPIService.getCategories();
+
 			if (process.env.NODE_ENV === "development") {
-				console.log("🏷️ getCategories: Criando cliente NOVO e anônimo");
+				console.log("✅ getCategories (Data API):", data?.length || 0);
 			}
 
-			// Cliente completamente novo
-			const freshClient = createFreshAnonymousClient();
-
-			const { data, error } = await freshClient
-				.from("categories")
-				.select("*")
-				.order("name");
-
-			if (error) {
-				console.warn("Categories error, using fallback:", error);
-				return this.getFallbackCategories();
-			}
-
-			const result =
-				data && data.length > 0 ? data : this.getFallbackCategories();
-			return result;
+			return data && data.length > 0 ? data : this.getFallbackCategories();
 		} catch (error) {
-			console.error("❌ PostService.getCategories error:", error);
+			console.error("❌ PostService.getCategories (Data API) error:", error);
 			return this.getFallbackCategories();
 		}
 	}
 
-	// Busca de posts - Cliente NOVO a cada chamada
+	// Busca de posts - Data API sem cache
 	static async searchPosts(query) {
 		if (!query || query.length < 2) {
 			return [];
 		}
 
 		try {
+			const data = await dataAPIService.searchPosts(query);
+
 			if (process.env.NODE_ENV === "development") {
 				console.log(
-					`🔍 searchPosts("${query}"): Criando cliente NOVO e anônimo`
+					`✅ searchPosts("${query}") (Data API):`,
+					data?.length || 0
 				);
 			}
 
-			// Cliente completamente novo
-			const freshClient = createFreshAnonymousClient();
-
-			const { data, error } = await freshClient
-				.from("posts")
-				.select("*")
-				.eq("published", true)
-				.or(
-					`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`
-				)
-				.order("created_at", { ascending: false })
-				.limit(20);
-
-			if (error) {
-				console.error(`❌ searchPosts("${query}") error:`, error);
-				throw error;
-			}
-
-			if (process.env.NODE_ENV === "development") {
-				console.log(`✅ searchPosts("${query}") success:`, data?.length || 0);
-			}
 			return data || [];
 		} catch (error) {
-			console.error("❌ PostService.searchPosts error:", error);
-			throw new Error(`Erro na busca: ${error.message}`);
+			console.error("❌ PostService.searchPosts (Data API) error:", error);
+			return this.searchPostsSDK(query);
 		}
 	}
 
 	/**
 	 * ======================================
-	 * MÉTODOS ADMINISTRATIVOS - MANTÉM COMO ESTAVA
+	 * MÉTODOS FALLBACK - SDK (para compatibilidade)
+	 * ======================================
+	 */
+
+	static async getFeaturedPostsSDK() {
+		const freshClient = this.createFreshAnonymousClient();
+		const { data, error } = await freshClient
+			.from("posts")
+			.select("*")
+			.eq("published", true)
+			.eq("trending", true)
+			.order("created_at", { ascending: false })
+			.limit(6);
+
+		if (error) throw error;
+		return data || [];
+	}
+
+	static async getAllPostsSDK() {
+		const freshClient = this.createFreshAnonymousClient();
+		const { data, error } = await freshClient
+			.from("posts")
+			.select("*")
+			.eq("published", true)
+			.order("created_at", { ascending: false });
+
+		if (error) throw error;
+		return data || [];
+	}
+
+	static async getPostsByCategorySDK(categoryId) {
+		const freshClient = this.createFreshAnonymousClient();
+		const { data, error } = await freshClient
+			.from("posts")
+			.select("*")
+			.eq("published", true)
+			.eq("category", categoryId)
+			.order("created_at", { ascending: false });
+
+		if (error) throw error;
+		return data || [];
+	}
+
+	static async getPostByIdSDK(id) {
+		const postId = typeof id === "string" ? parseInt(id, 10) : id;
+		const freshClient = this.createFreshAnonymousClient();
+		const { data, error } = await freshClient
+			.from("posts")
+			.select("*")
+			.eq("id", postId)
+			.eq("published", true)
+			.single();
+
+		if (error) {
+			if (error.code === "PGRST116") {
+				throw new Error("Post não encontrado");
+			}
+			throw error;
+		}
+		return data;
+	}
+
+	static async searchPostsSDK(query) {
+		const freshClient = this.createFreshAnonymousClient();
+		const { data, error } = await freshClient
+			.from("posts")
+			.select("*")
+			.eq("published", true)
+			.or(
+				`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`
+			)
+			.order("created_at", { ascending: false })
+			.limit(20);
+
+		if (error) throw error;
+		return data || [];
+	}
+
+	/**
+	 * ======================================
+	 * MÉTODOS ADMINISTRATIVOS - MANTÉM SDK
 	 * ======================================
 	 */
 
@@ -386,6 +330,9 @@ export class PostService {
 				throw error;
 			}
 
+			// Invalidar cache do Data API
+			await this.invalidatePublicCache();
+
 			if (process.env.NODE_ENV === "development") {
 				console.log("✅ createPost success:", data.title);
 			}
@@ -421,6 +368,9 @@ export class PostService {
 				throw error;
 			}
 
+			// Invalidar cache do Data API
+			await this.invalidatePublicCache();
+
 			if (process.env.NODE_ENV === "development") {
 				console.log("✅ updatePost success:", data.title);
 			}
@@ -451,6 +401,9 @@ export class PostService {
 				throw error;
 			}
 
+			// Invalidar cache do Data API
+			await this.invalidatePublicCache();
+
 			if (process.env.NODE_ENV === "development") {
 				console.log("✅ deletePost success, ID:", postId);
 			}
@@ -465,6 +418,33 @@ export class PostService {
 	 * UTILITIES
 	 * ======================================
 	 */
+
+	static createFreshAnonymousClient() {
+		return createClient(supabaseUrl, supabaseAnonKey, {
+			auth: {
+				persistSession: false,
+				autoRefreshToken: false,
+				detectSessionInUrl: false,
+				storageKey: `supabase.auth.token.anonymous.${Date.now()}`,
+			},
+		});
+	}
+
+	static async invalidatePublicCache() {
+		try {
+			// Invalidar cache HTTP das principais rotas
+			await Promise.all([
+				dataAPIService.invalidateCache("/posts"),
+				dataAPIService.invalidateCache("/categories"),
+			]);
+
+			if (process.env.NODE_ENV === "development") {
+				console.log("🧹 Cache HTTP invalidado após operação admin");
+			}
+		} catch (error) {
+			console.warn("Cache invalidation failed:", error);
+		}
+	}
 
 	static getFallbackCategories() {
 		return [
