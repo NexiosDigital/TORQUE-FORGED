@@ -383,7 +383,7 @@ function App() {
 
 							{/* Admin Routes */}
 							<Route
-								path="/admin/login"
+								path="/login"
 								element={
 									<Suspense fallback={<ModernPageLoader page="login admin" />}>
 										<AdminLogin />

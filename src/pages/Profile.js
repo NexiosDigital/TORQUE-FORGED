@@ -198,7 +198,7 @@ const Profile = () => {
 		);
 		return (
 			<Navigate
-				to="/admin/login"
+				to="/login"
 				state={{ from: { pathname: "/profile" } }}
 				replace
 			/>

@@ -659,7 +659,7 @@ const Header = () => {
 							{/* User Menu or Login - SEMPRE mostrar algo */}
 							{sessionChecked && !user ? (
 								<Link
-									to="/admin/login"
+									to="/login"
 									className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105
 										medium-navbar:px-3 medium-navbar:py-2"
 								>

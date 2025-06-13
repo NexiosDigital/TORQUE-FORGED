@@ -129,10 +129,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 
 	// SEGUNDO: Se sessão verificada mas não há usuário -> redirecionar para login
 	if (sessionChecked && !user) {
-		console.log(
-			"🔒 ProtectedRoute: Usuário não autenticado, redirecionando para login"
-		);
-		return <Navigate to="/admin/login" state={{ from: location }} replace />;
+		return <Navigate to="/login" state={{ from: location }} replace />;
 	}
 
 	// TERCEIRO: Se há usuário mas ainda está carregando auth ou profile
