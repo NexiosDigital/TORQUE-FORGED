@@ -55,17 +55,13 @@ const CACHE_STRATEGIES = {
 
 // Install event - cache assets críticos
 self.addEventListener("install", (event) => {
-	console.log("🔧 Service Worker installing...");
-
 	event.waitUntil(
 		caches
 			.open(STATIC_CACHE)
 			.then((cache) => {
-				console.log("📦 Caching static assets...");
 				return cache.addAll(STATIC_ASSETS);
 			})
 			.then(() => {
-				console.log("✅ Static assets cached");
 				return self.skipWaiting();
 			})
 			.catch((error) => {
@@ -76,8 +72,6 @@ self.addEventListener("install", (event) => {
 
 // Activate event - limpar caches antigos
 self.addEventListener("activate", (event) => {
-	console.log("🚀 Service Worker activating...");
-
 	event.waitUntil(
 		caches
 			.keys()
@@ -91,14 +85,12 @@ self.addEventListener("activate", (event) => {
 						);
 					})
 					.map((cacheName) => {
-						console.log("🗑️ Deleting old cache:", cacheName);
 						return caches.delete(cacheName);
 					});
 
 				return Promise.all(deletePromises);
 			})
 			.then(() => {
-				console.log("✅ Old caches cleaned");
 				return self.clients.claim();
 			})
 	);
@@ -179,11 +171,9 @@ async function cacheFirst(request, strategy) {
 	const cachedResponse = await cache.match(request);
 
 	if (cachedResponse && !isExpired(cachedResponse, strategy.maxAge)) {
-		console.log(`📦 Cache HIT (${strategy.name}):`, request.url);
 		return cachedResponse;
 	}
 
-	console.log(`🌐 Cache MISS (${strategy.name}):`, request.url);
 	const networkResponse = await fetch(request);
 
 	if (networkResponse.ok) {
@@ -199,7 +189,6 @@ async function networkFirst(request, strategy) {
 	const cache = await caches.open(strategy.cache);
 
 	try {
-		console.log(`🌐 Network FIRST (${strategy.name}):`, request.url);
 		const networkResponse = await fetch(request);
 
 		if (networkResponse.ok) {
@@ -209,10 +198,6 @@ async function networkFirst(request, strategy) {
 
 		return networkResponse;
 	} catch (error) {
-		console.log(
-			`📦 Network FAILED, trying cache (${strategy.name}):`,
-			request.url
-		);
 		const cachedResponse = await cache.match(request);
 
 		if (cachedResponse) {
@@ -234,24 +219,16 @@ async function staleWhileRevalidate(request, strategy) {
 			if (networkResponse.ok) {
 				const responseToCache = networkResponse.clone();
 				cache.put(request, responseToCache);
-				console.log(`🔄 Background UPDATE (${strategy.name}):`, request.url);
 			}
 			return networkResponse;
 		})
-		.catch((error) => {
-			console.log(`❌ Background fetch failed (${strategy.name}):`, error);
-		});
+		.catch((error) => {});
 
 	// Retornar cache se disponível, senão esperar network
 	if (cachedResponse) {
-		console.log(`📦 Stale cache HIT (${strategy.name}):`, request.url);
 		return cachedResponse;
 	}
 
-	console.log(
-		`🌐 No cache, waiting for network (${strategy.name}):`,
-		request.url
-	);
 	return await fetchPromise;
 }
 
@@ -281,7 +258,6 @@ async function handleStrategyError(request, strategy, error) {
 	const cachedResponse = await cache.match(request);
 
 	if (cachedResponse) {
-		console.log(`📦 Error fallback to cache:`, request.url);
 		return cachedResponse;
 	}
 
@@ -396,7 +372,6 @@ self.addEventListener("message", (event) => {
 			break;
 
 		default:
-			console.log("Unknown message type:", type);
 	}
 });
 
@@ -408,7 +383,6 @@ async function clearAllCaches() {
 		.map((name) => caches.delete(name));
 
 	await Promise.all(deletePromises);
-	console.log("🗑️ All caches cleared");
 }
 
 // Obter estatísticas de cache
@@ -436,8 +410,6 @@ self.addEventListener("periodicsync", (event) => {
 
 // Limpeza periódica de cache
 async function performCacheCleanup() {
-	console.log("🧹 Performing cache cleanup...");
-
 	// Limpar entradas expiradas
 	const cacheNames = await caches.keys();
 
@@ -452,7 +424,6 @@ async function performCacheCleanup() {
 			if (response && isExpired(response, 24 * 60 * 60 * 1000)) {
 				// 24h max
 				await cache.delete(request);
-				console.log("🗑️ Removed expired cache entry:", request.url);
 			}
 		}
 	}

@@ -314,6 +314,7 @@ const Header = () => {
 	// Debug melhorado
 	useEffect(() => {
 		if (process.env.NODE_ENV === "development") {
+			/*
 			console.log("🎛️ Header Auth State:", {
 				sessionChecked,
 				user: !!user,
@@ -322,7 +323,7 @@ const Header = () => {
 				authLoading,
 				profileLoading,
 				...(debugState || {}),
-			});
+			});*/
 		}
 	}, [
 		sessionChecked,
@@ -383,7 +384,6 @@ const Header = () => {
 		try {
 			setIsLoggingOut(true);
 			setIsUserMenuOpen(false);
-			console.log("🚪 Header: Iniciando logout...");
 			await signOut();
 		} catch (error) {
 			console.error("Header: Erro no logout:", error);

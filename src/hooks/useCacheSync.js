@@ -16,25 +16,14 @@ export const useCacheSync = () => {
 		// Aguardar verificação da sessão antes de fazer qualquer coisa
 		if (!sessionChecked) return;
 
-		console.log("🔄 CacheSync: Estado de auth mudou:", {
-			user: !!user,
-			isAdmin,
-			sessionChecked,
-		});
-
 		// Se não há usuário (logout), limpar todo o cache
 		if (!user) {
-			console.log("🧹 CacheSync: Limpando cache (logout)");
 			queryClient.clear();
 			return;
 		}
 
 		// Se usuário logou ou mudou status de admin, invalidar queries relevantes
 		if (user) {
-			console.log(
-				"🔄 CacheSync: Invalidando queries após login/mudança de status"
-			);
-
 			// Invalidar queries admin se for admin
 			if (isAdmin) {
 				queryClient.invalidateQueries({ queryKey: ["admin"] });
@@ -47,7 +36,6 @@ export const useCacheSync = () => {
 
 	// Função para forçar sincronização manual
 	const forceCacheSync = () => {
-		console.log("🔄 CacheSync: Sincronização manual forçada");
 		queryClient.clear();
 		queryClient.invalidateQueries();
 	};

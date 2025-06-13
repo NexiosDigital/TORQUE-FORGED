@@ -167,7 +167,7 @@ export class AvatarService {
 				.single();
 
 			// 5. Upload do arquivo
-			const { data: uploadData, error: uploadError } = await supabase.storage
+			const { error: uploadError } = await supabase.storage
 				.from(this.BUCKET_NAME)
 				.upload(filePath, compressedFile, {
 					cacheControl: "3600",
@@ -299,7 +299,6 @@ export class AvatarService {
 		setTimeout(async () => {
 			try {
 				await supabase.storage.from(this.BUCKET_NAME).remove([filePath]);
-				console.log("🗑️ Avatar antigo removido:", filePath);
 			} catch (error) {
 				console.warn("⚠️ Erro ao remover avatar antigo:", error);
 			}
@@ -356,19 +355,14 @@ export class AvatarService {
 			const orphanedFiles = await this.findOrphanedFiles();
 
 			if (orphanedFiles.length === 0) {
-				console.log("✅ Nenhum arquivo órfão encontrado");
 				return { removed: 0 };
 			}
 
-			console.log(`🗑️ Removendo ${orphanedFiles.length} arquivos órfãos...`);
-
-			const { data, error } = await supabase.storage
+			const { error } = await supabase.storage
 				.from(this.BUCKET_NAME)
 				.remove(orphanedFiles);
 
 			if (error) throw error;
-
-			console.log(`✅ ${orphanedFiles.length} arquivos órfãos removidos`);
 
 			return {
 				removed: orphanedFiles.length,

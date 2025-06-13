@@ -470,6 +470,7 @@ export const AuthProvider = ({ children }) => {
 	const isAdmin =
 		profile?.role === "admin" && !profileLoading && !isLoadingProfile.current;
 
+	/*
 	// Debug em desenvolvimento
 	if (process.env.NODE_ENV === "development") {
 		console.log("🎭 Auth State Debug:", {
@@ -484,6 +485,7 @@ export const AuthProvider = ({ children }) => {
 			currentUserIdRef: currentUserId.current,
 		});
 	}
+	*/
 
 	const value = {
 		user,

@@ -179,8 +179,6 @@ const PerformanceMonitor = () => {
 				success: queries.filter((q) => q.state.status === "success").length,
 			};
 
-			console.log("📊 Cache Stats:", stats);
-
 			// Alertar se muitos erros
 			if (stats.error > stats.total * 0.2) {
 				console.warn("⚠️ Alta taxa de erro nas queries - limpando cache");
@@ -304,8 +302,6 @@ export const ModernQueryProvider = ({ children }) => {
 					);
 					queryClient.clear();
 				}
-
-				console.log("✅ QueryProvider inicializado");
 			} catch (error) {
 				console.warn("Erro na verificação inicial de cache:", error);
 			}

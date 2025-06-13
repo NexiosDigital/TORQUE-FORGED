@@ -16,6 +16,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 	// Debug logs em desenvolvimento
 	useEffect(() => {
 		if (process.env.NODE_ENV === "development") {
+			/*
 			console.log("🛡️ ProtectedRoute status:", {
 				sessionChecked,
 				authLoading,
@@ -24,7 +25,7 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 				isAdmin,
 				requireAdmin,
 				pathname: location.pathname,
-			});
+			});*/
 		}
 	}, [
 		sessionChecked,
@@ -220,14 +221,10 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
 
 	// QUARTO: Se requer admin mas usuário não é admin
 	if (requireAdmin && !isAdmin) {
-		console.log(
-			"🔒 ProtectedRoute: Usuário não é admin, redirecionando para home"
-		);
 		return <Navigate to="/" replace />;
 	}
 
 	// QUINTO: Se chegou até aqui, usuário está autenticado e autorizado
-	console.log("✅ ProtectedRoute: Usuário autorizado, renderizando conteúdo");
 	return children;
 };
 

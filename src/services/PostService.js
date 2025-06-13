@@ -26,10 +26,6 @@ export class PostService {
 		try {
 			const data = await dataAPIService.getFeaturedPosts();
 
-			if (process.env.NODE_ENV === "development") {
-				console.log("✅ getFeaturedPosts (Data API):", data?.length || 0);
-			}
-
 			return data || [];
 		} catch (error) {
 			console.error("❌ PostService.getFeaturedPosts (Data API) error:", error);
@@ -43,10 +39,6 @@ export class PostService {
 	static async getAllPosts() {
 		try {
 			const data = await dataAPIService.getAllPosts();
-
-			if (process.env.NODE_ENV === "development") {
-				console.log("✅ getAllPosts (Data API):", data?.length || 0);
-			}
 
 			return data || [];
 		} catch (error) {
@@ -63,13 +55,6 @@ export class PostService {
 
 		try {
 			const data = await dataAPIService.getPostsByCategory(categoryId);
-
-			if (process.env.NODE_ENV === "development") {
-				console.log(
-					`✅ getPostsByCategory(${categoryId}) (Data API):`,
-					data?.length || 0
-				);
-			}
 
 			return data || [];
 		} catch (error) {
@@ -96,10 +81,6 @@ export class PostService {
 
 			const data = await dataAPIService.getPostById(postId);
 
-			if (process.env.NODE_ENV === "development") {
-				console.log(`✅ getPostById(${postId}) (Data API):`, data?.title);
-			}
-
 			return data;
 		} catch (error) {
 			console.error("❌ PostService.getPostById (Data API) error:", error);
@@ -117,10 +98,6 @@ export class PostService {
 		try {
 			const data = await dataAPIService.getCategories();
 
-			if (process.env.NODE_ENV === "development") {
-				console.log("✅ getCategories (Data API):", data?.length || 0);
-			}
-
 			return data && data.length > 0 ? data : this.getFallbackCategories();
 		} catch (error) {
 			console.error("❌ PostService.getCategories (Data API) error:", error);
@@ -136,13 +113,6 @@ export class PostService {
 
 		try {
 			const data = await dataAPIService.searchPosts(query);
-
-			if (process.env.NODE_ENV === "development") {
-				console.log(
-					`✅ searchPosts("${query}") (Data API):`,
-					data?.length || 0
-				);
-			}
 
 			return data || [];
 		} catch (error) {
@@ -239,12 +209,6 @@ export class PostService {
 
 	static async getAllPostsAdmin() {
 		try {
-			if (process.env.NODE_ENV === "development") {
-				console.log(
-					"🛡️ getAllPostsAdmin: Usando cliente autenticado (mantido)"
-				);
-			}
-
 			const { data, error } = await adminClient
 				.from("posts")
 				.select("*")
@@ -255,9 +219,6 @@ export class PostService {
 				throw error;
 			}
 
-			if (process.env.NODE_ENV === "development") {
-				console.log("✅ getAllPostsAdmin success:", data?.length || 0, "posts");
-			}
 			return data || [];
 		} catch (error) {
 			console.error("❌ PostService.getAllPostsAdmin error:", error);
@@ -277,12 +238,6 @@ export class PostService {
 				throw new Error(`ID inválido: ${id}`);
 			}
 
-			if (process.env.NODE_ENV === "development") {
-				console.log(
-					`🛡️ getPostByIdAdmin(${postId}): Usando cliente autenticado (mantido)`
-				);
-			}
-
 			const { data, error } = await adminClient
 				.from("posts")
 				.select("*")
@@ -297,9 +252,6 @@ export class PostService {
 				throw error;
 			}
 
-			if (process.env.NODE_ENV === "development") {
-				console.log(`✅ getPostByIdAdmin(${postId}) success:`, data.title);
-			}
 			return data;
 		} catch (error) {
 			console.error("❌ PostService.getPostByIdAdmin error:", error);
@@ -309,10 +261,6 @@ export class PostService {
 
 	static async createPost(postData) {
 		try {
-			if (process.env.NODE_ENV === "development") {
-				console.log("🛡️ createPost: Usando cliente autenticado (mantido)");
-			}
-
 			const { data, error } = await adminClient
 				.from("posts")
 				.insert([
@@ -333,9 +281,6 @@ export class PostService {
 			// Invalidar cache do Data API
 			await this.invalidatePublicCache();
 
-			if (process.env.NODE_ENV === "development") {
-				console.log("✅ createPost success:", data.title);
-			}
 			return data;
 		} catch (error) {
 			console.error("❌ PostService.createPost error:", error);
@@ -346,12 +291,6 @@ export class PostService {
 	static async updatePost(id, postData) {
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-
-			if (process.env.NODE_ENV === "development") {
-				console.log(
-					`🛡️ updatePost(${postId}): Usando cliente autenticado (mantido)`
-				);
-			}
 
 			const { data, error } = await adminClient
 				.from("posts")
@@ -371,9 +310,6 @@ export class PostService {
 			// Invalidar cache do Data API
 			await this.invalidatePublicCache();
 
-			if (process.env.NODE_ENV === "development") {
-				console.log("✅ updatePost success:", data.title);
-			}
 			return data;
 		} catch (error) {
 			console.error("❌ PostService.updatePost error:", error);
@@ -384,12 +320,6 @@ export class PostService {
 	static async deletePost(id) {
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-
-			if (process.env.NODE_ENV === "development") {
-				console.log(
-					`🛡️ deletePost(${postId}): Usando cliente autenticado (mantido)`
-				);
-			}
 
 			const { error } = await adminClient
 				.from("posts")
@@ -403,10 +333,6 @@ export class PostService {
 
 			// Invalidar cache do Data API
 			await this.invalidatePublicCache();
-
-			if (process.env.NODE_ENV === "development") {
-				console.log("✅ deletePost success, ID:", postId);
-			}
 		} catch (error) {
 			console.error("❌ PostService.deletePost error:", error);
 			throw new Error(`Erro ao deletar post: ${error.message}`);
@@ -437,10 +363,6 @@ export class PostService {
 				dataAPIService.invalidateCache("/posts"),
 				dataAPIService.invalidateCache("/categories"),
 			]);
-
-			if (process.env.NODE_ENV === "development") {
-				console.log("🧹 Cache HTTP invalidado após operação admin");
-			}
 		} catch (error) {
 			console.warn("Cache invalidation failed:", error);
 		}

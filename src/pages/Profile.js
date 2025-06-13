@@ -43,29 +43,6 @@ const Profile = () => {
 
 	const passwordForm = useForm();
 
-	// Debug logs em desenvolvimento
-	useEffect(() => {
-		if (process.env.NODE_ENV === "development") {
-			console.log("🏠 Profile Component State:", {
-				sessionChecked,
-				user: !!user,
-				profile: !!profile,
-				authLoading,
-				profileLoading,
-				formInitialized,
-				isAdmin,
-			});
-		}
-	}, [
-		sessionChecked,
-		user,
-		profile,
-		authLoading,
-		profileLoading,
-		formInitialized,
-		isAdmin,
-	]);
-
 	// Preencher formulário quando dados estiverem COMPLETAMENTE disponíveis
 	useEffect(() => {
 		if (
@@ -75,8 +52,6 @@ const Profile = () => {
 			!profileLoading &&
 			!formInitialized
 		) {
-			console.log("📝 Inicializando formulário com dados disponíveis");
-
 			const name = profile?.full_name || user.email?.split("@")[0] || "";
 			const email = profile?.email || user.email || "";
 
@@ -84,7 +59,6 @@ const Profile = () => {
 			setValue("email", email);
 
 			setFormInitialized(true);
-			console.log("✅ Formulário inicializado:", { name, email });
 		}
 	}, [
 		sessionChecked,
@@ -99,19 +73,16 @@ const Profile = () => {
 	const onSubmitProfile = async (data) => {
 		try {
 			setLoading(true);
-			console.log("💾 Salvando perfil:", data);
 
 			const updateData = {
 				email: data.email,
 				full_name: data.full_name,
 			};
 
-			console.log("📤 Enviando dados:", updateData);
-
 			const { error } = await updateProfile(updateData);
 
 			if (!error) {
-				console.log("✅ Perfil atualizado com sucesso");
+				//console.log("✅ Perfil atualizado com sucesso");
 			}
 		} catch (error) {
 			console.error("Error updating profile:", error);
@@ -193,9 +164,6 @@ const Profile = () => {
 
 	// SE sessão verificada E não há usuário = redirecionar
 	if (sessionChecked && !user) {
-		console.log(
-			"🔒 Profile: Usuário não autenticado, redirecionando para login"
-		);
 		return (
 			<Navigate
 				to="/login"
