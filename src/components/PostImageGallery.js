@@ -428,7 +428,7 @@ const PostImageGallery = ({
 						return (
 							<div
 								key={`${image.path}-${index}`}
-								className={`group bg-gradient-to-br from-gray-800/30 to-gray-900/30 rounded-3xl border-2 transition-all duration-500 hover:scale-[1.02] overflow-hidden ${
+								className={`group bg-gradient-to-br from-gray-800/30 to-gray-900/30 rounded-3xl border-2 transition-all duration-500 hover:scale-[1.05] overflow-hidden ${
 									isUnused
 										? "border-orange-500/40 shadow-lg shadow-orange-500/10"
 										: "border-gray-600/30 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10"
@@ -461,32 +461,30 @@ const PostImageGallery = ({
 											</span>
 										</div>
 									)}
-
-									{/* Hover overlay sutil */}
-									<div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-										<div className="bg-black/60 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-sm flex items-center space-x-2">
-											<Eye className="w-4 h-4" />
-											<span>Clique para visualizar</span>
-										</div>
-									</div>
 								</div>
 
 								{/* Info e botões SEPARADOS - Abaixo da imagem */}
-								<div className="p-4 space-y-3">
+								<div className="p-3 space-y-3">
 									{/* Nome e tamanho */}
 									<div>
 										<h4 className="text-white font-semibold text-sm mb-1 truncate">
 											{image.name}
 										</h4>
-										<p className="text-gray-400 text-xs">
-											{image.size
-												? `${(image.size / 1024).toFixed(1)} KB`
-												: "Sem info de tamanho"}
-										</p>
 									</div>
 
 									{/* Botões de ação - Em linha horizontal */}
-									<div className="flex items-center space-x-2">
+									<div className="flex items-center gap-1">
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												handleInsertImage(image);
+											}}
+											className="flex-1 flex items-center justify-center space-x-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-300 shadow-lg hover:shadow-blue-500/25 hover:scale-105"
+											title="Inserir no editor"
+										>
+											<Plus className="w-2 h-3" />
+										</button>
+
 										<button
 											onClick={(e) => handleOpenPreview(image, e)}
 											className="p-2 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 text-white rounded-lg transition-all duration-300 shadow-lg hover:scale-105"
