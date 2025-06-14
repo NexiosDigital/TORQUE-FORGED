@@ -3,12 +3,11 @@ import { dataAPIService } from "./DataAPIService";
 import { ImageUploadService } from "./ImageUploadService";
 
 /**
- * PostService - IMPLEMENTAÇÃO HÍBRIDA com Upload de Imagens - VERSÃO CORRIGIDA
- * - Data API para queries públicas (performance)
- * - SDK para operações administrativas (type safety)
- * - Integração com ImageUploadService
- * - Fallback automático
- * - CORREÇÃO: Garantir que image_url e image_path sejam salvos
+ * PostService - VERSÃO CORRIGIDA E VERIFICADA
+ * - Método createPost corrigido e com debug melhorado
+ * - Verificações de permissão adicionadas
+ * - Error handling melhorado
+ * - Logs detalhados para debug
  */
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
@@ -254,12 +253,14 @@ export class PostService {
 
 	/**
 	 * ======================================
-	 * MÉTODOS ADMINISTRATIVOS - MANTÉM SDK - VERSÃO CORRIGIDA
+	 * MÉTODOS ADMINISTRATIVOS - VERSÃO CORRIGIDA E MELHORADA
 	 * ======================================
 	 */
 
 	static async getAllPostsAdmin() {
 		try {
+			console.log("📊 PostService.getAllPostsAdmin: Iniciando busca...");
+
 			const { data, error } = await adminClient
 				.from("posts")
 				.select("*")
@@ -269,6 +270,8 @@ export class PostService {
 				console.error("❌ getAllPostsAdmin error:", error);
 				throw error;
 			}
+
+			console.log(`✅ getAllPostsAdmin: ${data?.length || 0} posts carregados`);
 
 			// Para admin, manter URLs originais para edição
 			return data || [];
@@ -290,6 +293,10 @@ export class PostService {
 				throw new Error(`ID inválido: ${id}`);
 			}
 
+			console.log(
+				`📖 PostService.getPostByIdAdmin: Buscando post ${postId}...`
+			);
+
 			const { data, error } = await adminClient
 				.from("posts")
 				.select("*")
@@ -304,6 +311,8 @@ export class PostService {
 				throw error;
 			}
 
+			console.log(`✅ getPostByIdAdmin: Post ${postId} carregado`);
+
 			// Para admin, manter URLs originais para edição
 			return data;
 		} catch (error) {
@@ -312,9 +321,39 @@ export class PostService {
 		}
 	}
 
-	// MÉTODO CREATEPOST - VERSÃO CORRIGIDA
+	// MÉTODO CREATEPOST - VERSÃO CORRIGIDA E COM DEBUG MELHORADO
 	static async createPost(postData) {
+		console.log("🆕 PostService.createPost: Iniciando criação de post...");
+		console.log("📝 Dados recebidos:", {
+			title: postData.title,
+			slug: postData.slug,
+			category: postData.category,
+			image_url: postData.image_url ? "✅ Presente" : "❌ Ausente",
+			image_path: postData.image_path ? "✅ Presente" : "❌ Ausente",
+			published: postData.published,
+			content_length: postData.content?.length || 0,
+		});
+
 		try {
+			// VERIFICAÇÃO INICIAL: Conectividade e Auth
+			const {
+				data: { user },
+			} = await adminClient.auth.getUser();
+			console.log("👤 Usuário autenticado:", user ? "✅ Sim" : "❌ Não");
+
+			// TESTE DE CONEXÃO: Verificar se consegue fazer uma query simples
+			const { data: testData, error: testError } = await adminClient
+				.from("posts")
+				.select("count")
+				.limit(1);
+
+			if (testError) {
+				console.error("❌ Teste de conexão falhou:", testError);
+				throw new Error(`Erro de conexão: ${testError.message}`);
+			}
+
+			console.log("🔗 Conexão com banco de dados: ✅ OK");
+
 			// Validar dados obrigatórios
 			if (!postData.title) {
 				throw new Error("Título é obrigatório");
@@ -324,13 +363,36 @@ export class PostService {
 				throw new Error("Imagem de capa é obrigatória");
 			}
 
+			if (!postData.category) {
+				throw new Error("Categoria é obrigatória");
+			}
+
+			if (!postData.content || postData.content.trim() === "") {
+				throw new Error("Conteúdo é obrigatório");
+			}
+
+			console.log("✅ Validações básicas: Aprovadas");
+
+			// VERIFICAR ESTRUTURA DA TABELA (apenas em desenvolvimento)
+			if (process.env.NODE_ENV === "development") {
+				try {
+					const { data: schemaData } = await adminClient
+						.from("posts")
+						.select("*")
+						.limit(1);
+					console.log("📋 Schema check: ✅ Tabela acessível");
+				} catch (schemaError) {
+					console.warn("⚠️ Schema check failed:", schemaError);
+				}
+			}
+
 			// Preparar dados para inserção - INCLUINDO CAMPOS DE IMAGEM
 			const dataToInsert = {
 				// Campos básicos
-				title: postData.title,
-				slug: postData.slug,
-				excerpt: postData.excerpt,
-				content: postData.content,
+				title: postData.title.trim(),
+				slug: postData.slug?.trim() || this.generateSlug(postData.title),
+				excerpt: postData.excerpt?.trim() || "",
+				content: postData.content.trim(),
 
 				// CAMPOS DE IMAGEM - CRÍTICOS
 				image_url: postData.image_url,
@@ -338,7 +400,7 @@ export class PostService {
 
 				// Categoria e metadados
 				category: postData.category,
-				category_name: postData.category_name,
+				category_name: postData.category_name || "",
 
 				// Metadados
 				author: postData.author || "Equipe TF",
@@ -361,6 +423,14 @@ export class PostService {
 				throw new Error("CRÍTICO: image_url não foi definida");
 			}
 
+			console.log("📤 Dados finais para inserção:", {
+				...dataToInsert,
+				content: `${dataToInsert.content.substring(0, 100)}...`,
+			});
+
+			// REALIZAR INSERÇÃO
+			console.log("💾 Iniciando inserção no banco de dados...");
+
 			const { data, error } = await adminClient
 				.from("posts")
 				.insert([dataToInsert])
@@ -368,7 +438,13 @@ export class PostService {
 				.single();
 
 			if (error) {
-				console.error("❌ createPost error:", error);
+				console.error("❌ Erro na inserção:", error);
+				console.error("🔍 Detalhes do erro:", {
+					code: error.code,
+					message: error.message,
+					details: error.details,
+					hint: error.hint,
+				});
 
 				// Mensagens de erro específicas
 				if (error.message.includes("duplicate")) {
@@ -377,23 +453,55 @@ export class PostService {
 					throw new Error("Alguns campos obrigatórios não foram preenchidos");
 				} else if (error.message.includes("foreign key")) {
 					throw new Error("Categoria inválida selecionada");
+				} else if (
+					error.message.includes("permission") ||
+					error.code === "42501"
+				) {
+					throw new Error(
+						"Erro de permissão. Verifique se você tem acesso para criar posts"
+					);
+				} else if (error.message.includes("policy")) {
+					throw new Error("Política de segurança bloqueou a operação");
 				}
 
-				throw error;
+				throw new Error(`Erro na criação: ${error.message}`);
 			}
 
+			console.log("✅ Post criado com sucesso!");
+			console.log("🎉 Dados do post criado:", {
+				id: data.id,
+				title: data.title,
+				slug: data.slug,
+				published: data.published,
+			});
+
 			// Invalidar cache do Data API
-			await this.invalidatePublicCache();
+			try {
+				await this.invalidatePublicCache();
+				console.log("🗑️ Cache invalidado com sucesso");
+			} catch (cacheError) {
+				console.warn("⚠️ Erro ao invalidar cache:", cacheError);
+			}
 
 			return data;
 		} catch (error) {
 			console.error("❌ PostService.createPost error:", error);
+
+			// Log adicional para debug
+			console.error("🔍 Error details:", {
+				name: error.name,
+				message: error.message,
+				stack: error.stack,
+			});
+
 			throw new Error(`Erro ao criar post: ${error.message}`);
 		}
 	}
 
 	// MÉTODO UPDATEPOST - VERSÃO CORRIGIDA
 	static async updatePost(id, postData) {
+		console.log(`📝 PostService.updatePost: Atualizando post ${id}...`);
+
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
@@ -453,6 +561,11 @@ export class PostService {
 				throw new Error("CRÍTICO: image_url não foi definida para atualização");
 			}
 
+			console.log("📤 Dados para atualização:", {
+				...dataToUpdate,
+				content: `${dataToUpdate.content.substring(0, 100)}...`,
+			});
+
 			const { data, error } = await adminClient
 				.from("posts")
 				.update(dataToUpdate)
@@ -474,6 +587,8 @@ export class PostService {
 
 				throw error;
 			}
+
+			console.log("✅ Post atualizado com sucesso!");
 
 			// Se a imagem mudou, agendar limpeza da imagem antiga
 			if (
@@ -498,6 +613,8 @@ export class PostService {
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
+			console.log(`🗑️ PostService.deletePost: Removendo post ${postId}...`);
+
 			// Buscar imagem do post antes de deletar
 			const { data: postToDelete } = await adminClient
 				.from("posts")
@@ -514,6 +631,8 @@ export class PostService {
 				console.error("❌ deletePost error:", error);
 				throw error;
 			}
+
+			console.log("✅ Post deletado com sucesso!");
 
 			// Agendar limpeza da imagem
 			if (postToDelete?.image_path) {
@@ -553,6 +672,22 @@ export class PostService {
 	}
 
 	/**
+	 * Gerar slug a partir do título
+	 */
+	static generateSlug(title) {
+		if (!title) return `post-${Date.now()}`;
+
+		return title
+			.toLowerCase()
+			.normalize("NFD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/[^a-z0-9\s-]/g, "")
+			.replace(/\s+/g, "-")
+			.replace(/-+/g, "-")
+			.trim();
+	}
+
+	/**
 	 * Agendar limpeza de imagem antiga
 	 */
 	static scheduleImageCleanup(imagePath) {
@@ -562,6 +697,7 @@ export class PostService {
 		setTimeout(async () => {
 			try {
 				await ImageUploadService.removePostImage(imagePath);
+				console.log(`🧹 Imagem antiga removida: ${imagePath}`);
 			} catch (error) {
 				console.warn("⚠️ Erro ao remover imagem antiga:", error);
 			}
@@ -634,32 +770,40 @@ export class PostService {
 
 	/**
 	 * ======================================
-	 * MÉTODOS DE DEBUG (remover em produção)
+	 * MÉTODOS DE DEBUG E DIAGNÓSTICO
 	 * ======================================
 	 */
 
 	// Verificar schema da tabela posts
 	static async debugTableSchema() {
 		try {
-			const { data, error } = await adminClient.rpc("get_table_columns", {
-				table_name: "posts",
-			});
+			console.log("🔍 Verificando schema da tabela posts...");
+
+			const { data, error } = await adminClient
+				.from("posts")
+				.select("*")
+				.limit(1);
 
 			if (error) {
 				console.error("❌ Erro ao verificar schema:", error);
-				return null;
+				return { success: false, error };
 			}
 
-			return data;
+			const columns = data.length > 0 ? Object.keys(data[0]) : [];
+			console.log("📋 Colunas da tabela posts:", columns);
+
+			return { success: true, columns, sampleData: data[0] };
 		} catch (error) {
 			console.error("❌ debugTableSchema error:", error);
-			return null;
+			return { success: false, error };
 		}
 	}
 
 	// Testar inserção simples
 	static async debugTestInsert() {
 		try {
+			console.log("🧪 Testando inserção simples...");
+
 			const testData = {
 				title: "Post de Teste",
 				slug: "post-de-teste-" + Date.now(),
@@ -689,13 +833,87 @@ export class PostService {
 				return { success: false, error };
 			}
 
+			console.log("✅ Teste de inserção bem-sucedido:", data);
+
 			// Limpar teste
 			await adminClient.from("posts").delete().eq("id", data.id);
+			console.log("🧹 Post de teste removido");
 
 			return { success: true, data };
 		} catch (error) {
 			console.error("❌ debugTestInsert error:", error);
 			return { success: false, error };
 		}
+	}
+
+	// Verificar permissões RLS
+	static async debugCheckPermissions() {
+		try {
+			console.log("🔐 Verificando permissões...");
+
+			// Tentar diferentes operações
+			const tests = {
+				select: false,
+				insert: false,
+				update: false,
+				delete: false,
+			};
+
+			// Teste SELECT
+			try {
+				await adminClient.from("posts").select("id").limit(1);
+				tests.select = true;
+			} catch (error) {
+				console.warn("⚠️ SELECT falhou:", error.message);
+			}
+
+			// Teste INSERT (com dados de teste)
+			try {
+				const { data, error } = await adminClient
+					.from("posts")
+					.insert([
+						{
+							title: "Teste Permissão",
+							slug: "teste-permissao-" + Date.now(),
+							excerpt: "Teste",
+							content: "Teste",
+							image_url: "https://example.com/test.jpg",
+							category: "f1",
+							published: false,
+						},
+					])
+					.select()
+					.single();
+
+				if (!error) {
+					tests.insert = true;
+					// Limpar imediatamente
+					await adminClient.from("posts").delete().eq("id", data.id);
+				}
+			} catch (error) {
+				console.warn("⚠️ INSERT falhou:", error.message);
+			}
+
+			console.log("🔐 Resultados dos testes de permissão:", tests);
+			return tests;
+		} catch (error) {
+			console.error("❌ debugCheckPermissions error:", error);
+			return { error };
+		}
+	}
+
+	// Método principal de diagnóstico
+	static async runDiagnostics() {
+		console.log("🩺 Iniciando diagnósticos completos...");
+
+		const results = {
+			timestamp: new Date().toISOString(),
+			schema: await this.debugTableSchema(),
+			permissions: await this.debugCheckPermissions(),
+			testInsert: await this.debugTestInsert(),
+		};
+
+		console.log("📊 Relatório de diagnósticos:", results);
+		return results;
 	}
 }

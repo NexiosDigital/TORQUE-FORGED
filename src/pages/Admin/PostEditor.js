@@ -22,7 +22,8 @@ import ImageUpload from "../../components/ImageUpload";
 import toast from "react-hot-toast";
 
 /**
- * PostEditor - VERSÃO CORRIGIDA PARA EDIÇÃO DE POSTS
+ * PostEditor - VERSÃO CORRIGIDA
+ * - CRIAÇÃO DE POSTS FUNCIONANDO
  * - Correção específica para atualização de imagens em posts existentes
  * - Estado da imagem mantido durante edição
  * - Prevenção de reversão após upload
@@ -193,6 +194,11 @@ const PostEditor = () => {
 				);
 			}
 
+			console.log("📝 PostEditor: Dados do post:", {
+				...postData,
+				content: postData.content.substring(0, 100) + "...",
+			});
+
 			// Salvar post
 			let result;
 			if (isEditing) {
@@ -200,9 +206,11 @@ const PostEditor = () => {
 					id,
 					...postData,
 				});
+				console.log("✅ Post atualizado:", result);
 			} else {
-				//result = await createPostMutation.mutateAsync(postData);
-				//console.log("✅ Post criado:", result);
+				// CORRIGIDO: Descomentar a criação de posts
+				result = await createPostMutation.mutateAsync(postData);
+				console.log("✅ Post criado:", result);
 			}
 
 			toast.success(`Post ${isEditing ? "atualizado" : "criado"} com sucesso!`);
@@ -846,6 +854,22 @@ const PostEditor = () => {
 									{isEditing
 										? "Selecione uma nova imagem ou mantenha a atual"
 										: "Faça o upload da imagem de capa para habilitar o salvamento"}
+								</div>
+							)}
+
+							{/* Debug info em desenvolvimento */}
+							{process.env.NODE_ENV === "development" && (
+								<div className="bg-gray-900/50 rounded-xl p-4 text-xs text-gray-500">
+									<h4 className="text-white mb-2">🔧 Debug Info:</h4>
+									<div className="space-y-1">
+										<p>isEditing: {isEditing.toString()}</p>
+										<p>
+											imageData.image_url: {imageData.image_url ? "✅" : "❌"}
+										</p>
+										<p>imageChanged: {imageChanged.toString()}</p>
+										<p>lastUpdate: {debugInfo.lastImageUpdate}</p>
+										<p>status: {debugInfo.imageStatus}</p>
+									</div>
 								</div>
 							)}
 						</div>

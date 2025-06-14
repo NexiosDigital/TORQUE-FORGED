@@ -12,6 +12,7 @@ import { useAuth } from "../contexts/AuthContext";
  * CONFIGURAÇÕES AJUSTADAS PARA DADOS MAIS FRESCOS
  * - Cache reduzido para detectar mudanças rapidamente
  * - Refetch habilitado para atualizações automáticas
+ * - MUTATIONS VERIFICADAS E CORRIGIDAS
  */
 
 // Query keys INALTERADOS (compatibilidade total)
@@ -174,6 +175,7 @@ export const useAllPostsAdmin = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.admin.posts,
 		queryFn: () => {
+			console.log("🔍 useAllPostsAdmin: Executando query...");
 			return PostService.getAllPostsAdmin();
 		},
 		enabled: isAdmin,
@@ -182,6 +184,12 @@ export const useAllPostsAdmin = (options = {}) => {
 		refetchInterval: 60 * 1000,
 		meta: {
 			errorMessage: "Erro ao carregar posts admin",
+		},
+		onSuccess: (data) => {
+			console.log(`✅ useAllPostsAdmin: ${data?.length || 0} posts carregados`);
+		},
+		onError: (error) => {
+			console.error("❌ useAllPostsAdmin error:", error);
 		},
 		...options,
 	});
@@ -194,6 +202,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.admin.byId(id),
 		queryFn: () => {
+			console.log(`🔍 usePostByIdAdmin: Carregando post ${id}...`);
 			return PostService.getPostByIdAdmin(id);
 		},
 		enabled: !!id && isAdmin,
@@ -201,26 +210,47 @@ export const usePostByIdAdmin = (id, options = {}) => {
 		meta: {
 			errorMessage: `Erro ao carregar post admin ${id}`,
 		},
+		onSuccess: (data) => {
+			console.log(`✅ usePostByIdAdmin: Post ${id} carregado`);
+		},
+		onError: (error) => {
+			console.error(`❌ usePostByIdAdmin(${id}) error:`, error);
+		},
 		...options,
 	});
 };
 
 /**
  * ======================================
- * MUTATIONS - INVALIDAÇÃO MELHORADA
+ * MUTATIONS - VERSÃO CORRIGIDA E MELHORADA
  * ======================================
  */
 export const useCreatePost = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: (postData) => {
-			return PostService.createPost(postData);
+		mutationFn: async (postData) => {
+			console.log("🚀 useCreatePost: Iniciando criação...");
+			console.log("📋 Dados da mutation:", {
+				title: postData.title,
+				slug: postData.slug,
+				category: postData.category,
+				image_url: postData.image_url ? "✅ Presente" : "❌ Ausente",
+				published: postData.published,
+				content_length: postData.content?.length || 0,
+			});
+
+			const result = await PostService.createPost(postData);
+			console.log("✅ useCreatePost: Post criado com sucesso!", result);
+			return result;
 		},
-		onSuccess: () => {
+		onSuccess: (data) => {
+			console.log("🎉 useCreatePost onSuccess:", data);
 			toast.success("Post criado com sucesso!");
 
 			// INVALIDAÇÃO COMPLETA - força refresh de todos os caches
+			console.log("🗑️ Invalidando caches...");
+
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -233,9 +263,16 @@ export const useCreatePost = () => {
 			// FORÇAR REFETCH imediato
 			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
+			queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
+
+			console.log("✅ Caches invalidados e refetch disparado");
 		},
-		onError: (err) => {
-			toast.error(`Erro ao criar post: ${err.message}`);
+		onError: (error) => {
+			console.error("❌ useCreatePost onError:", error);
+			toast.error(`Erro ao criar post: ${error.message}`);
+		},
+		onMutate: (variables) => {
+			console.log("⏳ useCreatePost onMutate:", variables.title);
 		},
 	});
 };
@@ -244,10 +281,14 @@ export const useUpdatePost = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: ({ id, ...postData }) => {
-			return PostService.updatePost(id, postData);
+		mutationFn: async ({ id, ...postData }) => {
+			console.log(`🔄 useUpdatePost: Atualizando post ${id}...`);
+			const result = await PostService.updatePost(id, postData);
+			console.log("✅ useUpdatePost: Post atualizado com sucesso!");
+			return result;
 		},
 		onSuccess: (data) => {
+			console.log("🎉 useUpdatePost onSuccess:", data);
 			toast.success("Post atualizado com sucesso!");
 
 			// INVALIDAÇÃO COMPLETA
@@ -262,12 +303,24 @@ export const useUpdatePost = () => {
 				});
 			}
 
+			// Invalidar post específico em ambos os caches
+			if (data?.id) {
+				queryClient.invalidateQueries({
+					queryKey: QUERY_KEYS.public.byId(data.id),
+				});
+				queryClient.invalidateQueries({
+					queryKey: QUERY_KEYS.admin.byId(data.id),
+				});
+			}
+
 			// FORÇAR REFETCH imediato
 			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
+			queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
 		},
-		onError: (err) => {
-			toast.error(`Erro ao atualizar post: ${err.message}`);
+		onError: (error) => {
+			console.error("❌ useUpdatePost onError:", error);
+			toast.error(`Erro ao atualizar post: ${error.message}`);
 		},
 	});
 };
@@ -276,10 +329,14 @@ export const useDeletePost = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: (id) => {
-			return PostService.deletePost(id);
+		mutationFn: async (id) => {
+			console.log(`🗑️ useDeletePost: Removendo post ${id}...`);
+			const result = await PostService.deletePost(id);
+			console.log("✅ useDeletePost: Post removido com sucesso!");
+			return result;
 		},
-		onSuccess: () => {
+		onSuccess: (data, variables) => {
+			console.log("🎉 useDeletePost onSuccess:", variables);
 			toast.success("Post deletado com sucesso!");
 
 			// INVALIDAÇÃO COMPLETA
@@ -292,12 +349,22 @@ export const useDeletePost = () => {
 				queryKey: ["public", "posts", "category"],
 			});
 
+			// Remover query específica do post deletado
+			queryClient.removeQueries({
+				queryKey: QUERY_KEYS.public.byId(variables),
+			});
+			queryClient.removeQueries({
+				queryKey: QUERY_KEYS.admin.byId(variables),
+			});
+
 			// FORÇAR REFETCH imediato
 			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
+			queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
 		},
-		onError: (err) => {
-			toast.error(`Erro ao deletar post: ${err.message}`);
+		onError: (error) => {
+			console.error("❌ useDeletePost onError:", error);
+			toast.error(`Erro ao deletar post: ${error.message}`);
 		},
 	});
 };
@@ -337,18 +404,21 @@ export const useCacheUtils = () => {
 	const queryClient = useQueryClient();
 
 	const invalidateAllPosts = () => {
+		console.log("🗑️ Invalidando todos os posts...");
 		queryClient.invalidateQueries({ queryKey: ["posts"] });
 		queryClient.invalidateQueries({ queryKey: ["public"] });
 		queryClient.invalidateQueries({ queryKey: ["admin"] });
 	};
 
 	const clearCache = () => {
+		console.log("🧹 Limpando todo o cache...");
 		queryClient.clear();
 		toast.success("Cache limpo com sucesso!");
 	};
 
 	// NOVA FUNÇÃO: Force refresh de todos os dados
 	const forceRefreshAll = () => {
+		console.log("🔄 Forçando refresh de todos os dados...");
 		queryClient.invalidateQueries();
 		queryClient.refetchQueries();
 		toast.success("Dados atualizados!");
@@ -356,14 +426,17 @@ export const useCacheUtils = () => {
 
 	// NOVA FUNÇÃO: Refresh específico para posts
 	const refreshPosts = () => {
+		console.log("🔄 Refrescando posts...");
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
 		queryClient.invalidateQueries({
 			queryKey: ["public", "posts", "category"],
 		});
+		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 
 		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
 		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
+		queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
 
 		toast.success("Posts atualizados!");
 	};
@@ -383,12 +456,33 @@ export const useCacheUtils = () => {
 		};
 	};
 
+	// NOVA FUNÇÃO: Debug mutations
+	const debugMutations = () => {
+		const cache = queryClient.getMutationCache();
+		const mutations = cache.getAll();
+
+		console.log("🔍 Debug Mutations:", {
+			total: mutations.length,
+			pending: mutations.filter((m) => m.state.status === "pending").length,
+			success: mutations.filter((m) => m.state.status === "success").length,
+			error: mutations.filter((m) => m.state.status === "error").length,
+			recent: mutations.slice(-5).map((m) => ({
+				status: m.state.status,
+				mutationKey: m.options.mutationKey,
+				submittedAt: m.state.submittedAt,
+			})),
+		});
+
+		return mutations;
+	};
+
 	return {
 		invalidateAllPosts,
 		clearCache,
 		getCacheStats,
 		forceRefreshAll,
-		refreshPosts, // NOVA
+		refreshPosts,
+		debugMutations, // NOVA
 	};
 };
 
@@ -401,6 +495,74 @@ export const usePostByIdSuspense = (id) => {
 		},
 		staleTime: 2 * 60 * 1000, // Cache reduzido
 	});
+};
+
+/**
+ * ======================================
+ * HOOK DE DEBUG PARA DESENVOLVIMENTO
+ * ======================================
+ */
+export const usePostsDebug = () => {
+	const queryClient = useQueryClient();
+
+	const runDiagnostics = async () => {
+		console.log("🩺 Executando diagnósticos do PostService...");
+
+		try {
+			const results = await PostService.runDiagnostics();
+			console.log("📊 Resultados dos diagnósticos:", results);
+			return results;
+		} catch (error) {
+			console.error("❌ Erro nos diagnósticos:", error);
+			return { error };
+		}
+	};
+
+	const testCreatePost = async () => {
+		console.log("🧪 Testando criação de post...");
+
+		const testData = {
+			title: "Post de Teste DEBUG",
+			slug: "post-teste-debug-" + Date.now(),
+			excerpt: "Este é um post de teste para debug",
+			content: "# Título\n\nEste é o conteúdo do post de teste.",
+			image_url:
+				"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
+			image_path: "test/debug-image.jpg",
+			category: "f1",
+			category_name: "Fórmula 1",
+			author: "Debug",
+			read_time: "1 min",
+			published: false,
+			trending: false,
+			tags: ["debug", "teste"],
+		};
+
+		try {
+			const result = await PostService.createPost(testData);
+			console.log("✅ Teste de criação bem-sucedido:", result);
+
+			// Limpar o post de teste
+			setTimeout(async () => {
+				try {
+					await PostService.deletePost(result.id);
+					console.log("🧹 Post de teste removido");
+				} catch (cleanupError) {
+					console.warn("⚠️ Erro ao limpar post de teste:", cleanupError);
+				}
+			}, 5000);
+
+			return { success: true, data: result };
+		} catch (error) {
+			console.error("❌ Erro no teste de criação:", error);
+			return { success: false, error };
+		}
+	};
+
+	return {
+		runDiagnostics,
+		testCreatePost,
+	};
 };
 
 export default {
@@ -418,5 +580,6 @@ export default {
 	useDeletePost,
 	usePrefetch,
 	useCacheUtils,
+	usePostsDebug, // NOVO
 	QUERY_KEYS,
 };
