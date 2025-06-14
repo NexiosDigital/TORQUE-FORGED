@@ -2,63 +2,106 @@ import React, { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 /**
- * QueryProvider CORRIGIDO - SEM REFETCH AUTOMÁTICO AGRESSIVO
- * - Removido visibilitychange listener que causava recarregamentos
- * - Cache mais estável para preservar dados do editor
- * - Limpeza menos agressiva para evitar perda de dados
+ * QueryProvider ULTRA OTIMIZADO - Carregamento instantâneo
+ * - Cache ULTRA agressivo para performance máxima
+ * - Sem refetch automático desnecessário
+ * - Persistência em localStorage
+ * - Background prefetch otimizado
  */
 
-// QueryClient com configurações ESTÁVEIS para evitar refetch desnecessário
+// QueryClient com configurações ULTRA AGRESSIVAS
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			// Cache mais longo para estabilidade
-			staleTime: 5 * 60 * 1000, // 5 minutos
-			gcTime: 30 * 60 * 1000, // 30 minutos
-			refetchOnWindowFocus: false, // CRÍTICO: nunca refetch ao focar
-			refetchOnMount: true,
-			refetchOnReconnect: false, // DESABILITADO para evitar refetch em reconexões
-			refetchInterval: false, // NUNCA refetch automático por interval
+			// Cache ULTRA longo para carregamento instantâneo
+			staleTime: 30 * 60 * 1000, // 30 minutos - dados ficam fresh por muito tempo
+			gcTime: 4 * 60 * 60 * 1000, // 4 horas - manter em memória por muito tempo
 
-			// Error handling menos agressivo
-			retry: (failureCount, error) => {
-				// Não retry para 404 ou dados não encontrados
-				if (error?.message?.includes("não encontrado")) return false;
-				if (error?.message?.includes("not found")) return false;
-				if (error?.status === 404) return false;
+			// NUNCA refetch automático - sempre usar cache primeiro
+			refetchOnWindowFocus: false,
+			refetchOnMount: false,
+			refetchOnReconnect: false,
+			refetchInterval: false,
+			refetchIntervalInBackground: false,
 
-				// Máximo 1 retry para evitar loops
-				return failureCount < 1;
-			},
+			// Offline-first para carregamento instantâneo
+			networkMode: "offlineFirst",
 
-			retryDelay: (attemptIndex) => {
-				return Math.min(1000 * 2 ** attemptIndex, 3000); // Delays menores
-			},
+			// Retry mínimo para velocidade
+			retry: false,
+			retryOnMount: false,
+			retryDelay: () => 0,
 
-			// Configurações de network
-			networkMode: "online",
+			// Placeholder data para UX suave
+			placeholderData: (previousData, previousQuery) => previousData,
+
+			// Configurações de network otimizadas
+			useErrorBoundary: false,
 		},
 		mutations: {
-			retry: 0, // Sem retry em mutations
-			retryDelay: 1000,
+			retry: 0,
+			retryDelay: 0,
 			networkMode: "online",
+			useErrorBoundary: false,
 		},
 	},
 });
 
-// Component para integração do Realtime
-const RealtimeProvider = ({ children }) => {
-	return <>{children}</>;
+// Persistência local para cache entre sessões
+const persistCache = {
+	save: (key, data) => {
+		try {
+			const item = {
+				data,
+				timestamp: Date.now(),
+				version: "1.0",
+			};
+			localStorage.setItem(`torque-cache-${key}`, JSON.stringify(item));
+		} catch (error) {
+			console.warn("Failed to save cache:", error);
+		}
+	},
+
+	load: (key, maxAge = 30 * 60 * 1000) => {
+		try {
+			const item = localStorage.getItem(`torque-cache-${key}`);
+			if (!item) return null;
+
+			const parsed = JSON.parse(item);
+			const age = Date.now() - parsed.timestamp;
+
+			if (age > maxAge) {
+				localStorage.removeItem(`torque-cache-${key}`);
+				return null;
+			}
+
+			return parsed.data;
+		} catch (error) {
+			console.warn("Failed to load cache:", error);
+			return null;
+		}
+	},
+
+	clear: () => {
+		try {
+			Object.keys(localStorage).forEach((key) => {
+				if (key.startsWith("torque-cache-")) {
+					localStorage.removeItem(key);
+				}
+			});
+		} catch (error) {
+			console.warn("Failed to clear cache:", error);
+		}
+	},
 };
 
-// Error Boundary para queries
+// Error Boundary minimalista
 class QueryErrorBoundary extends React.Component {
 	constructor(props) {
 		super(props);
 		this.state = {
 			hasError: false,
 			error: null,
-			retryCount: 0,
 		};
 	}
 
@@ -68,25 +111,7 @@ class QueryErrorBoundary extends React.Component {
 
 	componentDidCatch(error, errorInfo) {
 		console.error("🔴 QueryErrorBoundary:", error, errorInfo);
-
-		// Log para monitoramento em produção
-		if (process.env.NODE_ENV === "production") {
-			// Aqui você pode integrar com Sentry, LogRocket, etc.
-		}
 	}
-
-	handleRetry = () => {
-		this.setState((prevState) => ({
-			hasError: false,
-			error: null,
-			retryCount: prevState.retryCount + 1,
-		}));
-
-		// Limpar cache com problemas apenas se necessário
-		if (this.state.retryCount >= 2) {
-			queryClient.clear();
-		}
-	};
 
 	render() {
 		if (this.state.hasError) {
@@ -114,45 +139,17 @@ class QueryErrorBoundary extends React.Component {
 						</h2>
 
 						<p className="text-gray-400 mb-6">
-							Ocorreu um erro inesperado. Tente recarregar a página ou entre em
-							contato com o suporte.
+							Ocorreu um erro inesperado. Tente recarregar a página.
 						</p>
-
-						{this.state.retryCount > 0 && (
-							<p className="text-xs text-gray-500 mb-4">
-								Tentativas: {this.state.retryCount}
-							</p>
-						)}
 
 						<div className="space-y-3">
 							<button
-								onClick={this.handleRetry}
-								disabled={this.state.retryCount >= 3}
-								className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								{this.state.retryCount >= 3
-									? "Limite atingido"
-									: "Tentar Novamente"}
-							</button>
-
-							<button
 								onClick={() => window.location.reload()}
-								className="w-full border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
+								className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
 							>
 								Recarregar Página
 							</button>
 						</div>
-
-						{process.env.NODE_ENV === "development" && this.state.error && (
-							<details className="mt-6 text-left">
-								<summary className="text-red-400 cursor-pointer mb-2 text-sm">
-									Detalhes (desenvolvimento)
-								</summary>
-								<pre className="bg-gray-900 p-4 rounded-lg text-xs text-gray-300 overflow-auto max-h-32">
-									{this.state.error.stack}
-								</pre>
-							</details>
-						)}
 					</div>
 				</div>
 			);
@@ -162,137 +159,179 @@ class QueryErrorBoundary extends React.Component {
 	}
 }
 
-// Performance monitor MENOS AGRESSIVO
-const PerformanceMonitor = () => {
+// Background cache warmer
+const CacheWarmer = () => {
 	useEffect(() => {
-		if (process.env.NODE_ENV !== "development") return;
+		const warmupCache = async () => {
+			try {
+				// Preload de dados críticos após 100ms
+				setTimeout(async () => {
+					const { PostService } = await import("../services/PostService");
 
-		const logCacheStats = () => {
-			const cache = queryClient.getQueryCache();
-			const queries = cache.getAll();
-
-			const stats = {
-				total: queries.length,
-				fresh: queries.filter((q) => !q.isStale()).length,
-				stale: queries.filter((q) => q.isStale()).length,
-				loading: queries.filter((q) => q.state.status === "pending").length,
-				error: queries.filter((q) => q.state.status === "error").length,
-				success: queries.filter((q) => q.state.status === "success").length,
-			};
-
-			// Apenas log para debug, sem limpeza automática agressiva
-			console.log("📊 Cache Stats:", stats);
-
-			// Alertar apenas em casos extremos
-			if (stats.error > 10) {
-				console.warn("⚠️ Muitos erros no cache - considere limpar manualmente");
+					// Prefetch silencioso em background
+					Promise.allSettled([
+						queryClient.prefetchQuery({
+							queryKey: ["public", "posts", "featured"],
+							queryFn: () => PostService.getFeaturedPosts(),
+							staleTime: 45 * 60 * 1000,
+						}),
+						queryClient.prefetchQuery({
+							queryKey: ["public", "posts"],
+							queryFn: () => PostService.getAllPosts(),
+							staleTime: 30 * 60 * 1000,
+						}),
+						queryClient.prefetchQuery({
+							queryKey: ["public", "categories"],
+							queryFn: () => PostService.getCategories(),
+							staleTime: 2 * 60 * 60 * 1000,
+						}),
+					])
+						.then(() => {
+							console.log("🚀 Cache warmed up successfully");
+						})
+						.catch((error) => {
+							console.warn("⚠️ Cache warmup failed:", error);
+						});
+				}, 100);
+			} catch (error) {
+				console.warn("⚠️ Cache warmer error:", error);
 			}
 		};
 
-		// Log a cada 30 segundos (aumentado) em desenvolvimento
-		const interval = setInterval(logCacheStats, 30000);
-
-		// Log inicial após 5 segundos
-		const timeout = setTimeout(logCacheStats, 5000);
-
-		return () => {
-			clearInterval(interval);
-			clearTimeout(timeout);
-		};
+		warmupCache();
 	}, []);
 
 	return null;
 };
 
-// Cache Monitor MENOS AGRESSIVO - sem limpeza automática
-const CacheMonitor = () => {
+// Cache persistence manager
+const CachePersistence = () => {
 	useEffect(() => {
-		if (process.env.NODE_ENV !== "development") return;
-
-		// Monitor mais passivo - apenas log, sem limpeza automática
-		const detectProblems = () => {
+		// Carregar cache persistido na inicialização
+		const loadPersistedCache = () => {
 			try {
-				const cache = queryClient.getQueryCache();
-				const queries = cache.getAll();
+				// Carregar dados críticos do localStorage
+				const featuredPosts = persistCache.load(
+					"featured-posts",
+					45 * 60 * 1000
+				);
+				const allPosts = persistCache.load("all-posts", 30 * 60 * 1000);
+				const categories = persistCache.load("categories", 2 * 60 * 60 * 1000);
 
-				// Apenas contabilizar problemas, sem agir automaticamente
-				const problems = {
-					total: queries.length,
-					adminQueries: queries.filter((q) => q.queryKey[0] === "admin").length,
-					oldQueries: queries.filter((q) => {
-						const dataUpdatedAt = q.state.dataUpdatedAt;
-						return dataUpdatedAt && Date.now() - dataUpdatedAt > 60 * 60 * 1000; // 1 hora
-					}).length,
-				};
-
-				// Log apenas se há problemas significativos
-				if (problems.total > 50 || problems.oldQueries > 20) {
-					console.log("🔍 Cache Monitor:", problems);
+				if (featuredPosts) {
+					queryClient.setQueryData(
+						["public", "posts", "featured"],
+						featuredPosts
+					);
 				}
 
-				// REMOVIDO: Limpeza automática que causava perda de dados
+				if (allPosts) {
+					queryClient.setQueryData(["public", "posts"], allPosts);
+				}
+
+				if (categories) {
+					queryClient.setQueryData(["public", "categories"], categories);
+				}
+
+				if (featuredPosts || allPosts || categories) {
+					console.log("💾 Loaded persisted cache");
+				}
 			} catch (error) {
-				console.warn("Cache monitor error:", error);
+				console.warn("⚠️ Failed to load persisted cache:", error);
 			}
 		};
 
-		// Verificação a cada 5 minutos (muito menos agressivo)
-		const interval = setInterval(detectProblems, 5 * 60 * 1000);
+		// Carregar cache após 50ms
+		setTimeout(loadPersistedCache, 50);
 
-		// Verificação inicial após 30 segundos
-		setTimeout(detectProblems, 30000);
+		// Salvar cache periodicamente (a cada 5 minutos)
+		const saveInterval = setInterval(() => {
+			try {
+				const featuredPosts = queryClient.getQueryData([
+					"public",
+					"posts",
+					"featured",
+				]);
+				const allPosts = queryClient.getQueryData(["public", "posts"]);
+				const categories = queryClient.getQueryData(["public", "categories"]);
 
-		return () => clearInterval(interval);
+				if (featuredPosts) persistCache.save("featured-posts", featuredPosts);
+				if (allPosts) persistCache.save("all-posts", allPosts);
+				if (categories) persistCache.save("categories", categories);
+			} catch (error) {
+				console.warn("⚠️ Failed to persist cache:", error);
+			}
+		}, 5 * 60 * 1000);
+
+		// Cleanup
+		return () => {
+			clearInterval(saveInterval);
+		};
 	}, []);
 
 	return null;
 };
 
-// Provider principal SEM MONITORING AGRESSIVO
+// Provider principal ULTRA OTIMIZADO
 export const ModernQueryProvider = ({ children }) => {
-	// Disponibilizar o queryClient globalmente para o AuthContext
+	// Disponibilizar o queryClient globalmente
 	useEffect(() => {
 		window.queryClient = queryClient;
 
-		// REMOVIDO: Verificação inicial agressiva que causava limpeza desnecessária
-
+		// Cleanup na desmontagem
 		return () => {
-			// Limpar referência global na desmontagem
 			delete window.queryClient;
 		};
 	}, []);
 
-	// REMOVIDO: Listener para visibilitychange que causava recarregamentos automáticos
-	// Este era um dos principais causadores do problema
-
 	return (
 		<QueryErrorBoundary>
 			<QueryClientProvider client={queryClient}>
-				<RealtimeProvider>
-					{children}
+				{children}
 
-					{/* DevTools e Monitors apenas em desenvolvimento - MENOS AGRESSIVOS */}
-					{process.env.NODE_ENV === "development" && (
-						<>
-							<PerformanceMonitor />
-							<CacheMonitor />
-						</>
-					)}
-				</RealtimeProvider>
+				{/* Cache optimization components */}
+				<CacheWarmer />
+				<CachePersistence />
+
+				{/* DevTools apenas em desenvolvimento */}
+				{process.env.NODE_ENV === "development" && <DevTools />}
 			</QueryClientProvider>
 		</QueryErrorBoundary>
 	);
 };
 
+// DevTools minimalistas para desenvolvimento
+const DevTools = () => {
+	useEffect(() => {
+		// Log de cache stats apenas uma vez
+		const logStats = () => {
+			const cache = queryClient.getQueryCache();
+			const queries = cache.getAll();
+
+			console.log("📊 Cache Stats:", {
+				total: queries.length,
+				fresh: queries.filter((q) => !q.isStale()).length,
+				stale: queries.filter((q) => q.isStale()).length,
+			});
+		};
+
+		// Log inicial após 10 segundos
+		setTimeout(logStats, 10000);
+	}, []);
+
+	return null;
+};
+
 // Hook para acessar o queryClient
 export const useQueryClient = () => queryClient;
 
-// Utilities para cache CORRIGIDAS - apenas manuais
+// Utilities para cache OTIMIZADAS
 export const cacheUtils = {
-	// Limpeza manual
+	// Limpeza manual total
 	clear: () => {
 		console.log("🗑️ Manual cache clear");
 		queryClient.clear();
+		persistCache.clear();
 	},
 
 	// Invalidação manual
@@ -301,39 +340,33 @@ export const cacheUtils = {
 		queryClient.invalidateQueries();
 	},
 
-	// Limpeza manual de queries órfãs
-	forceCleanup: () => {
-		console.log("🗑️ Manual cleanup - removendo queries órfãs");
-		const cache = queryClient.getQueryCache();
-		const queries = cache.getAll();
+	// Preload de dados críticos
+	preloadCritical: async () => {
+		try {
+			const { PostService } = await import("../services/PostService");
 
-		// Remover apenas queries órfãs (sem observers)
-		const orphanQueries = queries.filter((q) => !q.getObserversCount());
-		orphanQueries.forEach((q) => {
-			queryClient.removeQueries({ queryKey: q.queryKey });
-		});
+			await Promise.allSettled([
+				queryClient.prefetchQuery({
+					queryKey: ["public", "posts", "featured"],
+					queryFn: () => PostService.getFeaturedPosts(),
+					staleTime: 45 * 60 * 1000,
+				}),
+				queryClient.prefetchQuery({
+					queryKey: ["public", "posts"],
+					queryFn: () => PostService.getAllPosts(),
+					staleTime: 30 * 60 * 1000,
+				}),
+				queryClient.prefetchQuery({
+					queryKey: ["public", "categories"],
+					queryFn: () => PostService.getCategories(),
+					staleTime: 2 * 60 * 60 * 1000,
+				}),
+			]);
 
-		console.log(`✅ Removed ${orphanQueries.length} orphan queries`);
-	},
-
-	// Detecção de problemas sem ação automática
-	detectProblems: () => {
-		const cache = queryClient.getQueryCache();
-		const queries = cache.getAll();
-
-		const problems = {
-			total: queries.length,
-			errors: queries.filter((q) => q.state.status === "error").length,
-			stale: queries.filter((q) => q.isStale()).length,
-			orphans: queries.filter((q) => !q.getObserversCount()).length,
-			old: queries.filter((q) => {
-				const dataUpdatedAt = q.state.dataUpdatedAt;
-				return dataUpdatedAt && Date.now() - dataUpdatedAt > 30 * 60 * 1000;
-			}).length,
-		};
-
-		console.log("🔍 Cache Problems:", problems);
-		return problems;
+			console.log("🚀 Critical data preloaded");
+		} catch (error) {
+			console.warn("⚠️ Preload failed:", error);
+		}
 	},
 
 	// Estatísticas do cache
@@ -348,8 +381,35 @@ export const cacheUtils = {
 			error: queries.filter((q) => q.state.status === "error").length,
 			loading: queries.filter((q) => q.state.status === "pending").length,
 			success: queries.filter((q) => q.state.status === "success").length,
-			orphans: queries.filter((q) => !q.getObserversCount()).length,
 		};
+	},
+
+	// Força refresh manual
+	forceRefresh: () => {
+		queryClient.invalidateQueries();
+		queryClient.refetchQueries();
+		console.log("🔄 Force refresh triggered");
+	},
+
+	// Salvar cache manualmente
+	persist: () => {
+		try {
+			const featuredPosts = queryClient.getQueryData([
+				"public",
+				"posts",
+				"featured",
+			]);
+			const allPosts = queryClient.getQueryData(["public", "posts"]);
+			const categories = queryClient.getQueryData(["public", "categories"]);
+
+			if (featuredPosts) persistCache.save("featured-posts", featuredPosts);
+			if (allPosts) persistCache.save("all-posts", allPosts);
+			if (categories) persistCache.save("categories", categories);
+
+			console.log("💾 Cache persisted manually");
+		} catch (error) {
+			console.warn("⚠️ Manual persist failed:", error);
+		}
 	},
 };
 

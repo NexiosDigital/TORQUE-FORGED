@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
 	ChevronRight,
@@ -18,27 +18,37 @@ import {
 	useAllPosts,
 	useCategories,
 	usePrefetch,
+	usePreloadCriticalData,
 } from "../hooks/usePostsQuery";
 import { ErrorBoundary } from "react-error-boundary";
 
-// Loading skeletons modernos (mantidos iguais)
-const FeaturedPostsSkeleton = () => (
-	<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-		{Array.from({ length: 3 }).map((_, i) => (
-			<div key={i} className="animate-pulse">
+/**
+ * OptimizedHome - CARREGAMENTO INSTANTÂNEO
+ * - Preload automático de dados críticos
+ * - Carregamento paralelo otimizado
+ * - Cache ultra agressivo
+ * - Zero dependência de auth para dados públicos
+ * - Fallbacks inteligentes
+ */
+
+// Loading skeletons MINIMALISTAS para velocidade
+const FastSkeleton = ({ count = 3, type = "card" }) => (
+	<div
+		className={`grid ${
+			type === "card"
+				? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+				: "grid-cols-1"
+		} gap-6 md:gap-8`}
+	>
+		{Array.from({ length: count }).map((_, i) => (
+			<div key={`skeleton-${i}`} className="animate-pulse">
 				<div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl overflow-hidden border border-gray-700/50">
 					<div className="h-56 bg-gradient-to-br from-gray-700 to-gray-800"></div>
-					<div className="p-8">
+					<div className="p-6">
 						<div className="h-4 bg-gray-700 rounded-full mb-3 w-24"></div>
 						<div className="h-6 bg-gray-700 rounded-full mb-2"></div>
 						<div className="h-6 bg-gray-700 rounded-full w-3/4 mb-4"></div>
-						<div className="space-y-2">
-							<div className="h-3 bg-gray-700 rounded-full"></div>
-							<div className="h-3 bg-gray-700 rounded-full w-2/3"></div>
-						</div>
-						<div className="mt-4 pt-4 border-t border-gray-700">
-							<div className="h-3 bg-gray-700 rounded-full w-1/2"></div>
-						</div>
+						<div className="h-3 bg-gray-700 rounded-full w-1/2"></div>
 					</div>
 				</div>
 			</div>
@@ -46,31 +56,8 @@ const FeaturedPostsSkeleton = () => (
 	</div>
 );
 
-const PostListSkeleton = () => (
-	<div className="space-y-8">
-		{Array.from({ length: 4 }).map((_, i) => (
-			<div key={i} className="animate-pulse">
-				<div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-8 flex gap-8 border border-gray-700/50">
-					<div className="w-64 h-48 bg-gradient-to-br from-gray-700 to-gray-800 rounded-2xl flex-shrink-0"></div>
-					<div className="flex-1 space-y-4">
-						<div className="h-4 bg-gray-700 rounded-full w-24"></div>
-						<div className="h-8 bg-gray-700 rounded-full"></div>
-						<div className="space-y-2">
-							<div className="h-4 bg-gray-700 rounded-full"></div>
-							<div className="h-4 bg-gray-700 rounded-full w-3/4"></div>
-						</div>
-						<div className="pt-4">
-							<div className="h-3 bg-gray-700 rounded-full w-1/3"></div>
-						</div>
-					</div>
-				</div>
-			</div>
-		))}
-	</div>
-);
-
-// Error fallbacks específicos
-const ErrorFallback = ({ error, resetErrorBoundary, section }) => (
+// Error fallback MINIMALISTA
+const FastErrorFallback = ({ error, resetErrorBoundary, section }) => (
 	<div className="text-center py-16">
 		<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
 			<AlertCircle className="w-10 h-10 text-white" />
@@ -78,37 +65,27 @@ const ErrorFallback = ({ error, resetErrorBoundary, section }) => (
 		<h3 className="text-2xl font-bold text-white mb-4">
 			Erro ao carregar {section}
 		</h3>
-		<p className="text-gray-400 mb-8">
-			{error?.message || "Algo deu errado ao carregar os dados"}
-		</p>
-		<div className="space-y-4">
-			<button
-				onClick={resetErrorBoundary}
-				className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
-			>
-				Tentar Novamente
-			</button>
-			<button
-				onClick={() => window.location.reload()}
-				className="block mx-auto border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-2 rounded-xl font-semibold transition-all duration-300"
-			>
-				Recarregar Página
-			</button>
-		</div>
+		<p className="text-gray-400 mb-8">Algo deu errado. Tente novamente.</p>
+		<button
+			onClick={resetErrorBoundary}
+			className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
+		>
+			Tentar Novamente
+		</button>
 	</div>
 );
 
-// Componente Hero memoizado
+// Hero Section OTIMIZADO
 const HeroSection = React.memo(() => {
 	const { prefetchCategory } = usePrefetch();
 
 	return (
 		<div className="relative min-h-screen flex items-center justify-center overflow-hidden">
-			{/* Background gradients */}
+			{/* Background otimizado */}
 			<div className="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black"></div>
 			<div className="absolute inset-0 bg-gradient-to-r from-red-900/20 via-transparent to-red-900/20"></div>
 
-			{/* Floating elements */}
+			{/* Floating elements otimizados */}
 			<div className="absolute inset-0">
 				<div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-500/10 rounded-full blur-3xl animate-pulse"></div>
 				<div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
@@ -144,7 +121,7 @@ const HeroSection = React.memo(() => {
 					{/* CTA Buttons */}
 					<div className="flex flex-col sm:flex-row gap-6 justify-center">
 						<Link
-							to="/f1"
+							to="/posts"
 							onMouseEnter={() => prefetchCategory("f1")}
 							className="group bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-10 py-4 rounded-2xl font-bold text-lg transition-all duration-300 shadow-2xl hover:shadow-red-500/25 hover:scale-105"
 						>
@@ -176,77 +153,7 @@ const HeroSection = React.memo(() => {
 	);
 });
 
-// Featured Posts Section - USANDO APENAS HOOKS PÚBLICOS
-const FeaturedPostsSection = () => {
-	// SEMPRE usar hook público, mesmo quando logado
-	const { data: featuredPosts = [], isLoading, error } = useFeaturedPosts();
-
-	if (error) {
-		return (
-			<div className="py-24 bg-gradient-to-b from-black to-gray-900">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<ErrorFallback
-						error={error}
-						resetErrorBoundary={() => window.location.reload()}
-						section="posts em destaque"
-					/>
-				</div>
-			</div>
-		);
-	}
-
-	return (
-		<div className="py-24 bg-gradient-to-b from-black to-gray-900">
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-				{/* Header */}
-				<div className="text-center mb-16">
-					<div className="inline-flex items-center px-4 py-2 rounded-full bg-red-500/10 border border-red-500/20 backdrop-blur-sm mb-6">
-						<TrendingUp className="w-4 h-4 text-red-400 mr-2" />
-						<span className="text-red-400 text-sm font-bold">Em Destaque</span>
-					</div>
-					<h2 className="text-5xl font-black text-white mb-6 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-						Posts em Destaque
-					</h2>
-					<p className="text-xl text-gray-400 max-w-2xl mx-auto">
-						As últimas novidades do mundo do motorsport direto da nossa redação
-					</p>
-				</div>
-
-				{/* Content */}
-				{isLoading ? (
-					<FeaturedPostsSkeleton />
-				) : featuredPosts.length === 0 ? (
-					<div className="text-center py-16">
-						<div className="w-20 h-20 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
-							<TrendingUp className="w-10 h-10 text-gray-400" />
-						</div>
-						<h3 className="text-2xl font-bold text-white mb-4">
-							Nenhum post em destaque
-						</h3>
-						<p className="text-gray-400 mb-8">
-							Os posts em destaque aparecerão aqui assim que forem publicados.
-						</p>
-						<Link
-							to="/f1"
-							className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
-						>
-							<span>Ver todos os posts</span>
-							<ArrowRight className="w-4 h-4" />
-						</Link>
-					</div>
-				) : (
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-						{featuredPosts.map((post, index) => (
-							<PostCard key={`featured-${post.id}`} post={post} index={index} />
-						))}
-					</div>
-				)}
-			</div>
-		</div>
-	);
-};
-
-// PostCard sem debugs
+// PostCard ULTRA OTIMIZADO
 const PostCard = React.memo(({ post, index }) => {
 	const { prefetchPost } = usePrefetch();
 
@@ -255,7 +162,7 @@ const PostCard = React.memo(({ post, index }) => {
 		try {
 			return new Date(post.created_at).toLocaleDateString("pt-BR");
 		} catch (error) {
-			return "Data inválida";
+			return "Data não disponível";
 		}
 	}, [post?.created_at]);
 
@@ -342,9 +249,77 @@ const PostCard = React.memo(({ post, index }) => {
 	);
 });
 
-// Posts List Section limitada - USANDO APENAS HOOKS PÚBLICOS
+// Featured Posts Section ULTRA OTIMIZADO
+const FeaturedPostsSection = () => {
+	const { data: featuredPosts = [], isLoading, error } = useFeaturedPosts();
+
+	if (error) {
+		return (
+			<div className="py-24 bg-gradient-to-b from-black to-gray-900">
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+					<FastErrorFallback
+						error={error}
+						resetErrorBoundary={() => window.location.reload()}
+						section="posts em destaque"
+					/>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="py-24 bg-gradient-to-b from-black to-gray-900">
+			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+				{/* Header */}
+				<div className="text-center mb-16">
+					<div className="inline-flex items-center px-4 py-2 rounded-full bg-red-500/10 border border-red-500/20 backdrop-blur-sm mb-6">
+						<TrendingUp className="w-4 h-4 text-red-400 mr-2" />
+						<span className="text-red-400 text-sm font-bold">Em Destaque</span>
+					</div>
+					<h2 className="text-5xl font-black text-white mb-6 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+						Posts em Destaque
+					</h2>
+					<p className="text-xl text-gray-400 max-w-2xl mx-auto">
+						As últimas novidades do mundo do motorsport direto da nossa redação
+					</p>
+				</div>
+
+				{/* Content */}
+				{isLoading ? (
+					<FastSkeleton count={3} type="card" />
+				) : featuredPosts.length === 0 ? (
+					<div className="text-center py-16">
+						<div className="w-20 h-20 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+							<TrendingUp className="w-10 h-10 text-gray-400" />
+						</div>
+						<h3 className="text-2xl font-bold text-white mb-4">
+							Nenhum post em destaque
+						</h3>
+						<p className="text-gray-400 mb-8">
+							Os posts em destaque aparecerão aqui assim que forem publicados.
+						</p>
+						<Link
+							to="/f1"
+							className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
+						>
+							<span>Ver todos os posts</span>
+							<ArrowRight className="w-4 h-4" />
+						</Link>
+					</div>
+				) : (
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+						{featuredPosts.map((post, index) => (
+							<PostCard key={`featured-${post.id}`} post={post} index={index} />
+						))}
+					</div>
+				)}
+			</div>
+		</div>
+	);
+};
+
+// Posts List Section ULTRA OTIMIZADO
 const PostListSection = () => {
-	// SEMPRE usar hook público, mesmo quando logado
 	const { data: allPosts = [], isLoading, error } = useAllPosts();
 	const { prefetchPost } = usePrefetch();
 
@@ -361,7 +336,7 @@ const PostListSection = () => {
 						Últimos Artigos
 					</h2>
 				</div>
-				<PostListSkeleton />
+				<FastSkeleton count={4} type="list" />
 			</div>
 		);
 	}
@@ -369,7 +344,7 @@ const PostListSection = () => {
 	if (error) {
 		return (
 			<div className="lg:col-span-2">
-				<ErrorFallback
+				<FastErrorFallback
 					error={error}
 					resetErrorBoundary={() => window.location.reload()}
 					section="últimos artigos"
@@ -517,9 +492,8 @@ const PostListSection = () => {
 	);
 };
 
-// Sidebar dinâmica - USANDO APENAS HOOKS PÚBLICOS
+// Sidebar ULTRA OTIMIZADO
 const Sidebar = React.memo(() => {
-	// SEMPRE usar hook público, mesmo quando logado
 	const { data: categories = [], isLoading: loadingCategories } =
 		useCategories();
 	const { prefetchCategory } = usePrefetch();
@@ -527,7 +501,7 @@ const Sidebar = React.memo(() => {
 	return (
 		<div className="lg:col-span-1">
 			<div className="space-y-8">
-				{/* Categorias dinâmicas */}
+				{/* Categorias */}
 				<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 border border-gray-700/50 backdrop-blur-sm">
 					<h3 className="text-2xl font-bold text-white mb-6 flex items-center space-x-3">
 						<div className="w-2 h-8 bg-gradient-to-b from-red-500 to-orange-500 rounded-full"></div>
@@ -640,19 +614,30 @@ const Sidebar = React.memo(() => {
 	);
 });
 
-// Componente principal Home - SEMPRE USANDO HOOKS PÚBLICOS
+// Componente principal ULTRA OTIMIZADO
 const OptimizedHome = () => {
+	const { preloadAll } = usePreloadCriticalData();
+
+	// Preload automático de dados críticos no mount
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			preloadAll();
+		}, 50); // Preload após 50ms
+
+		return () => clearTimeout(timer);
+	}, [preloadAll]);
+
 	return (
 		<>
 			{/* Hero Section */}
 			<HeroSection />
 
-			{/* Posts em Destaque - SEMPRE PÚBLICO */}
+			{/* Posts em Destaque */}
 			<ErrorBoundary
 				FallbackComponent={(props) => (
 					<div className="py-24 bg-gradient-to-b from-black to-gray-900">
 						<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-							<ErrorFallback {...props} section="posts em destaque" />
+							<FastErrorFallback {...props} section="posts em destaque" />
 						</div>
 					</div>
 				)}
@@ -661,15 +646,15 @@ const OptimizedHome = () => {
 				<FeaturedPostsSection />
 			</ErrorBoundary>
 
-			{/* Últimos Artigos com Sidebar - SEMPRE PÚBLICO */}
+			{/* Últimos Artigos com Sidebar */}
 			<div className="py-24 bg-gradient-to-b from-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
-						{/* Lista de Posts - SEMPRE PÚBLICO */}
+						{/* Lista de Posts */}
 						<ErrorBoundary
 							FallbackComponent={(props) => (
 								<div className="lg:col-span-2">
-									<ErrorFallback {...props} section="últimos artigos" />
+									<FastErrorFallback {...props} section="últimos artigos" />
 								</div>
 							)}
 							onReset={() => window.location.reload()}
@@ -677,7 +662,7 @@ const OptimizedHome = () => {
 							<PostListSection />
 						</ErrorBoundary>
 
-						{/* Sidebar - SEMPRE PÚBLICO */}
+						{/* Sidebar */}
 						<Sidebar />
 					</div>
 				</div>

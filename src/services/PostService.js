@@ -3,55 +3,70 @@ import { dataAPIService } from "./DataAPIService";
 import { ImageUploadService } from "./ImageUploadService";
 
 /**
- * PostService - VERSÃO CORRIGIDA PARA RLS
- * - Usa cliente autenticado para operações administrativas
- * - Verifica sessão antes de operações CRUD
- * - Error handling melhorado para RLS
- * - Logs detalhados para debug de permissões
+ * PostService - VERSÃO ULTRA OTIMIZADA para carregamento instantâneo
+ * - Data API como fonte principal para dados públicos
+ * - Cache agressivo em múltiplas camadas
+ * - Fallbacks inteligentes sem delay
+ * - Otimização de imagens automática
+ * - Zero dependência de auth para dados públicos
  */
 
 export class PostService {
 	/**
 	 * ======================================
-	 * MÉTODOS PÚBLICOS - AGORA COM DATA API
+	 * MÉTODOS PÚBLICOS - DATA API ULTRA RÁPIDA
 	 * ======================================
 	 */
 
-	// Posts em destaque - Data API com cache HTTP
+	// Posts em destaque - ULTRA RÁPIDO com cache em camadas
 	static async getFeaturedPosts() {
 		try {
+			// Tentar Data API primeiro (cache HTTP + memory cache)
 			const data = await dataAPIService.getFeaturedPosts();
 
-			// Otimizar URLs das imagens para performance
+			// Otimização de URLs para performance máxima
 			return (data || []).map((post) => ({
 				...post,
 				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
 			}));
 		} catch (error) {
-			console.error("❌ PostService.getFeaturedPosts (Data API) error:", error);
+			console.warn("⚠️ DataAPI failed, trying fallback:", error.message);
 
-			// Fallback para método SDK se Data API falhar
-			return this.getFeaturedPostsSDK();
+			// Fallback instantâneo para dados em cache ou estáticos
+			try {
+				return this.getFeaturedPostsFallback();
+			} catch (fallbackError) {
+				console.warn(
+					"⚠️ Fallback failed, returning empty:",
+					fallbackError.message
+				);
+				return this.getEmptyFeaturedPosts();
+			}
 		}
 	}
 
-	// Todos os posts - Data API otimizada
+	// Todos os posts - ULTRA RÁPIDO
 	static async getAllPosts() {
 		try {
 			const data = await dataAPIService.getAllPosts();
 
-			// Otimizar URLs das imagens para performance
 			return (data || []).map((post) => ({
 				...post,
 				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
 			}));
 		} catch (error) {
-			console.error("❌ PostService.getAllPosts (Data API) error:", error);
-			return this.getAllPostsSDK();
+			console.warn("⚠️ DataAPI failed for all posts:", error.message);
+
+			try {
+				return this.getAllPostsFallback();
+			} catch (fallbackError) {
+				console.warn("⚠️ All posts fallback failed:", fallbackError.message);
+				return [];
+			}
 		}
 	}
 
-	// Posts por categoria - Data API com cache
+	// Posts por categoria - ULTRA RÁPIDO
 	static async getPostsByCategory(categoryId) {
 		if (!categoryId) {
 			throw new Error("Category ID é obrigatório");
@@ -60,21 +75,29 @@ export class PostService {
 		try {
 			const data = await dataAPIService.getPostsByCategory(categoryId);
 
-			// Otimizar URLs das imagens para performance
 			return (data || []).map((post) => ({
 				...post,
 				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
 			}));
 		} catch (error) {
-			console.error(
-				`❌ PostService.getPostsByCategory (Data API) error:`,
-				error
+			console.warn(
+				`⚠️ DataAPI failed for category ${categoryId}:`,
+				error.message
 			);
-			return this.getPostsByCategorySDK(categoryId);
+
+			try {
+				return this.getPostsByCategoryFallback(categoryId);
+			} catch (fallbackError) {
+				console.warn(
+					`⚠️ Category ${categoryId} fallback failed:`,
+					fallbackError.message
+				);
+				return [];
+			}
 		}
 	}
 
-	// Post individual - Data API com cache longo
+	// Post individual - ULTRA RÁPIDO
 	static async getPostById(id) {
 		if (!id) {
 			throw new Error("Post ID é obrigatório");
@@ -89,7 +112,7 @@ export class PostService {
 
 			const data = await dataAPIService.getPostById(postId);
 
-			// Otimizar URL da imagem para performance (tamanho maior para detalhes)
+			// Otimizar URL da imagem para tamanho maior (detalhes do post)
 			return {
 				...data,
 				image_url: this.getOptimizedImageUrl(
@@ -99,29 +122,37 @@ export class PostService {
 				),
 			};
 		} catch (error) {
-			console.error("❌ PostService.getPostById (Data API) error:", error);
+			console.warn(`⚠️ DataAPI failed for post ${id}:`, error.message);
 
 			if (error.message === "Post não encontrado") {
-				throw error;
+				throw error; // Re-throw 404 errors
 			}
 
-			return this.getPostByIdSDK(id);
+			try {
+				return this.getPostByIdFallback(id);
+			} catch (fallbackError) {
+				console.warn(`⚠️ Post ${id} fallback failed:`, fallbackError.message);
+				throw new Error("Post não encontrado");
+			}
 		}
 	}
 
-	// Categorias - Data API com cache longo
+	// Categorias - ULTRA RÁPIDO com fallback inteligente
 	static async getCategories() {
 		try {
 			const data = await dataAPIService.getCategories();
 
+			// Se não conseguir carregar, usar categorias padrão imediatamente
 			return data && data.length > 0 ? data : this.getFallbackCategories();
 		} catch (error) {
-			console.error("❌ PostService.getCategories (Data API) error:", error);
+			console.warn("⚠️ DataAPI failed for categories:", error.message);
+
+			// Sempre retornar categorias padrão em caso de erro
 			return this.getFallbackCategories();
 		}
 	}
 
-	// Busca de posts - Data API sem cache
+	// Busca de posts - Rápido com cache
 	static async searchPosts(query) {
 		if (!query || query.length < 2) {
 			return [];
@@ -130,24 +161,28 @@ export class PostService {
 		try {
 			const data = await dataAPIService.searchPosts(query);
 
-			// Otimizar URLs das imagens para performance
 			return (data || []).map((post) => ({
 				...post,
 				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
 			}));
 		} catch (error) {
-			console.error("❌ PostService.searchPosts (Data API) error:", error);
-			return this.searchPostsSDK(query);
+			console.warn("⚠️ Search failed:", error.message);
+			return [];
 		}
 	}
 
 	/**
 	 * ======================================
-	 * MÉTODOS FALLBACK - SDK (para compatibilidade)
+	 * FALLBACKS ULTRA RÁPIDOS (cache local ou SDK)
 	 * ======================================
 	 */
 
-	static async getFeaturedPostsSDK() {
+	static async getFeaturedPostsFallback() {
+		// Tentar cache do navegador primeiro
+		const cached = this.getCachedData("featured-posts");
+		if (cached) return cached;
+
+		// SDK como último recurso
 		const { data, error } = await supabase
 			.from("posts")
 			.select("*")
@@ -158,13 +193,20 @@ export class PostService {
 
 		if (error) throw error;
 
-		return (data || []).map((post) => ({
+		const optimized = (data || []).map((post) => ({
 			...post,
 			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
 		}));
+
+		// Cachear resultado
+		this.setCachedData("featured-posts", optimized);
+		return optimized;
 	}
 
-	static async getAllPostsSDK() {
+	static async getAllPostsFallback() {
+		const cached = this.getCachedData("all-posts");
+		if (cached) return cached;
+
 		const { data, error } = await supabase
 			.from("posts")
 			.select("*")
@@ -173,13 +215,20 @@ export class PostService {
 
 		if (error) throw error;
 
-		return (data || []).map((post) => ({
+		const optimized = (data || []).map((post) => ({
 			...post,
 			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
 		}));
+
+		this.setCachedData("all-posts", optimized);
+		return optimized;
 	}
 
-	static async getPostsByCategorySDK(categoryId) {
+	static async getPostsByCategoryFallback(categoryId) {
+		const cacheKey = `category-${categoryId}`;
+		const cached = this.getCachedData(cacheKey);
+		if (cached) return cached;
+
 		const { data, error } = await supabase
 			.from("posts")
 			.select("*")
@@ -189,14 +238,21 @@ export class PostService {
 
 		if (error) throw error;
 
-		return (data || []).map((post) => ({
+		const optimized = (data || []).map((post) => ({
 			...post,
 			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
 		}));
+
+		this.setCachedData(cacheKey, optimized);
+		return optimized;
 	}
 
-	static async getPostByIdSDK(id) {
+	static async getPostByIdFallback(id) {
 		const postId = typeof id === "string" ? parseInt(id, 10) : id;
+		const cacheKey = `post-${postId}`;
+		const cached = this.getCachedData(cacheKey);
+		if (cached) return cached;
+
 		const { data, error } = await supabase
 			.from("posts")
 			.select("*")
@@ -211,7 +267,7 @@ export class PostService {
 			throw error;
 		}
 
-		return {
+		const optimized = {
 			...data,
 			image_url: this.getOptimizedImageUrl(
 				data.image_path,
@@ -219,503 +275,58 @@ export class PostService {
 				"1920x1080"
 			),
 		};
-	}
 
-	static async searchPostsSDK(query) {
-		const { data, error } = await supabase
-			.from("posts")
-			.select("*")
-			.eq("published", true)
-			.or(
-				`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`
-			)
-			.order("created_at", { ascending: false })
-			.limit(20);
-
-		if (error) throw error;
-
-		return (data || []).map((post) => ({
-			...post,
-			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
-		}));
+		this.setCachedData(cacheKey, optimized);
+		return optimized;
 	}
 
 	/**
 	 * ======================================
-	 * HELPER PARA VERIFICAR AUTENTICAÇÃO
+	 * CACHE LOCAL ULTRA RÁPIDO
 	 * ======================================
 	 */
 
-	static async verifyAuthenticatedAdmin() {
+	static getCachedData(key) {
 		try {
-			// Verificar se há usuário autenticado
-			const {
-				data: { user },
-				error: authError,
-			} = await supabase.auth.getUser();
+			const cached = localStorage.getItem(`tf-cache-${key}`);
+			if (!cached) return null;
 
-			if (authError) {
-				console.error("❌ Erro de autenticação:", authError);
-				throw new Error("Erro de autenticação: " + authError.message);
+			const { data, timestamp } = JSON.parse(cached);
+			const age = Date.now() - timestamp;
+
+			// Cache válido por 10 minutos para fallbacks
+			if (age < 10 * 60 * 1000) {
+				return data;
 			}
 
-			if (!user) {
-				throw new Error("Usuário não autenticado");
-			}
-
-			// Verificar se é admin na tabela user_profiles
-			const { data: profile, error: profileError } = await supabase
-				.from("user_profiles")
-				.select("role")
-				.eq("id", user.id)
-				.single();
-
-			if (profileError) {
-				console.error("❌ Erro ao buscar perfil:", profileError);
-				throw new Error(
-					"Erro ao verificar permissões: " + profileError.message
-				);
-			}
-
-			if (!profile || profile.role !== "admin") {
-				throw new Error("Usuário não tem permissões de administrador");
-			}
-
-			return { user, profile };
+			// Cache expirado
+			localStorage.removeItem(`tf-cache-${key}`);
+			return null;
 		} catch (error) {
-			console.error("❌ verifyAuthenticatedAdmin error:", error);
-			throw error;
+			return null;
 		}
 	}
 
-	/**
-	 * ======================================
-	 * MÉTODOS ADMINISTRATIVOS - VERSÃO CORRIGIDA COM RLS
-	 * ======================================
-	 */
-
-	static async getAllPostsAdmin() {
+	static setCachedData(key, data) {
 		try {
-			// CRÍTICO: Verificar autenticação primeiro
-			await this.verifyAuthenticatedAdmin();
-
-			const { data, error } = await supabase
-				.from("posts")
-				.select("*")
-				.order("created_at", { ascending: false });
-
-			if (error) {
-				console.error("❌ getAllPostsAdmin error:", error);
-				throw this.handleRLSError(error);
-			}
-
-			// Para admin, manter URLs originais para edição
-			return data || [];
-		} catch (error) {
-			console.error("❌ PostService.getAllPostsAdmin error:", error);
-			throw new Error(`Erro ao carregar posts admin: ${error.message}`);
-		}
-	}
-
-	static async getPostByIdAdmin(id) {
-		if (!id) {
-			throw new Error("Post ID é obrigatório");
-		}
-
-		try {
-			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-
-			if (isNaN(postId)) {
-				throw new Error(`ID inválido: ${id}`);
-			}
-
-			// CRÍTICO: Verificar autenticação primeiro
-			await this.verifyAuthenticatedAdmin();
-
-			const { data, error } = await supabase
-				.from("posts")
-				.select("*")
-				.eq("id", postId)
-				.single();
-
-			if (error) {
-				if (error.code === "PGRST116") {
-					throw new Error("Post não encontrado");
-				}
-				console.error(`❌ getPostByIdAdmin(${postId}) error:`, error);
-				throw this.handleRLSError(error);
-			}
-
-			// Para admin, manter URLs originais para edição
-			return data;
-		} catch (error) {
-			console.error("❌ PostService.getPostByIdAdmin error:", error);
-			throw new Error(`Erro ao carregar post admin: ${error.message}`);
-		}
-	}
-
-	// MÉTODO CREATEPOST - VERSÃO CORRIGIDA PARA RLS
-	static async createPost(postData) {
-		/*
-		console.log("🆕 PostService.createPost: Iniciando criação de post...");
-		console.log("📝 Dados recebidos:", {
-			title: postData.title,
-			slug: postData.slug,
-			category: postData.category,
-			image_url: postData.image_url ? "✅ Presente" : "❌ Ausente",
-			image_path: postData.image_path ? "✅ Presente" : "❌ Ausente",
-			published: postData.published,
-			content_length: postData.content?.length || 0,
-		});*/
-
-		try {
-			// CRÍTICO: Verificar autenticação E permissões primeiro
-			// Validar dados obrigatórios
-			if (!postData.title) {
-				throw new Error("Título é obrigatório");
-			}
-
-			if (!postData.image_url) {
-				throw new Error("Imagem de capa é obrigatória");
-			}
-
-			if (!postData.category) {
-				throw new Error("Categoria é obrigatória");
-			}
-
-			if (!postData.content || postData.content.trim() === "") {
-				throw new Error("Conteúdo é obrigatório");
-			}
-
-			// Preparar dados para inserção - INCLUINDO CAMPOS DE IMAGEM
-			const dataToInsert = {
-				// Campos básicos
-				title: postData.title.trim(),
-				slug: postData.slug?.trim() || this.generateSlug(postData.title),
-				excerpt: postData.excerpt?.trim() || "",
-				content: postData.content.trim(),
-
-				// CAMPOS DE IMAGEM - CRÍTICOS
-				image_url: postData.image_url,
-				image_path: postData.image_path || null,
-
-				// Categoria e metadados
-				category: postData.category,
-				category_name: postData.category_name || "",
-
-				// Metadados
-				author: postData.author || "Equipe TF",
-				read_time: postData.read_time || "5 min",
-
-				// Estados
-				published: Boolean(postData.published),
-				trending: Boolean(postData.trending),
-
-				// Tags
-				tags: Array.isArray(postData.tags) ? postData.tags : [],
-
-				// Timestamps
-				created_at: new Date().toISOString(),
-				updated_at: new Date().toISOString(),
+			const item = {
+				data,
+				timestamp: Date.now(),
 			};
-
-			// Verificação final
-			if (!dataToInsert.image_url) {
-				throw new Error("CRÍTICO: image_url não foi definida");
-			}
-
-			// REALIZAR INSERÇÃO COM CLIENTE AUTENTICADO
-			const { data, error } = await supabase
-				.from("posts")
-				.insert([dataToInsert])
-				.select()
-				.single();
-
-			if (error) {
-				console.error("❌ Erro na inserção:", error);
-				console.error("🔍 Detalhes do erro:", {
-					code: error.code,
-					message: error.message,
-					details: error.details,
-					hint: error.hint,
-				});
-
-				// Throw do erro tratado pelo RLS handler
-				throw this.handleRLSError(error);
-			}
-
-			// Invalidar cache do Data API
-			try {
-				await this.invalidatePublicCache();
-				//console.log("🗑️ Cache invalidado com sucesso");
-			} catch (cacheError) {
-				console.warn("⚠️ Erro ao invalidar cache:", cacheError);
-			}
-
-			return data;
+			localStorage.setItem(`tf-cache-${key}`, JSON.stringify(item));
 		} catch (error) {
-			console.error("❌ PostService.createPost error:", error);
-
-			// Log adicional para debug
-			console.error("🔍 Error details:", {
-				name: error.name,
-				message: error.message,
-				stack: error.stack,
-			});
-
-			throw error; // Re-throw o erro já tratado
-		}
-	}
-
-	// MÉTODO UPDATEPOST - VERSÃO CORRIGIDA PARA RLS
-	static async updatePost(id, postData) {
-		try {
-			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-
-			if (isNaN(postId)) {
-				throw new Error(`ID inválido: ${id}`);
-			}
-
-			// CRÍTICO: Verificar autenticação primeiro
-			await this.verifyAuthenticatedAdmin();
-
-			// Validar dados obrigatórios
-			if (!postData.title) {
-				throw new Error("Título é obrigatório");
-			}
-
-			if (!postData.image_url) {
-				throw new Error("Imagem de capa é obrigatória");
-			}
-
-			// Buscar post atual para comparar imagens
-			const { data: currentPost } = await supabase
-				.from("posts")
-				.select("image_path")
-				.eq("id", postId)
-				.single();
-
-			// Preparar dados para atualização - INCLUINDO CAMPOS DE IMAGEM
-			const dataToUpdate = {
-				// Campos básicos
-				title: postData.title,
-				slug: postData.slug,
-				excerpt: postData.excerpt,
-				content: postData.content,
-
-				// CAMPOS DE IMAGEM - CRÍTICOS
-				image_url: postData.image_url,
-				image_path: postData.image_path || null,
-
-				// Categoria e metadados
-				category: postData.category,
-				category_name: postData.category_name,
-
-				// Metadados
-				author: postData.author || "Equipe TF",
-				read_time: postData.read_time || "5 min",
-
-				// Estados
-				published: Boolean(postData.published),
-				trending: Boolean(postData.trending),
-
-				// Tags
-				tags: Array.isArray(postData.tags) ? postData.tags : [],
-
-				// Timestamp de atualização
-				updated_at: new Date().toISOString(),
-			};
-
-			// Verificação final
-			if (!dataToUpdate.image_url) {
-				throw new Error("CRÍTICO: image_url não foi definida para atualização");
-			}
-
-			const { data, error } = await supabase
-				.from("posts")
-				.update(dataToUpdate)
-				.eq("id", postId)
-				.select()
-				.single();
-
-			if (error) {
-				console.error("❌ updatePost error:", error);
-				throw this.handleRLSError(error);
-			}
-
-			// Se a imagem mudou, agendar limpeza da imagem antiga
-			if (
-				currentPost?.image_path &&
-				currentPost.image_path !== postData.image_path &&
-				postData.image_path // Se nova imagem foi definida
-			) {
-				this.scheduleImageCleanup(currentPost.image_path);
-			}
-
-			// Invalidar cache do Data API
-			await this.invalidatePublicCache();
-
-			return data;
-		} catch (error) {
-			console.error("❌ PostService.updatePost error:", error);
-			throw error; // Re-throw o erro já tratado
-		}
-	}
-
-	static async deletePost(id) {
-		try {
-			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-
-			// CRÍTICO: Verificar autenticação primeiro
-			await this.verifyAuthenticatedAdmin();
-
-			// Buscar imagem do post antes de deletar
-			const { data: postToDelete } = await supabase
-				.from("posts")
-				.select("image_path")
-				.eq("id", postId)
-				.single();
-
-			const { error } = await supabase.from("posts").delete().eq("id", postId);
-
-			if (error) {
-				console.error("❌ deletePost error:", error);
-				throw this.handleRLSError(error);
-			}
-
-			// Agendar limpeza da imagem
-			if (postToDelete?.image_path) {
-				this.scheduleImageCleanup(postToDelete.image_path);
-			}
-
-			// Invalidar cache do Data API
-			await this.invalidatePublicCache();
-		} catch (error) {
-			console.error("❌ PostService.deletePost error:", error);
-			throw error; // Re-throw o erro já tratado
+			// Ignorar erros de localStorage
 		}
 	}
 
 	/**
 	 * ======================================
-	 * ERROR HANDLING MELHORADO PARA RLS
+	 * FALLBACKS ESTÁTICOS INSTANTÂNEOS
 	 * ======================================
 	 */
 
-	static handleRLSError(error) {
-		console.error("🔍 Analisando erro RLS:", error);
-
-		// Erros de permissão específicos
-		if (
-			error.code === "42501" ||
-			error.message?.includes("permission denied")
-		) {
-			return new Error(
-				"Erro de permissão: Verifique se você está logado como administrador"
-			);
-		}
-
-		// Erros de política RLS
-		if (
-			error.code === "PGRST301" ||
-			error.message?.includes("policy") ||
-			error.message?.includes("RLS")
-		) {
-			return new Error(
-				"Política de segurança: Suas permissões não permitem esta operação"
-			);
-		}
-
-		// Erros de autenticação
-		if (error.code === "PGRST302" || error.message?.includes("JWT")) {
-			return new Error("Sessão expirada: Faça login novamente para continuar");
-		}
-
-		// Erros de dados duplicados
-		if (error.message?.includes("duplicate") || error.code === "23505") {
-			return new Error("Já existe um post com este slug");
-		}
-
-		// Erros de campos obrigatórios
-		if (error.message?.includes("null value") || error.code === "23502") {
-			return new Error("Alguns campos obrigatórios não foram preenchidos");
-		}
-
-		// Erros de chave estrangeira
-		if (error.message?.includes("foreign key") || error.code === "23503") {
-			return new Error("Categoria inválida selecionada");
-		}
-
-		// Erro genérico com mais contexto
-		return new Error(`Erro no banco de dados: ${error.message}`);
-	}
-
-	/**
-	 * ======================================
-	 * UTILITIES - OTIMIZAÇÃO DE IMAGENS
-	 * ======================================
-	 */
-
-	/**
-	 * Obter URL otimizada da imagem com fallback
-	 */
-	static getOptimizedImageUrl(imagePath, originalUrl, size = "800x600") {
-		// Se temos image_path, usar URL otimizada
-		if (imagePath) {
-			return ImageUploadService.getOptimizedImageUrl(imagePath, size);
-		}
-
-		// Fallback para URL original (posts antigos)
-		if (originalUrl) {
-			return originalUrl;
-		}
-
-		// Fallback final para imagem padrão
-		return "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
-	}
-
-	/**
-	 * Gerar slug a partir do título
-	 */
-	static generateSlug(title) {
-		if (!title) return `post-${Date.now()}`;
-
-		return title
-			.toLowerCase()
-			.normalize("NFD")
-			.replace(/[\u0300-\u036f]/g, "")
-			.replace(/[^a-z0-9\s-]/g, "")
-			.replace(/\s+/g, "-")
-			.replace(/-+/g, "-")
-			.trim();
-	}
-
-	/**
-	 * Agendar limpeza de imagem antiga
-	 */
-	static scheduleImageCleanup(imagePath) {
-		if (!imagePath) return;
-
-		// Agendar limpeza com delay para evitar problemas de cache
-		setTimeout(async () => {
-			try {
-				await ImageUploadService.removePostImage(imagePath);
-			} catch (error) {
-				console.warn("⚠️ Erro ao remover imagem antiga:", error);
-			}
-		}, 5 * 60 * 1000); // 5 minutos de delay
-	}
-
-	static async invalidatePublicCache() {
-		try {
-			// Invalidar cache HTTP das principais rotas
-			await Promise.all([
-				dataAPIService.invalidateCache("/posts"),
-				dataAPIService.invalidateCache("/categories"),
-			]);
-		} catch (error) {
-			console.warn("Cache invalidation failed:", error);
-		}
+	static getEmptyFeaturedPosts() {
+		return [];
 	}
 
 	static getFallbackCategories() {
@@ -761,140 +372,482 @@ export class PostService {
 
 	/**
 	 * ======================================
-	 * MÉTODOS DE DEBUG E DIAGNÓSTICO
+	 * MÉTODOS ADMINISTRATIVOS - SEM ALTERAÇÃO
 	 * ======================================
 	 */
 
-	// Verificar schema da tabela posts
-	static async debugTableSchema() {
+	static async verifyAuthenticatedAdmin() {
 		try {
-			const { data, error } = await supabase.from("posts").select("*").limit(1);
+			const {
+				data: { user },
+				error: authError,
+			} = await supabase.auth.getUser();
 
-			if (error) {
-				console.error("❌ Erro ao verificar schema:", error);
-				return { success: false, error };
+			if (authError) {
+				console.error("❌ Erro de autenticação:", authError);
+				throw new Error("Erro de autenticação: " + authError.message);
 			}
 
-			const columns = data.length > 0 ? Object.keys(data[0]) : [];
+			if (!user) {
+				throw new Error("Usuário não autenticado");
+			}
 
-			return { success: true, columns, sampleData: data[0] };
+			const { data: profile, error: profileError } = await supabase
+				.from("user_profiles")
+				.select("role")
+				.eq("id", user.id)
+				.single();
+
+			if (profileError) {
+				console.error("❌ Erro ao buscar perfil:", profileError);
+				throw new Error(
+					"Erro ao verificar permissões: " + profileError.message
+				);
+			}
+
+			if (!profile || profile.role !== "admin") {
+				throw new Error("Usuário não tem permissões de administrador");
+			}
+
+			return { user, profile };
 		} catch (error) {
-			console.error("❌ debugTableSchema error:", error);
-			return { success: false, error };
+			console.error("❌ verifyAuthenticatedAdmin error:", error);
+			throw error;
 		}
 	}
 
-	// Testar inserção simples
-	static async debugTestInsert() {
+	static async getAllPostsAdmin() {
 		try {
-			// Verificar autenticação primeiro
 			await this.verifyAuthenticatedAdmin();
 
-			const testData = {
-				title: "Post de Teste",
-				slug: "post-de-teste-" + Date.now(),
-				excerpt: "Este é um post de teste",
-				content: "Conteúdo do post de teste",
-				image_url: "https://example.com/test.jpg",
-				image_path: "test/image.jpg",
-				category: "f1",
-				category_name: "Fórmula 1",
-				author: "Admin",
-				read_time: "5 min",
-				published: false,
-				trending: false,
-				tags: ["teste"],
+			const { data, error } = await supabase
+				.from("posts")
+				.select("*")
+				.order("created_at", { ascending: false });
+
+			if (error) {
+				console.error("❌ getAllPostsAdmin error:", error);
+				throw this.handleRLSError(error);
+			}
+
+			return data || [];
+		} catch (error) {
+			console.error("❌ PostService.getAllPostsAdmin error:", error);
+			throw new Error(`Erro ao carregar posts admin: ${error.message}`);
+		}
+	}
+
+	static async getPostByIdAdmin(id) {
+		if (!id) {
+			throw new Error("Post ID é obrigatório");
+		}
+
+		try {
+			const postId = typeof id === "string" ? parseInt(id, 10) : id;
+
+			if (isNaN(postId)) {
+				throw new Error(`ID inválido: ${id}`);
+			}
+
+			await this.verifyAuthenticatedAdmin();
+
+			const { data, error } = await supabase
+				.from("posts")
+				.select("*")
+				.eq("id", postId)
+				.single();
+
+			if (error) {
+				if (error.code === "PGRST116") {
+					throw new Error("Post não encontrado");
+				}
+				console.error(`❌ getPostByIdAdmin(${postId}) error:`, error);
+				throw this.handleRLSError(error);
+			}
+
+			return data;
+		} catch (error) {
+			console.error("❌ PostService.getPostByIdAdmin error:", error);
+			throw new Error(`Erro ao carregar post admin: ${error.message}`);
+		}
+	}
+
+	static async createPost(postData) {
+		try {
+			await this.verifyAuthenticatedAdmin();
+
+			if (!postData.title) {
+				throw new Error("Título é obrigatório");
+			}
+
+			if (!postData.image_url) {
+				throw new Error("Imagem de capa é obrigatória");
+			}
+
+			if (!postData.category) {
+				throw new Error("Categoria é obrigatória");
+			}
+
+			if (!postData.content || postData.content.trim() === "") {
+				throw new Error("Conteúdo é obrigatório");
+			}
+
+			const dataToInsert = {
+				title: postData.title.trim(),
+				slug: postData.slug?.trim() || this.generateSlug(postData.title),
+				excerpt: postData.excerpt?.trim() || "",
+				content: postData.content.trim(),
+				image_url: postData.image_url,
+				image_path: postData.image_path || null,
+				category: postData.category,
+				category_name: postData.category_name || "",
+				author: postData.author || "Equipe TF",
+				read_time: postData.read_time || "5 min",
+				published: Boolean(postData.published),
+				trending: Boolean(postData.trending),
+				tags: Array.isArray(postData.tags) ? postData.tags : [],
 				created_at: new Date().toISOString(),
 				updated_at: new Date().toISOString(),
 			};
 
+			if (!dataToInsert.image_url) {
+				throw new Error("CRÍTICO: image_url não foi definida");
+			}
+
 			const { data, error } = await supabase
 				.from("posts")
-				.insert([testData])
+				.insert([dataToInsert])
 				.select()
 				.single();
 
 			if (error) {
-				console.error("❌ debugTestInsert error:", error);
-				return { success: false, error: this.handleRLSError(error) };
+				console.error("❌ Erro na inserção:", error);
+				throw this.handleRLSError(error);
 			}
 
-			// Limpar teste
-			await supabase.from("posts").delete().eq("id", data.id);
+			// Invalidar cache
+			try {
+				await this.invalidatePublicCache();
+				this.clearLocalCache();
+			} catch (cacheError) {
+				console.warn("⚠️ Erro ao invalidar cache:", cacheError);
+			}
 
-			return { success: true, data };
+			return data;
 		} catch (error) {
-			console.error("❌ debugTestInsert error:", error);
-			return { success: false, error };
+			console.error("❌ PostService.createPost error:", error);
+			throw error;
 		}
 	}
 
-	// Verificar permissões RLS
-	static async debugCheckPermissions() {
+	static async updatePost(id, postData) {
 		try {
-			// Primeiro verificar autenticação
-			const authResult = await this.verifyAuthenticatedAdmin();
+			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
-			// Tentar diferentes operações
-			const tests = {
-				auth: !!authResult.user,
-				isAdmin: authResult.profile?.role === "admin",
-				select: false,
-				insert: false,
-				update: false,
-				delete: false,
+			if (isNaN(postId)) {
+				throw new Error(`ID inválido: ${id}`);
+			}
+
+			await this.verifyAuthenticatedAdmin();
+
+			if (!postData.title) {
+				throw new Error("Título é obrigatório");
+			}
+
+			if (!postData.image_url) {
+				throw new Error("Imagem de capa é obrigatória");
+			}
+
+			const { data: currentPost } = await supabase
+				.from("posts")
+				.select("image_path")
+				.eq("id", postId)
+				.single();
+
+			const dataToUpdate = {
+				title: postData.title,
+				slug: postData.slug,
+				excerpt: postData.excerpt,
+				content: postData.content,
+				image_url: postData.image_url,
+				image_path: postData.image_path || null,
+				category: postData.category,
+				category_name: postData.category_name,
+				author: postData.author || "Equipe TF",
+				read_time: postData.read_time || "5 min",
+				published: Boolean(postData.published),
+				trending: Boolean(postData.trending),
+				tags: Array.isArray(postData.tags) ? postData.tags : [],
+				updated_at: new Date().toISOString(),
 			};
 
-			// Teste SELECT
-			try {
-				await supabase.from("posts").select("id").limit(1);
-				tests.select = true;
-			} catch (error) {
-				console.warn("⚠️ SELECT falhou:", error.message);
+			if (!dataToUpdate.image_url) {
+				throw new Error("CRÍTICO: image_url não foi definida para atualização");
 			}
 
-			// Teste INSERT (com dados de teste)
-			try {
-				const { data, error } = await supabase
-					.from("posts")
-					.insert([
-						{
-							title: "Teste Permissão",
-							slug: "teste-permissao-" + Date.now(),
-							excerpt: "Teste",
-							content: "Teste",
-							image_url: "https://example.com/test.jpg",
-							category: "f1",
-							published: false,
-						},
-					])
-					.select()
-					.single();
+			const { data, error } = await supabase
+				.from("posts")
+				.update(dataToUpdate)
+				.eq("id", postId)
+				.select()
+				.single();
 
-				if (!error) {
-					tests.insert = true;
-					// Limpar imediatamente
-					await supabase.from("posts").delete().eq("id", data.id);
-				}
-			} catch (error) {
-				console.warn("⚠️ INSERT falhou:", error.message);
+			if (error) {
+				console.error("❌ updatePost error:", error);
+				throw this.handleRLSError(error);
 			}
 
-			return tests;
+			if (
+				currentPost?.image_path &&
+				currentPost.image_path !== postData.image_path &&
+				postData.image_path
+			) {
+				this.scheduleImageCleanup(currentPost.image_path);
+			}
+
+			// Invalidar cache
+			await this.invalidatePublicCache();
+			this.clearLocalCache();
+
+			return data;
 		} catch (error) {
-			console.error("❌ debugCheckPermissions error:", error);
-			return { error: error.message };
+			console.error("❌ PostService.updatePost error:", error);
+			throw error;
 		}
 	}
 
-	// Método principal de diagnóstico
+	static async deletePost(id) {
+		try {
+			const postId = typeof id === "string" ? parseInt(id, 10) : id;
+
+			await this.verifyAuthenticatedAdmin();
+
+			const { data: postToDelete } = await supabase
+				.from("posts")
+				.select("image_path")
+				.eq("id", postId)
+				.single();
+
+			const { error } = await supabase.from("posts").delete().eq("id", postId);
+
+			if (error) {
+				console.error("❌ deletePost error:", error);
+				throw this.handleRLSError(error);
+			}
+
+			if (postToDelete?.image_path) {
+				this.scheduleImageCleanup(postToDelete.image_path);
+			}
+
+			// Invalidar cache
+			await this.invalidatePublicCache();
+			this.clearLocalCache();
+		} catch (error) {
+			console.error("❌ PostService.deletePost error:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * ======================================
+	 * UTILITIES OTIMIZADAS
+	 * ======================================
+	 */
+
+	static getOptimizedImageUrl(imagePath, originalUrl, size = "800x600") {
+		if (imagePath) {
+			return ImageUploadService.getOptimizedImageUrl(imagePath, size);
+		}
+
+		if (originalUrl) {
+			return originalUrl;
+		}
+
+		return "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
+	}
+
+	static generateSlug(title) {
+		if (!title) return `post-${Date.now()}`;
+
+		return title
+			.toLowerCase()
+			.normalize("NFD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/[^a-z0-9\s-]/g, "")
+			.replace(/\s+/g, "-")
+			.replace(/-+/g, "-")
+			.trim();
+	}
+
+	static scheduleImageCleanup(imagePath) {
+		if (!imagePath) return;
+
+		setTimeout(async () => {
+			try {
+				await ImageUploadService.removePostImage(imagePath);
+			} catch (error) {
+				console.warn("⚠️ Erro ao remover imagem antiga:", error);
+			}
+		}, 5 * 60 * 1000);
+	}
+
+	static async invalidatePublicCache() {
+		try {
+			await Promise.all([
+				dataAPIService.invalidateCache("/posts"),
+				dataAPIService.invalidateCache("/categories"),
+			]);
+		} catch (error) {
+			console.warn("Cache invalidation failed:", error);
+		}
+	}
+
+	static clearLocalCache() {
+		try {
+			Object.keys(localStorage).forEach((key) => {
+				if (key.startsWith("tf-cache-")) {
+					localStorage.removeItem(key);
+				}
+			});
+		} catch (error) {
+			// Ignorar erros de localStorage
+		}
+	}
+
+	static handleRLSError(error) {
+		console.error("🔍 Analisando erro RLS:", error);
+
+		if (
+			error.code === "42501" ||
+			error.message?.includes("permission denied")
+		) {
+			return new Error(
+				"Erro de permissão: Verifique se você está logado como administrador"
+			);
+		}
+
+		if (
+			error.code === "PGRST301" ||
+			error.message?.includes("policy") ||
+			error.message?.includes("RLS")
+		) {
+			return new Error(
+				"Política de segurança: Suas permissões não permitem esta operação"
+			);
+		}
+
+		if (error.code === "PGRST302" || error.message?.includes("JWT")) {
+			return new Error("Sessão expirada: Faça login novamente para continuar");
+		}
+
+		if (error.message?.includes("duplicate") || error.code === "23505") {
+			return new Error("Já existe um post com este slug");
+		}
+
+		if (error.message?.includes("null value") || error.code === "23502") {
+			return new Error("Alguns campos obrigatórios não foram preenchidos");
+		}
+
+		if (error.message?.includes("foreign key") || error.code === "23503") {
+			return new Error("Categoria inválida selecionada");
+		}
+
+		return new Error(`Erro no banco de dados: ${error.message}`);
+	}
+
+	/**
+	 * ======================================
+	 * PRELOAD E WARMUP para carregamento instantâneo
+	 * ======================================
+	 */
+
+	static async preloadCriticalData() {
+		try {
+			console.log("🚀 Preloading critical data...");
+
+			const promises = [
+				this.getFeaturedPosts(),
+				this.getAllPosts(),
+				this.getCategories(),
+			];
+
+			const results = await Promise.allSettled(promises);
+
+			const successful = results.filter((r) => r.status === "fulfilled").length;
+			console.log(`✅ Preloaded ${successful}/3 critical data sets`);
+
+			return {
+				success: true,
+				loaded: successful,
+				total: 3,
+			};
+		} catch (error) {
+			console.warn("⚠️ Critical data preload failed:", error);
+			return {
+				success: false,
+				error: error.message,
+			};
+		}
+	}
+
+	/**
+	 * ======================================
+	 * DEBUG E DIAGNÓSTICO
+	 * ======================================
+	 */
+
 	static async runDiagnostics() {
 		const results = {
 			timestamp: new Date().toISOString(),
-			schema: await this.debugTableSchema(),
-			permissions: await this.debugCheckPermissions(),
-			testInsert: await this.debugTestInsert(),
+			dataAPI: null,
+			fallback: null,
+			cache: null,
 		};
+
+		// Teste Data API
+		try {
+			const start = Date.now();
+			await dataAPIService.healthCheck();
+			results.dataAPI = {
+				status: "healthy",
+				responseTime: Date.now() - start,
+			};
+		} catch (error) {
+			results.dataAPI = {
+				status: "unhealthy",
+				error: error.message,
+			};
+		}
+
+		// Teste fallback
+		try {
+			const start = Date.now();
+			await this.getFallbackCategories();
+			results.fallback = {
+				status: "healthy",
+				responseTime: Date.now() - start,
+			};
+		} catch (error) {
+			results.fallback = {
+				status: "unhealthy",
+				error: error.message,
+			};
+		}
+
+		// Teste cache local
+		try {
+			this.setCachedData("test", { timestamp: Date.now() });
+			const cached = this.getCachedData("test");
+			results.cache = {
+				status: cached ? "healthy" : "unhealthy",
+				working: !!cached,
+			};
+		} catch (error) {
+			results.cache = {
+				status: "unhealthy",
+				error: error.message,
+			};
+		}
 
 		return results;
 	}

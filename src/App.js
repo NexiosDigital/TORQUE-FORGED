@@ -1,15 +1,17 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./contexts/AuthContext";
-import { ModernQueryProvider } from "./providers/QueryProvider";
+import { ModernQueryProvider, cacheUtils } from "./providers/QueryProvider";
 import Layout from "./components/Layout/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ErrorBoundary } from "react-error-boundary";
 
-// Lazy load pages com prefetching inteligente
+// Lazy load pages com prefetching ULTRA otimizado
 const Home = lazy(() =>
-	import(/* webpackChunkName: "home" */ "./pages/OptimizedHome")
+	import(
+		/* webpackChunkName: "home", webpackPreload: true */ "./pages/OptimizedHome"
+	)
 );
 
 const AllPosts = lazy(() =>
@@ -72,31 +74,19 @@ const PostEditor = lazy(() =>
 	import(/* webpackChunkName: "admin" */ "./pages/Admin/PostEditor")
 );
 
-// Componente de loading moderno e limpo
-const ModernPageLoader = ({ page = "página" }) => (
+// Componente de loading ULTRA RÁPIDO
+const UltraFastLoader = ({ page = "página" }) => (
 	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 		<div className="text-center">
-			{/* Logo animado */}
+			{/* Logo animado minimalista */}
 			<div className="relative mb-8">
 				<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl flex items-center justify-center mx-auto shadow-2xl">
-					<svg
-						className="w-10 h-10 text-white animate-spin"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={2}
-							d="M12 2v4m0 0l2.5-2.5M12 6l-2.5-2.5M18 12h-4m0 0l2.5 2.5M14 12l2.5-2.5M12 18v-4m0 0l-2.5 2.5M12 14l2.5 2.5M6 12h4m0 0L7.5 9.5M10 12L7.5 14.5"
-						/>
-					</svg>
+					<div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
 				</div>
 				<div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl mx-auto animate-ping opacity-20"></div>
 			</div>
 
-			{/* Texto de carregamento */}
+			{/* Texto minimalista */}
 			<h2 className="text-2xl font-bold text-white mb-2">Carregando {page}</h2>
 			<p className="text-gray-400 mb-4">Sistema ultrarrápido carregando...</p>
 
@@ -108,7 +98,7 @@ const ModernPageLoader = ({ page = "página" }) => (
 	</div>
 );
 
-// Error boundary melhorado
+// Error boundary OTIMIZADO
 const AppErrorBoundary = ({ error, resetErrorBoundary }) => (
 	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 		<div className="text-center p-8 max-w-lg mx-auto">
@@ -158,8 +148,65 @@ const AppErrorBoundary = ({ error, resetErrorBoundary }) => (
 	</div>
 );
 
-// Componente principal da aplicação
+// Preloader de dados críticos
+const CriticalDataPreloader = () => {
+	useEffect(() => {
+		// Preload IMEDIATO de dados críticos em background
+		const preloadCritical = async () => {
+			try {
+				// Importar serviços dinamicamente para não bloquear initial load
+				const [{ dataAPIService }] = await Promise.all([
+					import("./services/DataAPIService"),
+				]);
+
+				// Preload silencioso em background
+				setTimeout(async () => {
+					await Promise.allSettled([
+						dataAPIService.getFeaturedPosts(),
+						dataAPIService.getAllPosts(),
+						dataAPIService.getCategories(),
+					]);
+					console.log("🚀 Critical data preloaded in background");
+				}, 100);
+			} catch (error) {
+				console.warn("⚠️ Background preload failed:", error);
+			}
+		};
+
+		preloadCritical();
+	}, []);
+
+	return null;
+};
+
+// Service Worker registration para cache persistente
+const ServiceWorkerLoader = () => {
+	useEffect(() => {
+		if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+			setTimeout(() => {
+				navigator.serviceWorker
+					.register("/sw.js")
+					.then(() => console.log("🔧 ServiceWorker registered"))
+					.catch((error) => console.warn("⚠️ ServiceWorker failed:", error));
+			}, 2000);
+		}
+	}, []);
+
+	return null;
+};
+
+// Componente principal da aplicação ULTRA OTIMIZADO
 function App() {
+	// Preload de cache crítico no app startup
+	useEffect(() => {
+		// Preload automático do cache após 50ms
+		const timer = setTimeout(() => {
+			cacheUtils.preloadCritical();
+		}, 50);
+
+		return () => clearTimeout(timer);
+	}, []);
+
 	return (
 		<ErrorBoundary
 			FallbackComponent={AppErrorBoundary}
@@ -167,18 +214,24 @@ function App() {
 				console.error("🔴 App Error Boundary:", error, errorInfo);
 			}}
 			onReset={() => {
+				// Limpar cache em caso de erro crítico
+				cacheUtils.clear();
 				window.location.reload();
 			}}
 		>
 			<AuthProvider>
 				<ModernQueryProvider>
 					<div className="App">
-						{/* Toast notifications modernas */}
+						{/* Preloaders em background */}
+						<CriticalDataPreloader />
+						<ServiceWorkerLoader />
+
+						{/* Toast notifications OTIMIZADAS */}
 						<Toaster
 							position="top-right"
 							gutter={8}
 							toastOptions={{
-								duration: 4000,
+								duration: 3000, // Reduzido para 3s
 								style: {
 									background:
 										"linear-gradient(135deg, #1f2937 0%, #111827 100%)",
@@ -227,27 +280,27 @@ function App() {
 							}}
 						/>
 
-						{/* Rotas da aplicação */}
+						{/* Rotas da aplicação OTIMIZADAS */}
 						<Routes>
-							{/* Public Routes */}
+							{/* Public Routes - PRIORIDADE MÁXIMA */}
 							<Route
 								path="/"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="homepage" />}>
+										<Suspense fallback={<UltraFastLoader page="homepage" />}>
 											<Home />
 										</Suspense>
 									</Layout>
 								}
 							/>
 
-							{/* Nova rota para todos os posts */}
+							{/* Posts route - SEGUNDA PRIORIDADE */}
 							<Route
 								path="/posts"
 								element={
 									<Layout>
 										<Suspense
-											fallback={<ModernPageLoader page="todos os posts" />}
+											fallback={<UltraFastLoader page="todos os posts" />}
 										>
 											<AllPosts />
 										</Suspense>
@@ -255,11 +308,12 @@ function App() {
 								}
 							/>
 
+							{/* Category routes - ALTA PRIORIDADE */}
 							<Route
 								path="/f1"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="Fórmula 1" />}>
+										<Suspense fallback={<UltraFastLoader page="Fórmula 1" />}>
 											<Formula1 />
 										</Suspense>
 									</Layout>
@@ -270,7 +324,7 @@ function App() {
 								path="/nascar"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="NASCAR" />}>
+										<Suspense fallback={<UltraFastLoader page="NASCAR" />}>
 											<NASCAR />
 										</Suspense>
 									</Layout>
@@ -281,7 +335,7 @@ function App() {
 								path="/endurance"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="Endurance" />}>
+										<Suspense fallback={<UltraFastLoader page="Endurance" />}>
 											<Endurance />
 										</Suspense>
 									</Layout>
@@ -293,7 +347,7 @@ function App() {
 								element={
 									<Layout>
 										<Suspense
-											fallback={<ModernPageLoader page="Formula Drift" />}
+											fallback={<UltraFastLoader page="Formula Drift" />}
 										>
 											<Drift />
 										</Suspense>
@@ -305,7 +359,7 @@ function App() {
 								path="/tuning"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="Tuning" />}>
+										<Suspense fallback={<UltraFastLoader page="Tuning" />}>
 											<Tuning />
 										</Suspense>
 									</Layout>
@@ -316,18 +370,19 @@ function App() {
 								path="/engines"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="Motores" />}>
+										<Suspense fallback={<UltraFastLoader page="Motores" />}>
 											<Engines />
 										</Suspense>
 									</Layout>
 								}
 							/>
 
+							{/* Static pages */}
 							<Route
 								path="/about"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="sobre nós" />}>
+										<Suspense fallback={<UltraFastLoader page="sobre nós" />}>
 											<About />
 										</Suspense>
 									</Layout>
@@ -338,18 +393,19 @@ function App() {
 								path="/contact"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="contato" />}>
+										<Suspense fallback={<UltraFastLoader page="contato" />}>
 											<Contact />
 										</Suspense>
 									</Layout>
 								}
 							/>
 
+							{/* Post detail - ALTA PRIORIDADE */}
 							<Route
 								path="/post/:id"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="post" />}>
+										<Suspense fallback={<UltraFastLoader page="post" />}>
 											<PostDetail />
 										</Suspense>
 									</Layout>
@@ -360,7 +416,7 @@ function App() {
 								path="/category/:category"
 								element={
 									<Layout>
-										<Suspense fallback={<ModernPageLoader page="categoria" />}>
+										<Suspense fallback={<UltraFastLoader page="categoria" />}>
 											<Category />
 										</Suspense>
 									</Layout>
@@ -373,7 +429,7 @@ function App() {
 								element={
 									<ProtectedRoute>
 										<Layout>
-											<Suspense fallback={<ModernPageLoader page="perfil" />}>
+											<Suspense fallback={<UltraFastLoader page="perfil" />}>
 												<Profile />
 											</Suspense>
 										</Layout>
@@ -385,7 +441,7 @@ function App() {
 							<Route
 								path="/login"
 								element={
-									<Suspense fallback={<ModernPageLoader page="login admin" />}>
+									<Suspense fallback={<UltraFastLoader page="login admin" />}>
 										<AdminLogin />
 									</Suspense>
 								}
@@ -396,7 +452,7 @@ function App() {
 								element={
 									<ProtectedRoute>
 										<Suspense
-											fallback={<ModernPageLoader page="dashboard admin" />}
+											fallback={<UltraFastLoader page="dashboard admin" />}
 										>
 											<AdminDashboard />
 										</Suspense>
@@ -409,7 +465,7 @@ function App() {
 								element={
 									<ProtectedRoute>
 										<Suspense
-											fallback={<ModernPageLoader page="editor de post" />}
+											fallback={<UltraFastLoader page="editor de post" />}
 										>
 											<PostEditor />
 										</Suspense>
@@ -422,7 +478,7 @@ function App() {
 								element={
 									<ProtectedRoute>
 										<Suspense
-											fallback={<ModernPageLoader page="editor de post" />}
+											fallback={<UltraFastLoader page="editor de post" />}
 										>
 											<PostEditor />
 										</Suspense>
@@ -430,7 +486,7 @@ function App() {
 								}
 							/>
 
-							{/* 404 Route */}
+							{/* 404 Route OTIMIZADA */}
 							<Route
 								path="*"
 								element={

@@ -26,44 +26,78 @@ export const QUERY_KEYS = {
 	},
 };
 
-// Configurações CORRIGIDAS para evitar refetch desnecessário
-const PUBLIC_CACHE_CONFIG = {
-	staleTime: 5 * 60 * 1000, // 5 minutos (aumentado)
-	gcTime: 15 * 60 * 1000, // 15 minutos
-	refetchOnWindowFocus: false, // DESABILITADO para evitar recarregamentos
-	refetchOnMount: true, // Refetch apenas ao montar
-	// REMOVIDO: refetchInterval que causava recarregamentos automáticos
-	retry: (failureCount, error) => {
-		if (error?.message?.includes("não encontrado")) return false;
-		return failureCount < 1;
-	},
-	retryDelay: 1000,
+// Configurações ULTRA AGRESSIVAS para carregamento instantâneo
+const ULTRA_CACHE_CONFIG = {
+	staleTime: 30 * 60 * 1000, // 30 minutos - dados ficam fresh por muito tempo
+	gcTime: 2 * 60 * 60 * 1000, // 2 horas - manter em memória por muito tempo
+	refetchOnWindowFocus: false, // NUNCA refetch ao focar
+	refetchOnMount: false, // NUNCA refetch ao montar - usar cache
+	refetchOnReconnect: false, // NUNCA refetch ao reconectar
+	refetchInterval: false, // NUNCA refetch automático
+	networkMode: "offlineFirst", // Priorizar cache offline
+	retry: false, // SEM retry para ser mais rápido
+	retryOnMount: false,
+	retryDelay: () => 0,
+};
+
+const FEATURED_CACHE_CONFIG = {
+	staleTime: 45 * 60 * 1000, // 45 minutos - featured posts mudam menos
+	gcTime: 3 * 60 * 60 * 1000, // 3 horas
+	refetchOnWindowFocus: false,
+	refetchOnMount: false,
+	refetchOnReconnect: false,
+	refetchInterval: false,
+	networkMode: "offlineFirst",
+	retry: false,
+};
+
+const CATEGORIES_CACHE_CONFIG = {
+	staleTime: 2 * 60 * 60 * 1000, // 2 horas - categorias quase nunca mudam
+	gcTime: 6 * 60 * 60 * 1000, // 6 horas
+	refetchOnWindowFocus: false,
+	refetchOnMount: false,
+	refetchOnReconnect: false,
+	refetchInterval: false,
+	networkMode: "offlineFirst",
+	retry: false,
+};
+
+const POST_DETAIL_CACHE_CONFIG = {
+	staleTime: 60 * 60 * 1000, // 1 hora para posts individuais
+	gcTime: 4 * 60 * 60 * 1000, // 4 horas
+	refetchOnWindowFocus: false,
+	refetchOnMount: false,
+	refetchOnReconnect: false,
+	refetchInterval: false,
+	networkMode: "offlineFirst",
+	retry: false,
 };
 
 const ADMIN_CACHE_CONFIG = {
-	staleTime: 10 * 60 * 1000, // 10 minutos para admin (mais tempo)
-	gcTime: 30 * 60 * 1000, // 30 minutos
-	refetchOnWindowFocus: false, // DESABILITADO - crítico para editor
-	refetchOnMount: false, // DESABILITADO para admin para preservar dados
-	// SEM refetchInterval - evita perda de dados no editor
-	retry: 0, // Sem retry automático para admin
+	staleTime: 30 * 60 * 1000, // 30 minutos para admin
+	gcTime: 2 * 60 * 60 * 1000, // 2 horas
+	refetchOnWindowFocus: false,
+	refetchOnMount: false,
+	refetchOnReconnect: false,
+	refetchInterval: false,
+	retry: 0,
 };
 
 /**
  * ======================================
- * HOOKS PÚBLICOS - SEM REFETCH AUTOMÁTICO
+ * HOOKS PÚBLICOS - CARREGAMENTO INSTANTÂNEO
  * ======================================
  */
 
-// Posts em destaque - SEM refetch interval
+// Posts em destaque - CACHE ULTRA AGRESSIVO
 export const useFeaturedPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.featured,
-		queryFn: () => {
-			return PostService.getFeaturedPosts();
-		},
-		...PUBLIC_CACHE_CONFIG,
-		// REMOVIDO: refetchInterval que causava recarregamentos
+		queryFn: () => PostService.getFeaturedPosts(),
+		...FEATURED_CACHE_CONFIG,
+		// CRÍTICO: Não depender de nenhum estado externo
+		enabled: true, // SEMPRE habilitado
+		placeholderData: (previousData) => previousData, // Manter dados antigos enquanto carrega
 		meta: {
 			errorMessage: "Erro ao carregar posts em destaque",
 		},
@@ -71,15 +105,21 @@ export const useFeaturedPosts = (options = {}) => {
 	});
 };
 
-// Todos os posts - SEM refetch interval
+// Todos os posts - CACHE ULTRA AGRESSIVO
 export const useAllPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.posts,
-		queryFn: () => {
-			return PostService.getAllPosts();
+		queryFn: () => PostService.getAllPosts(),
+		...ULTRA_CACHE_CONFIG,
+		enabled: true,
+		placeholderData: (previousData) => previousData,
+		select: (data) => {
+			// Ordenação e otimização no cliente para cache mais eficiente
+			return (
+				data?.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) ||
+				[]
+			);
 		},
-		...PUBLIC_CACHE_CONFIG,
-		// REMOVIDO: refetchInterval que causava recarregamentos
 		meta: {
 			errorMessage: "Erro ao carregar posts",
 		},
@@ -87,16 +127,14 @@ export const useAllPosts = (options = {}) => {
 	});
 };
 
-// Posts por categoria - SEM refetch interval
+// Posts por categoria - CACHE AGRESSIVO
 export const usePostsByCategory = (categoryId, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byCategory(categoryId),
-		queryFn: () => {
-			return PostService.getPostsByCategory(categoryId);
-		},
+		queryFn: () => PostService.getPostsByCategory(categoryId),
 		enabled: !!categoryId && typeof categoryId === "string",
-		...PUBLIC_CACHE_CONFIG,
-		// REMOVIDO: refetchInterval que causava recarregamentos
+		...ULTRA_CACHE_CONFIG,
+		placeholderData: (previousData) => previousData,
 		meta: {
 			errorMessage: `Erro ao carregar posts da categoria ${categoryId}`,
 		},
@@ -104,17 +142,14 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 	});
 };
 
-// Post individual - Cache longo, sem refetch
+// Post individual - CACHE MUITO AGRESSIVO
 export const usePostById = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
-		queryFn: () => {
-			return PostService.getPostById(id);
-		},
+		queryFn: () => PostService.getPostById(id),
 		enabled: !!id,
-		...PUBLIC_CACHE_CONFIG,
-		staleTime: 15 * 60 * 1000, // 15 minutos para posts individuais
-		refetchOnWindowFocus: false, // CRÍTICO: não refetch no foco
+		...POST_DETAIL_CACHE_CONFIG,
+		placeholderData: (previousData) => previousData,
 		meta: {
 			errorMessage: `Erro ao carregar post ${id}`,
 		},
@@ -122,17 +157,21 @@ export const usePostById = (id, options = {}) => {
 	});
 };
 
-// Categorias - Cache longo (categorias mudam pouco)
+// Categorias - CACHE ULTRA LONGO
 export const useCategories = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.categories,
-		queryFn: () => {
-			return PostService.getCategories();
+		queryFn: () => PostService.getCategories(),
+		...CATEGORIES_CACHE_CONFIG,
+		enabled: true,
+		placeholderData: (previousData) => previousData,
+		// Fallback para categorias padrão se não conseguir carregar
+		select: (data) => {
+			if (!data || data.length === 0) {
+				return PostService.getFallbackCategories();
+			}
+			return data;
 		},
-		staleTime: 30 * 60 * 1000, // 30 minutos (categorias são estáveis)
-		gcTime: 60 * 60 * 1000, // 60 minutos
-		refetchOnWindowFocus: false,
-		refetchOnMount: false,
 		meta: {
 			errorMessage: "Erro ao carregar categorias",
 		},
@@ -140,81 +179,54 @@ export const useCategories = (options = {}) => {
 	});
 };
 
-// Busca - sem cache
+// Busca - cache moderado
 export const useSearchPosts = (query, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.search(query),
-		queryFn: () => {
-			return PostService.searchPosts(query);
-		},
+		queryFn: () => PostService.searchPosts(query),
 		enabled: !!query && query.length >= 2,
-		staleTime: 0, // SEM CACHE para buscas
-		gcTime: 2 * 60 * 1000,
+		staleTime: 5 * 60 * 1000, // 5 min para buscas
+		gcTime: 10 * 60 * 1000,
 		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		placeholderData: (previousData) => previousData,
 		...options,
 	});
 };
 
 /**
  * ======================================
- * HOOKS ADMIN - CONFIGURAÇÕES SEGURAS PARA EDITOR
+ * HOOKS ADMIN - CONFIGURAÇÕES SEGURAS
  * ======================================
  */
 
-// Posts admin - CONFIGURAÇÃO SEGURA para não perder dados no editor
 export const useAllPostsAdmin = (options = {}) => {
 	const { isAdmin } = useAuth();
 
 	return useQuery({
 		queryKey: QUERY_KEYS.admin.posts,
-		queryFn: () => {
-			return PostService.getAllPostsAdmin();
-		},
+		queryFn: () => PostService.getAllPostsAdmin(),
 		enabled: isAdmin,
 		...ADMIN_CACHE_CONFIG,
-		// CRÍTICO: Configurações para não perder dados no editor
-		refetchOnWindowFocus: false, // NUNCA refetch ao focar janela
-		refetchOnMount: false, // NUNCA refetch ao montar (preserva dados)
-		refetchOnReconnect: false, // NUNCA refetch ao reconectar
+		placeholderData: (previousData) => previousData,
 		meta: {
 			errorMessage: "Erro ao carregar posts admin",
-		},
-		onSuccess: (data) => {
-			// Log opcional para debug
-		},
-		onError: (error) => {
-			console.error("❌ useAllPostsAdmin error:", error);
 		},
 		...options,
 	});
 };
 
-// Post admin individual - CONFIGURAÇÃO SEGURA para edição
 export const usePostByIdAdmin = (id, options = {}) => {
 	const { isAdmin } = useAuth();
 
 	return useQuery({
 		queryKey: QUERY_KEYS.admin.byId(id),
-		queryFn: () => {
-			return PostService.getPostByIdAdmin(id);
-		},
+		queryFn: () => PostService.getPostByIdAdmin(id),
 		enabled: !!id && isAdmin,
 		...ADMIN_CACHE_CONFIG,
-		// CRÍTICO: Nunca refetch durante edição
-		refetchOnWindowFocus: false,
-		refetchOnMount: false,
-		refetchOnReconnect: false,
-		// Cache extra longo para editor
-		staleTime: 60 * 60 * 1000, // 1 hora
-		gcTime: 2 * 60 * 60 * 1000, // 2 horas
+		placeholderData: (previousData) => previousData,
 		meta: {
 			errorMessage: `Erro ao carregar post admin ${id}`,
-		},
-		onSuccess: (data) => {
-			// Log opcional para debug
-		},
-		onError: (error) => {
-			console.error(`❌ usePostByIdAdmin(${id}) error:`, error);
 		},
 		...options,
 	});
@@ -222,7 +234,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 
 /**
  * ======================================
- * MUTATIONS - VERSÃO CORRIGIDA
+ * MUTATIONS OTIMIZADAS
  * ======================================
  */
 export const useCreatePost = () => {
@@ -233,22 +245,49 @@ export const useCreatePost = () => {
 			const result = await PostService.createPost(postData);
 			return result;
 		},
+		onMutate: async (newPost) => {
+			// Optimistic updates para UI instantânea
+			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.admin.posts });
+
+			const previousPosts = queryClient.getQueryData(QUERY_KEYS.admin.posts);
+
+			if (previousPosts) {
+				queryClient.setQueryData(QUERY_KEYS.admin.posts, [
+					{
+						...newPost,
+						id: "temp-" + Date.now(),
+						created_at: new Date().toISOString(),
+					},
+					...previousPosts,
+				]);
+			}
+
+			return { previousPosts };
+		},
+		onError: (err, newPost, context) => {
+			// Rollback optimistic update
+			if (context?.previousPosts) {
+				queryClient.setQueryData(QUERY_KEYS.admin.posts, context.previousPosts);
+			}
+			toast.error(`Erro ao criar post: ${err.message}`);
+		},
 		onSuccess: (data) => {
 			toast.success("Post criado com sucesso!");
 
-			// INVALIDAÇÃO MANUAL (não automática)
+			// Invalidar apenas queries necessárias
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
 
-			// Invalidar TODAS as categorias
-			queryClient.invalidateQueries({
-				queryKey: ["public", "posts", "category"],
-			});
-		},
-		onError: (error) => {
-			console.error("❌ useCreatePost onError:", error);
-			toast.error(`Erro ao criar post: ${error.message}`);
+			// Se publicado, invalidar cache público
+			if (data?.published) {
+				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
+				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
+
+				if (data.category) {
+					queryClient.invalidateQueries({
+						queryKey: QUERY_KEYS.public.byCategory(data.category),
+					});
+				}
+			}
 		},
 	});
 };
@@ -261,34 +300,53 @@ export const useUpdatePost = () => {
 			const result = await PostService.updatePost(id, postData);
 			return result;
 		},
+		onMutate: async ({ id, ...newData }) => {
+			// Optimistic updates
+			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.admin.byId(id) });
+
+			const previousPost = queryClient.getQueryData(QUERY_KEYS.admin.byId(id));
+
+			if (previousPost) {
+				queryClient.setQueryData(QUERY_KEYS.admin.byId(id), {
+					...previousPost,
+					...newData,
+					updated_at: new Date().toISOString(),
+				});
+			}
+
+			return { previousPost };
+		},
+		onError: (err, { id }, context) => {
+			if (context?.previousPost) {
+				queryClient.setQueryData(
+					QUERY_KEYS.admin.byId(id),
+					context.previousPost
+				);
+			}
+			toast.error(`Erro ao atualizar post: ${err.message}`);
+		},
 		onSuccess: (data) => {
 			toast.success("Post atualizado com sucesso!");
 
-			// INVALIDAÇÃO MANUAL ESPECÍFICA
+			// Invalidações otimizadas
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
 
-			// Invalidar categoria específica se disponível
-			if (data?.category) {
-				queryClient.invalidateQueries({
-					queryKey: QUERY_KEYS.public.byCategory(data.category),
-				});
-			}
+			if (data?.published) {
+				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
+				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
 
-			// Invalidar post específico em ambos os caches
-			if (data?.id) {
-				queryClient.invalidateQueries({
-					queryKey: QUERY_KEYS.public.byId(data.id),
-				});
-				queryClient.invalidateQueries({
-					queryKey: QUERY_KEYS.admin.byId(data.id),
-				});
+				if (data.category) {
+					queryClient.invalidateQueries({
+						queryKey: QUERY_KEYS.public.byCategory(data.category),
+					});
+				}
+
+				if (data.id) {
+					queryClient.invalidateQueries({
+						queryKey: QUERY_KEYS.public.byId(data.id),
+					});
+				}
 			}
-		},
-		onError: (error) => {
-			console.error("❌ useUpdatePost onError:", error);
-			toast.error(`Erro ao atualizar post: ${error.message}`);
 		},
 	});
 };
@@ -301,20 +359,39 @@ export const useDeletePost = () => {
 			const result = await PostService.deletePost(id);
 			return result;
 		},
+		onMutate: async (id) => {
+			// Optimistic removal
+			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.admin.posts });
+
+			const previousPosts = queryClient.getQueryData(QUERY_KEYS.admin.posts);
+
+			if (previousPosts) {
+				queryClient.setQueryData(
+					QUERY_KEYS.admin.posts,
+					previousPosts.filter((post) => post.id !== id)
+				);
+			}
+
+			return { previousPosts };
+		},
+		onError: (err, id, context) => {
+			if (context?.previousPosts) {
+				queryClient.setQueryData(QUERY_KEYS.admin.posts, context.previousPosts);
+			}
+			toast.error(`Erro ao deletar post: ${err.message}`);
+		},
 		onSuccess: (data, variables) => {
 			toast.success("Post deletado com sucesso!");
 
-			// INVALIDAÇÃO MANUAL
+			// Limpeza completa
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
-
-			// Invalidar TODAS as categorias
 			queryClient.invalidateQueries({
 				queryKey: ["public", "posts", "category"],
 			});
 
-			// Remover query específica do post deletado
+			// Remover query específica
 			queryClient.removeQueries({
 				queryKey: QUERY_KEYS.public.byId(variables),
 			});
@@ -322,16 +399,12 @@ export const useDeletePost = () => {
 				queryKey: QUERY_KEYS.admin.byId(variables),
 			});
 		},
-		onError: (error) => {
-			console.error("❌ useDeletePost onError:", error);
-			toast.error(`Erro ao deletar post: ${error.message}`);
-		},
 	});
 };
 
 /**
  * ======================================
- * UTILITIES - MELHORADOS
+ * UTILITIES OTIMIZADAS
  * ======================================
  */
 export const usePrefetch = () => {
@@ -343,7 +416,7 @@ export const usePrefetch = () => {
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byId(id),
 			queryFn: () => PostService.getPostById(id),
-			staleTime: 5 * 60 * 1000, // 5 minutos para prefetch
+			staleTime: 60 * 60 * 1000, // 1 hora para prefetch
 		});
 	};
 
@@ -353,7 +426,7 @@ export const usePrefetch = () => {
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byCategory(categoryId),
 			queryFn: () => PostService.getPostsByCategory(categoryId),
-			staleTime: 5 * 60 * 1000,
+			staleTime: 30 * 60 * 1000,
 		});
 	};
 
@@ -374,14 +447,12 @@ export const useCacheUtils = () => {
 		toast.success("Cache limpo com sucesso!");
 	};
 
-	// MANUAL: Force refresh - não automático
 	const forceRefreshAll = () => {
 		queryClient.invalidateQueries();
 		queryClient.refetchQueries();
 		toast.success("Dados atualizados!");
 	};
 
-	// MANUAL: Refresh específico para posts
 	const refreshPosts = () => {
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -390,7 +461,6 @@ export const useCacheUtils = () => {
 		});
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 
-		// MANUAL refetch - não automático
 		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
 		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
 		queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
@@ -429,75 +499,55 @@ export const useCacheUtils = () => {
 	};
 };
 
-// Suspense hook - Cache seguro
+// Suspense hook - Cache super agressivo
 export const usePostByIdSuspense = (id) => {
 	return useSuspenseQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
-		queryFn: () => {
-			return PostService.getPostById(id);
-		},
-		staleTime: 10 * 60 * 1000, // 10 minutos
-		refetchOnWindowFocus: false, // NUNCA refetch automático
+		queryFn: () => PostService.getPostById(id),
+		staleTime: 60 * 60 * 1000, // 1 hora
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
 	});
 };
 
 /**
  * ======================================
- * HOOK DE DEBUG PARA DESENVOLVIMENTO
+ * PRELOAD HOOKS PARA PERFORMANCE
  * ======================================
  */
-export const usePostsDebug = () => {
-	const runDiagnostics = async () => {
+
+// Hook para preload de dados críticos
+export const usePreloadCriticalData = () => {
+	const queryClient = useQueryClient();
+
+	const preloadAll = async () => {
+		const promises = [
+			queryClient.prefetchQuery({
+				queryKey: QUERY_KEYS.public.featured,
+				queryFn: () => PostService.getFeaturedPosts(),
+				staleTime: 45 * 60 * 1000,
+			}),
+			queryClient.prefetchQuery({
+				queryKey: QUERY_KEYS.public.posts,
+				queryFn: () => PostService.getAllPosts(),
+				staleTime: 30 * 60 * 1000,
+			}),
+			queryClient.prefetchQuery({
+				queryKey: QUERY_KEYS.public.categories,
+				queryFn: () => PostService.getCategories(),
+				staleTime: 2 * 60 * 60 * 1000,
+			}),
+		];
+
 		try {
-			const results = await PostService.runDiagnostics();
-			return results;
+			await Promise.allSettled(promises);
+			console.log("🚀 Critical data preloaded successfully");
 		} catch (error) {
-			console.error("❌ Erro nos diagnósticos:", error);
-			return { error };
+			console.warn("⚠️ Preload failed:", error);
 		}
 	};
 
-	const testCreatePost = async () => {
-		const testData = {
-			title: "Post de Teste DEBUG",
-			slug: "post-teste-debug-" + Date.now(),
-			excerpt: "Este é um post de teste para debug",
-			content: "# Título\n\nEste é o conteúdo do post de teste.",
-			image_url:
-				"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop",
-			image_path: "test/debug-image.jpg",
-			category: "f1",
-			category_name: "Fórmula 1",
-			author: "Debug",
-			read_time: "1 min",
-			published: false,
-			trending: false,
-			tags: ["debug", "teste"],
-		};
-
-		try {
-			const result = await PostService.createPost(testData);
-
-			// Limpar o post de teste
-			setTimeout(async () => {
-				try {
-					await PostService.deletePost(result.id);
-				} catch (cleanupError) {
-					console.warn("⚠️ Erro ao limpar post de teste:", cleanupError);
-				}
-			}, 5000);
-
-			return { success: true, data: result };
-		} catch (error) {
-			console.error("❌ Erro no teste de criação:", error);
-			return { success: false, error };
-		}
-	};
-
-	return {
-		runDiagnostics,
-		testCreatePost,
-	};
+	return { preloadAll };
 };
 
 export default {
@@ -515,6 +565,6 @@ export default {
 	useDeletePost,
 	usePrefetch,
 	useCacheUtils,
-	usePostsDebug,
+	usePreloadCriticalData,
 	QUERY_KEYS,
 };

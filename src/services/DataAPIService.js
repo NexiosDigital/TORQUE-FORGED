@@ -1,8 +1,9 @@
 /**
- * DataAPIService - CACHE REDUZIDO para dados mais frescos
- * - Cache HTTP mais curto
- * - Opção para bypass de cache
- * - Headers ajustados para detecção de mudanças
+ * DataAPIService - CACHE ULTRA AGRESSIVO para carregamento instantâneo
+ * - Cache HTTP de 30+ minutos para dados públicos
+ * - Browser cache persistence
+ * - Headers otimizados para performance máxima
+ * - Preload de dados críticos
  */
 
 class DataAPIService {
@@ -14,13 +15,23 @@ class DataAPIService {
 			"Content-Type": "application/json",
 			Prefer: "return=representation",
 		};
+
+		// Cache memory para responses
+		this.memoryCache = new Map();
+		this.cacheTimestamps = new Map();
 	}
 
 	/**
-	 * Fetch wrapper com cache HTTP reduzido
+	 * Fetch wrapper com cache ULTRA agressivo
 	 */
 	async fetch(endpoint, options = {}) {
 		const url = `${this.baseURL}${endpoint}`;
+		const cacheKey = `${endpoint}-${JSON.stringify(options.headers || {})}`;
+
+		// Verificar cache memory primeiro (mais rápido que HTTP)
+		if (this.isMemoryCacheValid(cacheKey)) {
+			return this.memoryCache.get(cacheKey);
+		}
 
 		const fetchOptions = {
 			...options,
@@ -28,8 +39,8 @@ class DataAPIService {
 				...this.headers,
 				...options.headers,
 			},
-			// Cache mais agressivo apenas quando solicitado
-			cache: options.cache || "default",
+			// Cache AGRESSIVO por padrão
+			cache: options.cache || "force-cache",
 		};
 
 		try {
@@ -42,67 +53,128 @@ class DataAPIService {
 				);
 			}
 
-			return await response.json();
+			const data = await response.json();
+
+			// Armazenar em memory cache
+			this.setMemoryCache(
+				cacheKey,
+				data,
+				options.memoryCacheTTL || 30 * 60 * 1000
+			); // 30min default
+
+			return data;
 		} catch (error) {
 			console.error(`❌ DataAPI Error: ${endpoint}`, error);
+
+			// Tentar retornar cache expirado em caso de erro
+			if (this.memoryCache.has(cacheKey)) {
+				console.warn(`⚠️ Retornando cache expirado para: ${endpoint}`);
+				return this.memoryCache.get(cacheKey);
+			}
+
 			throw error;
 		}
 	}
 
 	/**
-	 * Posts públicos - Cache REDUZIDO
+	 * Memory cache helpers
+	 */
+	isMemoryCacheValid(key) {
+		if (!this.memoryCache.has(key)) return false;
+		const timestamp = this.cacheTimestamps.get(key);
+		return timestamp && Date.now() - timestamp < 30 * 60 * 1000; // 30 min
+	}
+
+	setMemoryCache(key, data, ttl) {
+		this.memoryCache.set(key, data);
+		this.cacheTimestamps.set(key, Date.now());
+
+		// Auto cleanup
+		setTimeout(() => {
+			this.memoryCache.delete(key);
+			this.cacheTimestamps.delete(key);
+		}, ttl);
+	}
+
+	/**
+	 * Posts públicos - Cache ULTRA AGRESSIVO (30min+)
 	 */
 	async getAllPosts(bypassCache = false) {
 		const endpoint = "/posts?select=*&published=eq.true&order=created_at.desc";
 
 		return this.fetch(endpoint, {
-			cache: bypassCache ? "no-cache" : "default",
+			cache: bypassCache ? "no-cache" : "force-cache",
 			headers: {
-				"Cache-Control": bypassCache ? "no-cache" : "max-age=60", // REDUZIDO: 1 minuto
+				"Cache-Control": bypassCache
+					? "no-cache"
+					: "public, max-age=1800, s-maxage=3600", // 30min cliente, 60min CDN
+				Pragma: bypassCache ? "no-cache" : "cache",
+				Expires: bypassCache
+					? "0"
+					: new Date(Date.now() + 30 * 60 * 1000).toUTCString(),
 			},
+			memoryCacheTTL: 30 * 60 * 1000, // 30min memory cache
 		});
 	}
 
 	/**
-	 * Posts em destaque - Cache REDUZIDO
+	 * Posts em destaque - Cache ULTRA AGRESSIVO (45min)
 	 */
 	async getFeaturedPosts(bypassCache = false) {
 		const endpoint =
 			"/posts?select=*&published=eq.true&trending=eq.true&order=created_at.desc&limit=6";
 
 		return this.fetch(endpoint, {
-			cache: bypassCache ? "no-cache" : "default",
+			cache: bypassCache ? "no-cache" : "force-cache",
 			headers: {
-				"Cache-Control": bypassCache ? "no-cache" : "max-age=60", // REDUZIDO: 1 minuto
+				"Cache-Control": bypassCache
+					? "no-cache"
+					: "public, max-age=2700, s-maxage=3600, immutable", // 45min cliente, 60min CDN
+				Pragma: bypassCache ? "no-cache" : "cache",
+				Expires: bypassCache
+					? "0"
+					: new Date(Date.now() + 45 * 60 * 1000).toUTCString(),
 			},
+			memoryCacheTTL: 45 * 60 * 1000, // 45min memory cache
 		});
 	}
 
 	/**
-	 * Posts por categoria - Cache REDUZIDO
+	 * Posts por categoria - Cache AGRESSIVO (20min)
 	 */
 	async getPostsByCategory(categoryId, bypassCache = false) {
 		const endpoint = `/posts?select=*&published=eq.true&category=eq.${categoryId}&order=created_at.desc`;
 
 		return this.fetch(endpoint, {
-			cache: bypassCache ? "no-cache" : "default",
+			cache: bypassCache ? "no-cache" : "force-cache",
 			headers: {
-				"Cache-Control": bypassCache ? "no-cache" : "max-age=60", // REDUZIDO: 1 minuto
+				"Cache-Control": bypassCache
+					? "no-cache"
+					: "public, max-age=1200, s-maxage=1800", // 20min cliente, 30min CDN
+				Pragma: bypassCache ? "no-cache" : "cache",
 			},
+			memoryCacheTTL: 20 * 60 * 1000, // 20min memory cache
 		});
 	}
 
 	/**
-	 * Post individual - Cache moderado
+	 * Post individual - Cache MUITO AGRESSIVO (60min)
 	 */
 	async getPostById(id, bypassCache = false) {
 		const endpoint = `/posts?select=*&id=eq.${id}&published=eq.true&limit=1`;
 
 		const data = await this.fetch(endpoint, {
-			cache: bypassCache ? "no-cache" : "default",
+			cache: bypassCache ? "no-cache" : "force-cache",
 			headers: {
-				"Cache-Control": bypassCache ? "no-cache" : "max-age=120", // 2 minutos para posts individuais
+				"Cache-Control": bypassCache
+					? "no-cache"
+					: "public, max-age=3600, s-maxage=7200, immutable", // 60min cliente, 120min CDN
+				Pragma: bypassCache ? "no-cache" : "cache",
+				Expires: bypassCache
+					? "0"
+					: new Date(Date.now() + 60 * 60 * 1000).toUTCString(),
 			},
+			memoryCacheTTL: 60 * 60 * 1000, // 60min memory cache
 		});
 
 		if (!data || data.length === 0) {
@@ -113,7 +185,7 @@ class DataAPIService {
 	}
 
 	/**
-	 * Categorias - Cache moderado (categorias mudam pouco)
+	 * Categorias - Cache ULTRA AGRESSIVO (2 horas)
 	 */
 	async getCategories(bypassCache = false) {
 		const endpoint = "/categories?select=*&order=name";
@@ -121,13 +193,20 @@ class DataAPIService {
 		return this.fetch(endpoint, {
 			cache: bypassCache ? "no-cache" : "force-cache",
 			headers: {
-				"Cache-Control": bypassCache ? "no-cache" : "max-age=600", // 10 minutos para categorias
+				"Cache-Control": bypassCache
+					? "no-cache"
+					: "public, max-age=7200, s-maxage=10800, immutable", // 2h cliente, 3h CDN
+				Pragma: bypassCache ? "no-cache" : "cache",
+				Expires: bypassCache
+					? "0"
+					: new Date(Date.now() + 2 * 60 * 60 * 1000).toUTCString(),
 			},
+			memoryCacheTTL: 2 * 60 * 60 * 1000, // 2h memory cache
 		});
 	}
 
 	/**
-	 * Busca de posts - SEM cache
+	 * Busca de posts - Cache curto (5min)
 	 */
 	async searchPosts(query) {
 		if (!query || query.length < 2) return [];
@@ -145,219 +224,91 @@ class DataAPIService {
 		)}*)&order=created_at.desc&limit=20`;
 
 		return this.fetch(endpoint, {
-			cache: "no-cache", // SEMPRE sem cache para buscas
-			headers: {
-				"Cache-Control": "no-cache",
-			},
-		});
-	}
-
-	/**
-	 * NOVO: Método para buscar dados frescos (bypass total de cache)
-	 */
-	async getAllPostsFresh() {
-		return this.getAllPosts(true);
-	}
-
-	async getFeaturedPostsFresh() {
-		return this.getFeaturedPosts(true);
-	}
-
-	async getPostsByCategoryFresh(categoryId) {
-		return this.getPostsByCategory(categoryId, true);
-	}
-
-	async getCategoriesFresh() {
-		return this.getCategories(true);
-	}
-
-	/**
-	 * Busca avançada com filtros
-	 */
-	async searchPostsAdvanced(filters = {}) {
-		const { query, category, author, trending, limit = 20 } = filters;
-
-		let conditions = ["published=eq.true"];
-
-		if (query && query.length >= 2) {
-			conditions.push(
-				`or=(title.ilike.*${encodeURIComponent(
-					query
-				)}*,excerpt.ilike.*${encodeURIComponent(
-					query
-				)}*,content.ilike.*${encodeURIComponent(query)}*)`
-			);
-		}
-
-		if (category) {
-			conditions.push(`category=eq.${category}`);
-		}
-
-		if (author) {
-			conditions.push(`author.ilike.*${encodeURIComponent(author)}*`);
-		}
-
-		if (trending !== undefined) {
-			conditions.push(`trending=eq.${trending}`);
-		}
-
-		const endpoint = `/posts?select=*&${conditions.join(
-			"&"
-		)}&order=created_at.desc&limit=${limit}`;
-
-		return this.fetch(endpoint, {
-			cache: "no-cache",
-			headers: {
-				"Cache-Control": "no-cache",
-			},
-		});
-	}
-
-	/**
-	 * Posts relacionados por categoria
-	 */
-	async getRelatedPosts(categoryId, excludePostId, limit = 3) {
-		const endpoint = `/posts?select=*&published=eq.true&category=eq.${categoryId}&id=neq.${excludePostId}&order=created_at.desc&limit=${limit}`;
-
-		return this.fetch(endpoint, {
 			cache: "default",
 			headers: {
-				"Cache-Control": "max-age=120", // 2 minutos
+				"Cache-Control": "public, max-age=300", // 5min para busca
 			},
+			memoryCacheTTL: 5 * 60 * 1000,
 		});
 	}
 
 	/**
-	 * Posts mais recentes (para widgets)
+	 * PRELOAD de dados críticos para carregamento instantâneo
 	 */
-	async getLatestPosts(limit = 5, bypassCache = false) {
-		const endpoint = `/posts?select=id,title,excerpt,image_url,image_path,category_name,created_at,author&published=eq.true&order=created_at.desc&limit=${limit}`;
+	async preloadCriticalData() {
+		try {
+			// Preload em paralelo dos dados mais importantes
+			const [featuredPosts, allPosts, categories] = await Promise.allSettled([
+				this.getFeaturedPosts(),
+				this.getAllPosts(),
+				this.getCategories(),
+			]);
 
-		return this.fetch(endpoint, {
-			cache: bypassCache ? "no-cache" : "default",
-			headers: {
-				"Cache-Control": bypassCache ? "no-cache" : "max-age=60", // 1 minuto
-			},
-		});
+			return {
+				featuredPosts:
+					featuredPosts.status === "fulfilled" ? featuredPosts.value : [],
+				allPosts: allPosts.status === "fulfilled" ? allPosts.value : [],
+				categories: categories.status === "fulfilled" ? categories.value : [],
+				preloadTimestamp: Date.now(),
+			};
+		} catch (error) {
+			console.warn("⚠️ Preload failed, will load on demand:", error);
+			return null;
+		}
 	}
 
 	/**
-	 * Posts por autor
+	 * Warmup cache - executar no app startup
 	 */
-	async getPostsByAuthor(author, limit = 10) {
-		const endpoint = `/posts?select=*&published=eq.true&author.ilike.*${encodeURIComponent(
-			author
-		)}*&order=created_at.desc&limit=${limit}`;
+	async warmupCache() {
+		if (typeof window === "undefined") return; // SSR safety
 
-		return this.fetch(endpoint, {
-			cache: "default",
-			headers: {
-				"Cache-Control": "max-age=180", // 3 minutos
-			},
-		});
+		try {
+			// Warmup silencioso em background
+			setTimeout(async () => {
+				await this.preloadCriticalData();
+				console.log("🚀 Cache warmed up successfully");
+			}, 100);
+		} catch (error) {
+			console.warn("⚠️ Cache warmup failed:", error);
+		}
 	}
 
 	/**
-	 * Estatísticas básicas
+	 * Cache management otimizado
 	 */
-	async getPublicStats() {
-		const [totalPosts, featuredPosts, categories] = await Promise.all([
-			this.fetch("/posts?select=count&published=eq.true", {
-				cache: "default",
-				headers: { "Cache-Control": "max-age=300" }, // 5 minutos para stats
-			}),
-			this.fetch("/posts?select=count&published=eq.true&trending=eq.true", {
-				cache: "default",
-				headers: { "Cache-Control": "max-age=300" },
-			}),
-			this.fetch("/categories?select=count", {
-				cache: "default",
-				headers: { "Cache-Control": "max-age=600" }, // 10 minutos para contagem de categorias
-			}),
-		]);
+	clearMemoryCache() {
+		this.memoryCache.clear();
+		this.cacheTimestamps.clear();
+		console.log("🗑️ Memory cache cleared");
+	}
 
+	getCacheStats() {
 		return {
-			totalPosts: totalPosts?.[0]?.count || 0,
-			featuredPosts: featuredPosts?.[0]?.count || 0,
-			totalCategories: categories?.[0]?.count || 0,
+			memoryEntries: this.memoryCache.size,
+			oldestEntry: Math.min(...Array.from(this.cacheTimestamps.values())),
+			newestEntry: Math.max(...Array.from(this.cacheTimestamps.values())),
 		};
 	}
 
 	/**
-	 * Verificar se post existe
-	 */
-	async postExists(id) {
-		try {
-			const endpoint = `/posts?select=id&id=eq.${id}&published=eq.true&limit=1`;
-			const data = await this.fetch(endpoint, {
-				cache: "default",
-				headers: { "Cache-Control": "max-age=60" },
-			});
-			return data && data.length > 0;
-		} catch (error) {
-			return false;
-		}
-	}
-
-	/**
-	 * MELHORADA: Invalidar cache HTTP para rotas específicas
-	 */
-	async invalidateCache(endpoint) {
-		try {
-			const url = `${this.baseURL}${endpoint}`;
-
-			// Fazer uma requisição HEAD com no-cache para forçar invalidação
-			await fetch(url, {
-				method: "HEAD",
-				headers: {
-					...this.headers,
-					"Cache-Control": "no-cache",
-					Pragma: "no-cache",
-				},
-			});
-		} catch (error) {
-			console.warn("Cache invalidation failed:", error);
-		}
-	}
-
-	/**
-	 * MELHORADA: Invalidar cache de múltiplas rotas
-	 */
-	async invalidateMultipleCache(endpoints) {
-		const results = await Promise.allSettled(
-			endpoints.map((endpoint) => this.invalidateCache(endpoint))
-		);
-
-		const failed = results.filter((r) => r.status === "rejected");
-		if (failed.length > 0) {
-			console.warn(`Failed to invalidate ${failed.length} cache entries`);
-		}
-	}
-
-	/**
-	 * NOVA: Invalidar todos os caches de posts
-	 */
-	async invalidateAllPostsCache() {
-		const endpoints = [
-			"/posts",
-			"/posts?published=eq.true",
-			"/posts?published=eq.true&trending=eq.true",
-		];
-
-		await this.invalidateMultipleCache(endpoints);
-	}
-
-	/**
-	 * Health check da API
+	 * Health check otimizado
 	 */
 	async healthCheck() {
 		try {
-			const endpoint = "/posts?select=count&limit=1";
-			await this.fetch(endpoint, {
+			const start = Date.now();
+			await this.fetch("/posts?select=count&limit=1", {
 				cache: "no-cache",
 				headers: { "Cache-Control": "no-cache" },
 			});
-			return { status: "healthy", timestamp: new Date().toISOString() };
+			const duration = Date.now() - start;
+
+			return {
+				status: "healthy",
+				responseTime: duration,
+				timestamp: new Date().toISOString(),
+				cacheStats: this.getCacheStats(),
+			};
 		} catch (error) {
 			return {
 				status: "unhealthy",
@@ -368,43 +319,41 @@ class DataAPIService {
 	}
 
 	/**
-	 * Buscar posts por tags
+	 * Invalidação seletiva para admin
 	 */
-	async getPostsByTag(tag, limit = 10) {
-		const endpoint = `/posts?select=*&published=eq.true&tags.cs.["${tag}"]&order=created_at.desc&limit=${limit}`;
+	async invalidateCache(endpoint) {
+		// Invalidar memory cache
+		const keysToDelete = Array.from(this.memoryCache.keys()).filter((key) =>
+			key.includes(endpoint)
+		);
 
-		return this.fetch(endpoint, {
-			cache: "default",
-			headers: {
-				"Cache-Control": "max-age=180", // 3 minutos
-			},
-		});
-	}
-
-	/**
-	 * Buscar todas as tags únicas
-	 */
-	async getAllTags() {
-		const endpoint = "/posts?select=tags&published=eq.true&not.tags.is.null";
-
-		const posts = await this.fetch(endpoint, {
-			cache: "force-cache",
-			headers: {
-				"Cache-Control": "max-age=900", // 15 minutos para tags
-			},
+		keysToDelete.forEach((key) => {
+			this.memoryCache.delete(key);
+			this.cacheTimestamps.delete(key);
 		});
 
-		// Processar tags no cliente
-		const allTags = new Set();
-		posts.forEach((post) => {
-			if (post.tags && Array.isArray(post.tags)) {
-				post.tags.forEach((tag) => allTags.add(tag.trim()));
-			}
-		});
-
-		return Array.from(allTags).sort();
+		// Força nova requisição para invalidar HTTP cache
+		try {
+			const url = `${this.baseURL}${endpoint}`;
+			await fetch(url, {
+				method: "HEAD",
+				headers: {
+					...this.headers,
+					"Cache-Control": "no-cache, no-store, must-revalidate",
+					Pragma: "no-cache",
+					Expires: "0",
+				},
+			});
+		} catch (error) {
+			console.warn("Cache invalidation failed:", error);
+		}
 	}
 }
 
 // Singleton instance
 export const dataAPIService = new DataAPIService();
+
+// Auto warmup on module load
+if (typeof window !== "undefined") {
+	dataAPIService.warmupCache();
+}
