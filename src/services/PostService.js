@@ -1,10 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { dataAPIService } from "./DataAPIService";
+import { ImageUploadService } from "./ImageUploadService";
 
 /**
- * PostService - IMPLEMENTAÇÃO HÍBRIDA
+ * PostService - IMPLEMENTAÇÃO HÍBRIDA com Upload de Imagens
  * - Data API para queries públicas (performance)
  * - SDK para operações administrativas (type safety)
+ * - Integração com ImageUploadService
  * - Fallback automático
  */
 
@@ -26,7 +28,11 @@ export class PostService {
 		try {
 			const data = await dataAPIService.getFeaturedPosts();
 
-			return data || [];
+			// Otimizar URLs das imagens para performance
+			return (data || []).map((post) => ({
+				...post,
+				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+			}));
 		} catch (error) {
 			console.error("❌ PostService.getFeaturedPosts (Data API) error:", error);
 
@@ -40,7 +46,11 @@ export class PostService {
 		try {
 			const data = await dataAPIService.getAllPosts();
 
-			return data || [];
+			// Otimizar URLs das imagens para performance
+			return (data || []).map((post) => ({
+				...post,
+				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+			}));
 		} catch (error) {
 			console.error("❌ PostService.getAllPosts (Data API) error:", error);
 			return this.getAllPostsSDK();
@@ -56,7 +66,11 @@ export class PostService {
 		try {
 			const data = await dataAPIService.getPostsByCategory(categoryId);
 
-			return data || [];
+			// Otimizar URLs das imagens para performance
+			return (data || []).map((post) => ({
+				...post,
+				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+			}));
 		} catch (error) {
 			console.error(
 				`❌ PostService.getPostsByCategory (Data API) error:`,
@@ -81,7 +95,15 @@ export class PostService {
 
 			const data = await dataAPIService.getPostById(postId);
 
-			return data;
+			// Otimizar URL da imagem para performance (tamanho maior para detalhes)
+			return {
+				...data,
+				image_url: this.getOptimizedImageUrl(
+					data.image_path,
+					data.image_url,
+					"1920x1080"
+				),
+			};
 		} catch (error) {
 			console.error("❌ PostService.getPostById (Data API) error:", error);
 
@@ -114,7 +136,11 @@ export class PostService {
 		try {
 			const data = await dataAPIService.searchPosts(query);
 
-			return data || [];
+			// Otimizar URLs das imagens para performance
+			return (data || []).map((post) => ({
+				...post,
+				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+			}));
 		} catch (error) {
 			console.error("❌ PostService.searchPosts (Data API) error:", error);
 			return this.searchPostsSDK(query);
@@ -138,7 +164,11 @@ export class PostService {
 			.limit(6);
 
 		if (error) throw error;
-		return data || [];
+
+		return (data || []).map((post) => ({
+			...post,
+			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+		}));
 	}
 
 	static async getAllPostsSDK() {
@@ -150,7 +180,11 @@ export class PostService {
 			.order("created_at", { ascending: false });
 
 		if (error) throw error;
-		return data || [];
+
+		return (data || []).map((post) => ({
+			...post,
+			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+		}));
 	}
 
 	static async getPostsByCategorySDK(categoryId) {
@@ -163,7 +197,11 @@ export class PostService {
 			.order("created_at", { ascending: false });
 
 		if (error) throw error;
-		return data || [];
+
+		return (data || []).map((post) => ({
+			...post,
+			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+		}));
 	}
 
 	static async getPostByIdSDK(id) {
@@ -182,7 +220,15 @@ export class PostService {
 			}
 			throw error;
 		}
-		return data;
+
+		return {
+			...data,
+			image_url: this.getOptimizedImageUrl(
+				data.image_path,
+				data.image_url,
+				"1920x1080"
+			),
+		};
 	}
 
 	static async searchPostsSDK(query) {
@@ -198,7 +244,11 @@ export class PostService {
 			.limit(20);
 
 		if (error) throw error;
-		return data || [];
+
+		return (data || []).map((post) => ({
+			...post,
+			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+		}));
 	}
 
 	/**
@@ -219,6 +269,7 @@ export class PostService {
 				throw error;
 			}
 
+			// Para admin, manter URLs originais para edição
 			return data || [];
 		} catch (error) {
 			console.error("❌ PostService.getAllPostsAdmin error:", error);
@@ -252,6 +303,7 @@ export class PostService {
 				throw error;
 			}
 
+			// Para admin, manter URLs originais para edição
 			return data;
 		} catch (error) {
 			console.error("❌ PostService.getPostByIdAdmin error:", error);
@@ -292,6 +344,13 @@ export class PostService {
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
+			// Buscar post atual para comparar imagens
+			const { data: currentPost } = await adminClient
+				.from("posts")
+				.select("image_path")
+				.eq("id", postId)
+				.single();
+
 			const { data, error } = await adminClient
 				.from("posts")
 				.update({
@@ -305,6 +364,15 @@ export class PostService {
 			if (error) {
 				console.error("❌ updatePost error:", error);
 				throw error;
+			}
+
+			// Se a imagem mudou, agendar limpeza da imagem antiga
+			if (
+				currentPost?.image_path &&
+				currentPost.image_path !== postData.image_path &&
+				postData.image_path // Se nova imagem foi definida
+			) {
+				this.scheduleImageCleanup(currentPost.image_path);
 			}
 
 			// Invalidar cache do Data API
@@ -321,6 +389,13 @@ export class PostService {
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
+			// Buscar imagem do post antes de deletar
+			const { data: postToDelete } = await adminClient
+				.from("posts")
+				.select("image_path")
+				.eq("id", postId)
+				.single();
+
 			const { error } = await adminClient
 				.from("posts")
 				.delete()
@@ -329,6 +404,11 @@ export class PostService {
 			if (error) {
 				console.error("❌ deletePost error:", error);
 				throw error;
+			}
+
+			// Agendar limpeza da imagem
+			if (postToDelete?.image_path) {
+				this.scheduleImageCleanup(postToDelete.image_path);
 			}
 
 			// Invalidar cache do Data API
@@ -341,9 +421,43 @@ export class PostService {
 
 	/**
 	 * ======================================
-	 * UTILITIES
+	 * UTILITIES - OTIMIZAÇÃO DE IMAGENS
 	 * ======================================
 	 */
+
+	/**
+	 * Obter URL otimizada da imagem com fallback
+	 */
+	static getOptimizedImageUrl(imagePath, originalUrl, size = "800x600") {
+		// Se temos image_path, usar URL otimizada
+		if (imagePath) {
+			return ImageUploadService.getOptimizedImageUrl(imagePath, size);
+		}
+
+		// Fallback para URL original (posts antigos)
+		if (originalUrl) {
+			return originalUrl;
+		}
+
+		// Fallback final para imagem padrão
+		return "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
+	}
+
+	/**
+	 * Agendar limpeza de imagem antiga
+	 */
+	static scheduleImageCleanup(imagePath) {
+		if (!imagePath) return;
+
+		// Agendar limpeza com delay para evitar problemas de cache
+		setTimeout(async () => {
+			try {
+				await ImageUploadService.removePostImage(imagePath);
+			} catch (error) {
+				console.warn("⚠️ Erro ao remover imagem antiga:", error);
+			}
+		}, 5 * 60 * 1000); // 5 minutos de delay
+	}
 
 	static createFreshAnonymousClient() {
 		return createClient(supabaseUrl, supabaseAnonKey, {

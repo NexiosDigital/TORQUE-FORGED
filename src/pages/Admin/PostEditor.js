@@ -17,11 +17,13 @@ import {
 	usePostByIdAdmin,
 	useCategories,
 } from "../../hooks/usePostsQuery";
+import ImageUpload from "../../components/ImageUpload";
 import toast from "react-hot-toast";
 
 /**
- * PostEditor com Suporte a Markdown
+ * PostEditor com Suporte a Markdown e Upload de Imagens
  * - Editor Markdown com preview em tempo real
+ * - Upload de imagens integrado
  * - Sintaxe highlighting visual
  * - Toolbar com atalhos comuns
  */
@@ -51,6 +53,10 @@ const PostEditor = () => {
 	const [content, setContent] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [showPreview, setShowPreview] = useState(false);
+	const [imageData, setImageData] = useState({
+		image_url: null,
+		image_path: null,
+	});
 
 	const watchTitle = watch("title");
 	const watchPublished = watch("published");
@@ -62,7 +68,6 @@ const PostEditor = () => {
 			setValue("title", existingPost.title);
 			setValue("slug", existingPost.slug);
 			setValue("category", existingPost.category);
-			setValue("image_url", existingPost.image_url);
 			setValue("excerpt", existingPost.excerpt);
 			setValue("author", existingPost.author);
 			setValue("read_time", existingPost.read_time);
@@ -70,6 +75,12 @@ const PostEditor = () => {
 			setValue("trending", existingPost.trending);
 			setValue("tags", existingPost.tags?.join(", ") || "");
 			setContent(existingPost.content || "");
+
+			// Configurar dados da imagem
+			setImageData({
+				image_url: existingPost.image_url,
+				image_path: existingPost.image_path,
+			});
 		}
 	}, [existingPost, isEditing, setValue]);
 
@@ -92,9 +103,19 @@ const PostEditor = () => {
 		try {
 			setLoading(true);
 
+			// Validar se há imagem
+			if (!imageData.image_url) {
+				toast.error("É obrigatório fazer upload de uma imagem de capa");
+				return;
+			}
+
 			const postData = {
 				...data,
 				content,
+				// Dados da imagem
+				image_url: imageData.image_url,
+				image_path: imageData.image_path,
+				// Outros dados
 				category_name:
 					categories.find((cat) => cat.id === data.category)?.name || "",
 				tags: data.tags ? data.tags.split(",").map((tag) => tag.trim()) : [],
@@ -120,6 +141,11 @@ const PostEditor = () => {
 		} finally {
 			setLoading(false);
 		}
+	};
+
+	// Handler para mudança na imagem
+	const handleImageChange = (newImageData) => {
+		setImageData(newImageData);
 	};
 
 	// Inserir texto na posição do cursor
@@ -585,6 +611,19 @@ console.log('Hello World!');
 
 						{/* Sidebar */}
 						<div className="lg:col-span-1 space-y-6">
+							{/* Upload de Imagem */}
+							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
+								<h3 className="text-xl font-bold text-white mb-4">
+									Imagem de Capa *
+								</h3>
+								<ImageUpload
+									value={imageData.image_url}
+									onChange={handleImageChange}
+									postSlug={watch("slug")}
+									disabled={loading}
+								/>
+							</div>
+
 							{/* Publish Settings */}
 							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
 								<h3 className="text-xl font-bold text-white mb-4">
@@ -639,18 +678,6 @@ console.log('Hello World!');
 										{errors.category.message}
 									</p>
 								)}
-							</div>
-
-							{/* Image */}
-							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
-								<label className="block text-white font-semibold mb-3">
-									URL da Imagem
-								</label>
-								<input
-									{...register("image_url")}
-									className="w-full px-6 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
-									placeholder="https://exemplo.com/imagem.jpg"
-								/>
 							</div>
 
 							{/* Meta Info */}
