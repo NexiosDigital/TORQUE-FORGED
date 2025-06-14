@@ -10,6 +10,9 @@ import {
 	FileText,
 	AlertCircle,
 	Image as ImageIcon,
+	Link as LinkIcon,
+	Table,
+	Folder,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,15 +24,10 @@ import {
 } from "../../hooks/usePostsQuery";
 import ImageUpload from "../../components/ImageUpload";
 import ImageUploadModal from "../../components/ImageUploadModal";
+import LinkInsertModal from "../../components/LinkInsertModal";
+import TableGeneratorModal from "../../components/TableGeneratorModal";
+import PostImageGallery from "../../components/PostImageGallery";
 import toast from "react-hot-toast";
-
-/**
- * PostEditor - VERSÃO ATUALIZADA COM UPLOAD INLINE
- * - Upload de imagens durante a escrita
- * - Inserção automática de markdown na posição do cursor
- * - Toolbar expandida com novas funcionalidades
- * - Gerenciamento de imagens de conteúdo
- */
 
 const PostEditor = () => {
 	const navigate = useNavigate();
@@ -57,17 +55,21 @@ const PostEditor = () => {
 	const [loading, setLoading] = useState(false);
 	const [showPreview, setShowPreview] = useState(false);
 
-	// Estados para upload inline de imagens
+	// Estados para modais
 	const [showImageModal, setShowImageModal] = useState(false);
+	const [showLinkModal, setShowLinkModal] = useState(false);
+	const [showTableModal, setShowTableModal] = useState(false);
 	const [cursorPosition, setCursorPosition] = useState(0);
 
-	// Estado da imagem de capa - CORRIGIDO PARA EDIÇÃO
+	// Estados para aba lateral
+	const [sidebarTab, setSidebarTab] = useState("settings"); // settings | gallery
+
+	// Estado da imagem de capa
 	const [imageData, setImageData] = useState({
 		image_url: null,
 		image_path: null,
 	});
 
-	// Estado para controlar se a imagem foi alterada durante edição
 	const [imageChanged, setImageChanged] = useState(false);
 
 	const watchTitle = watch("title");
@@ -75,7 +77,7 @@ const PostEditor = () => {
 	const watchTrending = watch("trending");
 	const watchSlug = watch("slug");
 
-	// Carregar post para edição - VERSÃO CORRIGIDA
+	// Carregar post para edição
 	useEffect(() => {
 		if (isEditing && existingPost) {
 			setValue("title", existingPost.title);
@@ -89,7 +91,6 @@ const PostEditor = () => {
 			setValue("tags", existingPost.tags?.join(", ") || "");
 			setContent(existingPost.content || "");
 
-			// Configurar dados da imagem existente - APENAS SE NÃO FOI ALTERADA
 			if (existingPost.image_url && !imageChanged) {
 				const imageState = {
 					image_url: existingPost.image_url,
@@ -100,7 +101,7 @@ const PostEditor = () => {
 		}
 	}, [existingPost, isEditing, setValue, imageChanged]);
 
-	// Gerar slug automaticamente - APENAS PARA POSTS NOVOS
+	// Gerar slug automaticamente para posts novos
 	useEffect(() => {
 		if (watchTitle && !isEditing) {
 			const slug = watchTitle
@@ -121,7 +122,7 @@ const PostEditor = () => {
 		setImageData(newImageData);
 	};
 
-	// NOVA FUNÇÃO: Salvar posição do cursor antes de abrir modal
+	// Salvar posição do cursor
 	const handleSaveCursorPosition = () => {
 		const textarea = document.getElementById("markdown-editor");
 		if (textarea) {
@@ -129,7 +130,7 @@ const PostEditor = () => {
 		}
 	};
 
-	// NOVA FUNÇÃO: Inserir markdown na posição do cursor
+	// Inserir markdown na posição do cursor
 	const insertMarkdownAtCursor = (markdownText) => {
 		const textarea = document.getElementById("markdown-editor");
 		if (!textarea) return;
@@ -137,7 +138,6 @@ const PostEditor = () => {
 		const start = cursorPosition;
 		const end = cursorPosition;
 
-		// Inserir markdown no conteúdo
 		const newContent =
 			content.substring(0, start) +
 			"\n\n" +
@@ -147,36 +147,86 @@ const PostEditor = () => {
 
 		setContent(newContent);
 
-		// Focar no textarea e posicionar cursor após a inserção
 		setTimeout(() => {
 			textarea.focus();
-			const newPosition = start + markdownText.length + 4; // +4 para as quebras de linha
+			const newPosition = start + markdownText.length + 4;
 			textarea.setSelectionRange(newPosition, newPosition);
 		}, 100);
 	};
 
-	// NOVA FUNÇÃO: Handler para imagem inserida
+	// Handlers para modais
+	const handleAddImage = () => {
+		handleSaveCursorPosition();
+		setShowImageModal(true);
+	};
+
 	const handleImageUploaded = (imageResult) => {
 		insertMarkdownAtCursor(imageResult.markdown);
 		toast.success("Imagem inserida no editor!");
 	};
 
-	// NOVA FUNÇÃO: Abrir modal de upload de imagem
-	const handleAddImage = () => {
+	const handleAddLink = () => {
 		handleSaveCursorPosition();
-		setShowImageModal(true);
+		setShowLinkModal(true);
+	};
+
+	const handleLinkInserted = (linkResult) => {
+		insertMarkdownAtCursor(linkResult.markdown);
+		toast.success("Link inserido no editor!");
+	};
+
+	const handleAddTable = () => {
+		handleSaveCursorPosition();
+		setShowTableModal(true);
+	};
+
+	const handleTableInserted = (tableResult) => {
+		insertMarkdownAtCursor(tableResult.markdown);
+		toast.success("Tabela inserida no editor!");
+	};
+
+	// Handler para inserção de imagem da galeria
+	const handleGalleryImageInserted = (imageResult) => {
+		handleSaveCursorPosition();
+		insertMarkdownAtCursor(imageResult.markdown);
+	};
+
+	// Inserir texto na posição do cursor (para botões básicos)
+	const insertText = (textToInsert, wrapSelection = false) => {
+		const textarea = document.getElementById("markdown-editor");
+		if (!textarea) return;
+
+		const start = textarea.selectionStart;
+		const end = textarea.selectionEnd;
+		const selectedText = textarea.value.substring(start, end);
+
+		let newText;
+		if (wrapSelection && selectedText) {
+			newText = textToInsert.replace("{text}", selectedText);
+		} else {
+			newText = textToInsert;
+		}
+
+		const newContent =
+			content.substring(0, start) + newText + content.substring(end);
+
+		setContent(newContent);
+
+		setTimeout(() => {
+			textarea.focus();
+			const newPosition = start + newText.length;
+			textarea.setSelectionRange(newPosition, newPosition);
+		}, 10);
 	};
 
 	// Validação antes do submit
 	const validateBeforeSubmit = () => {
 		const errors = [];
 
-		// Validar imagem obrigatória
 		if (!imageData.image_url) {
 			errors.push("É obrigatório ter uma imagem de capa");
 		}
 
-		// Validar conteúdo
 		if (!content.trim()) {
 			errors.push("O conteúdo do post não pode estar vazio");
 		}
@@ -188,26 +238,17 @@ const PostEditor = () => {
 		try {
 			setLoading(true);
 
-			// Validações
 			const validationErrors = validateBeforeSubmit();
 			if (validationErrors.length > 0) {
 				validationErrors.forEach((error) => toast.error(error));
 				return;
 			}
 
-			// Usar slug atual ou slug temporário para organizar imagens
-			const currentSlug = data.slug || `temp-${Date.now()}`;
-
-			// Montar dados do post - INCLUINDO CAMPOS DE IMAGEM
 			const postData = {
 				...data,
 				content: content.trim(),
-
-				// CAMPOS DE IMAGEM - USAR ESTADO ATUAL
 				image_url: imageData.image_url,
 				image_path: imageData.image_path,
-
-				// Outros dados processados
 				category_name:
 					categories.find((cat) => cat.id === data.category)?.name || "",
 				tags: data.tags
@@ -220,29 +261,20 @@ const PostEditor = () => {
 				trending: data.trending || false,
 			};
 
-			// Verificação final da imagem
 			if (!postData.image_url) {
 				throw new Error(
 					"Dados da imagem não encontrados. Faça o upload da imagem novamente."
 				);
 			}
 
-			console.log("📝 PostEditor: Dados do post:", {
-				...postData,
-				content: postData.content.substring(0, 100) + "...",
-			});
-
-			// Salvar post
 			let result;
 			if (isEditing) {
 				result = await updatePostMutation.mutateAsync({
 					id,
 					...postData,
 				});
-				console.log("✅ Post atualizado:", result);
 			} else {
 				result = await createPostMutation.mutateAsync(postData);
-				console.log("✅ Post criado:", result);
 			}
 
 			toast.success(`Post ${isEditing ? "atualizado" : "criado"} com sucesso!`);
@@ -250,7 +282,6 @@ const PostEditor = () => {
 		} catch (error) {
 			console.error(`❌ PostEditor: Erro no onSubmit:`, error);
 
-			// Mensagens de erro específicas
 			if (error.message.includes("image_url")) {
 				toast.error(
 					"Erro relacionado à imagem. Verifique se a imagem foi carregada corretamente."
@@ -272,36 +303,7 @@ const PostEditor = () => {
 		}
 	};
 
-	// Inserir texto na posição do cursor
-	const insertText = (textToInsert, wrapSelection = false) => {
-		const textarea = document.getElementById("markdown-editor");
-		if (!textarea) return;
-
-		const start = textarea.selectionStart;
-		const end = textarea.selectionEnd;
-		const selectedText = textarea.value.substring(start, end);
-
-		let newText;
-		if (wrapSelection && selectedText) {
-			newText = textToInsert.replace("{text}", selectedText);
-		} else {
-			newText = textToInsert;
-		}
-
-		const newContent =
-			content.substring(0, start) + newText + content.substring(end);
-
-		setContent(newContent);
-
-		// Focar no textarea após inserção
-		setTimeout(() => {
-			textarea.focus();
-			const newPosition = start + newText.length;
-			textarea.setSelectionRange(newPosition, newPosition);
-		}, 10);
-	};
-
-	// Toolbar com atalhos Markdown - EXPANDIDA COM BOTÃO DE IMAGEM
+	// Toolbar com atalhos Markdown
 	const MarkdownToolbar = () => (
 		<div className="flex flex-wrap items-center gap-2 p-4 bg-gray-800/30 border-b border-gray-700/30">
 			<button
@@ -328,16 +330,19 @@ const PostEditor = () => {
 			>
 				H2
 			</button>
+
+			<div className="w-px h-6 bg-gray-600 mx-1"></div>
+
 			<button
 				type="button"
-				onClick={() => insertText("[{text}](url)", true)}
-				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors duration-300"
-				title="Link"
+				onClick={handleAddLink}
+				className="flex items-center space-x-1 px-3 py-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-lg text-sm transition-all duration-300 shadow-lg hover:shadow-green-500/25"
+				title="Inserir Link"
 			>
-				Link
+				<LinkIcon className="w-4 h-4" />
+				<span>Link</span>
 			</button>
 
-			{/* NOVO BOTÃO: Inserir Imagem */}
 			<button
 				type="button"
 				onClick={handleAddImage}
@@ -347,6 +352,18 @@ const PostEditor = () => {
 				<ImageIcon className="w-4 h-4" />
 				<span>Imagem</span>
 			</button>
+
+			<button
+				type="button"
+				onClick={handleAddTable}
+				className="flex items-center space-x-1 px-3 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg text-sm transition-all duration-300 shadow-lg hover:shadow-indigo-500/25"
+				title="Inserir Tabela"
+			>
+				<Table className="w-4 h-4" />
+				<span>Tabela</span>
+			</button>
+
+			<div className="w-px h-6 bg-gray-600 mx-1"></div>
 
 			<button
 				type="button"
@@ -394,7 +411,7 @@ const PostEditor = () => {
 		</div>
 	);
 
-	// Guia de sintaxe Markdown - ATUALIZADA
+	// Guia de sintaxe Markdown
 	const MarkdownGuide = () => (
 		<div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/30">
 			<h4 className="text-white font-semibold mb-4 flex items-center space-x-2">
@@ -416,10 +433,15 @@ const PostEditor = () => {
 					<code className="text-red-400">## Subtítulo</code> - Subtítulo
 				</div>
 				<div>
-					<code className="text-red-400">[link](url)</code> - Link
+					<code className="text-green-400">[link](url)</code> - Link (use o
+					botão!)
 				</div>
 				<div>
 					<code className="text-blue-400">![alt](img)</code> - Imagem (use o
+					botão!)
+				</div>
+				<div>
+					<code className="text-indigo-400">| col | col |</code> - Tabela (use o
 					botão!)
 				</div>
 				<div>
@@ -496,7 +518,7 @@ const PostEditor = () => {
 							<p className="text-gray-400">
 								{isEditing
 									? `Editando: ${existingPost?.title || "Carregando..."}`
-									: "Crie um novo post em Markdown com imagens inline"}
+									: "Crie um novo post com recursos avançados"}
 							</p>
 						</div>
 					</div>
@@ -585,15 +607,15 @@ const PostEditor = () => {
 								)}
 							</div>
 
-							{/* Markdown Editor - ATUALIZADO COM TOOLBAR EXPANDIDA */}
+							{/* Markdown Editor */}
 							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl border border-gray-700/50 overflow-hidden">
 								<div className="p-6 border-b border-gray-700/50">
 									<label className="block text-white font-semibold mb-0">
 										Conteúdo em Markdown *
 									</label>
 									<p className="text-blue-400 text-sm mt-1">
-										💡 Use o botão "Imagem" para adicionar imagens durante a
-										escrita!
+										💡 Use os botões "Link", "Imagem" e "Tabela" para adicionar
+										elementos durante a escrita!
 									</p>
 								</div>
 
@@ -617,7 +639,7 @@ const PostEditor = () => {
 											className="w-full h-full min-h-[500px] p-6 bg-transparent border-none text-white placeholder-gray-500 focus:outline-none resize-none font-mono text-sm leading-relaxed"
 											placeholder="Digite seu conteúdo em Markdown aqui...
 
-Use o botão 'Imagem' na toolbar para inserir imagens facilmente!"
+Use os botões 'Link', 'Imagem' e 'Tabela' na toolbar para inserir elementos facilmente!"
 										/>
 									</div>
 
@@ -720,149 +742,194 @@ Use o botão 'Imagem' na toolbar para inserir imagens facilmente!"
 
 						{/* Sidebar */}
 						<div className="lg:col-span-1 space-y-6">
-							{/* Upload de Imagem de Capa */}
-							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
-								<h3 className="text-xl font-bold text-white mb-4">
-									Imagem de Capa *
-								</h3>
-
-								{/* Status específico para edição */}
-								{isEditing && imageChanged && (
-									<div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-										<div className="flex items-center space-x-2">
-											<AlertCircle className="w-4 h-4 text-blue-400" />
-											<span className="text-blue-400 text-sm font-semibold">
-												Nova imagem carregada - será atualizada ao salvar
-											</span>
+							{/* Tabs */}
+							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl border border-gray-700/50 overflow-hidden">
+								<div className="flex border-b border-gray-700/50">
+									<button
+										type="button"
+										onClick={() => setSidebarTab("settings")}
+										className={`flex-1 px-4 py-3 text-sm font-semibold transition-colors duration-300 ${
+											sidebarTab === "settings"
+												? "bg-red-600 text-white"
+												: "bg-gray-800/30 text-gray-400 hover:text-white hover:bg-gray-700/30"
+										}`}
+									>
+										Configurações
+									</button>
+									<button
+										type="button"
+										onClick={() => setSidebarTab("gallery")}
+										className={`flex-1 px-4 py-3 text-sm font-semibold transition-colors duration-300 ${
+											sidebarTab === "gallery"
+												? "bg-red-600 text-white"
+												: "bg-gray-800/30 text-gray-400 hover:text-white hover:bg-gray-700/30"
+										}`}
+									>
+										<div className="flex items-center justify-center space-x-2">
+											<Folder className="w-4 h-4" />
+											<span>Galeria</span>
 										</div>
-									</div>
-								)}
+									</button>
+								</div>
 
-								{!imageData.image_url && (
-									<div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-										<div className="flex items-center space-x-2">
-											<AlertCircle className="w-4 h-4 text-yellow-400" />
-											<span className="text-yellow-400 text-sm font-semibold">
-												Imagem de capa é obrigatória
-											</span>
+								<div className="p-6">
+									{sidebarTab === "settings" ? (
+										<div className="space-y-6">
+											{/* Upload de Imagem de Capa */}
+											<div>
+												<h3 className="text-xl font-bold text-white mb-4">
+													Imagem de Capa *
+												</h3>
+
+												{isEditing && imageChanged && (
+													<div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+														<div className="flex items-center space-x-2">
+															<AlertCircle className="w-4 h-4 text-blue-400" />
+															<span className="text-blue-400 text-sm font-semibold">
+																Nova imagem carregada - será atualizada ao
+																salvar
+															</span>
+														</div>
+													</div>
+												)}
+
+												{!imageData.image_url && (
+													<div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+														<div className="flex items-center space-x-2">
+															<AlertCircle className="w-4 h-4 text-yellow-400" />
+															<span className="text-yellow-400 text-sm font-semibold">
+																Imagem de capa é obrigatória
+															</span>
+														</div>
+													</div>
+												)}
+
+												<ImageUpload
+													value={imageData.image_url}
+													onChange={handleImageChange}
+													postSlug={watchSlug}
+													disabled={loading}
+												/>
+											</div>
+
+											{/* Publish Settings */}
+											<div>
+												<h3 className="text-xl font-bold text-white mb-4">
+													Configurações
+												</h3>
+
+												<div className="space-y-4">
+													<label className="flex items-center space-x-3">
+														<input
+															type="checkbox"
+															{...register("published")}
+															className="w-5 h-5 bg-gray-700 border-gray-600 rounded focus:ring-red-500 focus:ring-2"
+														/>
+														<span className="text-white font-medium">
+															Publicar post
+														</span>
+													</label>
+
+													<label className="flex items-center space-x-3">
+														<input
+															type="checkbox"
+															{...register("trending")}
+															className="w-5 h-5 bg-gray-700 border-gray-600 rounded focus:ring-red-500 focus:ring-2"
+														/>
+														<span className="text-white font-medium">
+															Marcar como trending
+														</span>
+													</label>
+												</div>
+											</div>
+
+											{/* Category */}
+											<div>
+												<label className="block text-white font-semibold mb-3">
+													Categoria *
+												</label>
+												<select
+													{...register("category", {
+														required: "Categoria é obrigatória",
+													})}
+													className="w-full px-6 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
+												>
+													<option value="">Selecione uma categoria</option>
+													{categories.map((category) => (
+														<option key={category.id} value={category.id}>
+															{category.name}
+														</option>
+													))}
+												</select>
+												{errors.category && (
+													<p className="text-red-400 text-sm mt-2">
+														{errors.category.message}
+													</p>
+												)}
+											</div>
+
+											{/* Meta Info */}
+											<div>
+												<h3 className="text-xl font-bold text-white mb-4">
+													Meta Informações
+												</h3>
+
+												<div className="space-y-4">
+													<div>
+														<label className="block text-white font-medium mb-2">
+															Autor
+														</label>
+														<input
+															{...register("author")}
+															defaultValue="Equipe TF"
+															className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
+															placeholder="Nome do autor"
+														/>
+													</div>
+
+													<div>
+														<label className="block text-white font-medium mb-2">
+															Tempo de Leitura
+														</label>
+														<input
+															{...register("read_time")}
+															defaultValue="5 min"
+															className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
+															placeholder="5 min"
+														/>
+													</div>
+												</div>
+											</div>
+
+											{/* Tags */}
+											<div>
+												<label className="block text-white font-semibold mb-3">
+													Tags
+												</label>
+												<input
+													{...register("tags")}
+													className="w-full px-6 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
+													placeholder="f1, verstappen, corrida"
+												/>
+												<p className="text-gray-400 text-sm mt-2">
+													Separe as tags com vírgulas
+												</p>
+											</div>
+
+											{/* Markdown Guide */}
+											<MarkdownGuide />
 										</div>
-									</div>
-								)}
-
-								<ImageUpload
-									value={imageData.image_url}
-									onChange={handleImageChange}
-									postSlug={watchSlug}
-									disabled={loading}
-								/>
-							</div>
-
-							{/* Publish Settings */}
-							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
-								<h3 className="text-xl font-bold text-white mb-4">
-									Configurações
-								</h3>
-
-								<div className="space-y-4">
-									<label className="flex items-center space-x-3">
-										<input
-											type="checkbox"
-											{...register("published")}
-											className="w-5 h-5 bg-gray-700 border-gray-600 rounded focus:ring-red-500 focus:ring-2"
+									) : (
+										/* Gallery Tab */
+										<PostImageGallery
+											postSlug={watchSlug}
+											onImageInserted={handleGalleryImageInserted}
+											onUploadNewImage={handleAddImage}
+											postContent={content}
 										/>
-										<span className="text-white font-medium">
-											Publicar post
-										</span>
-									</label>
-
-									<label className="flex items-center space-x-3">
-										<input
-											type="checkbox"
-											{...register("trending")}
-											className="w-5 h-5 bg-gray-700 border-gray-600 rounded focus:ring-red-500 focus:ring-2"
-										/>
-										<span className="text-white font-medium">
-											Marcar como trending
-										</span>
-									</label>
+									)}
 								</div>
 							</div>
-
-							{/* Category */}
-							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
-								<label className="block text-white font-semibold mb-3">
-									Categoria *
-								</label>
-								<select
-									{...register("category", {
-										required: "Categoria é obrigatória",
-									})}
-									className="w-full px-6 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
-								>
-									<option value="">Selecione uma categoria</option>
-									{categories.map((category) => (
-										<option key={category.id} value={category.id}>
-											{category.name}
-										</option>
-									))}
-								</select>
-								{errors.category && (
-									<p className="text-red-400 text-sm mt-2">
-										{errors.category.message}
-									</p>
-								)}
-							</div>
-
-							{/* Meta Info */}
-							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
-								<h3 className="text-xl font-bold text-white mb-4">
-									Meta Informações
-								</h3>
-
-								<div className="space-y-4">
-									<div>
-										<label className="block text-white font-medium mb-2">
-											Autor
-										</label>
-										<input
-											{...register("author")}
-											defaultValue="Equipe TF"
-											className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
-											placeholder="Nome do autor"
-										/>
-									</div>
-
-									<div>
-										<label className="block text-white font-medium mb-2">
-											Tempo de Leitura
-										</label>
-										<input
-											{...register("read_time")}
-											defaultValue="5 min"
-											className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
-											placeholder="5 min"
-										/>
-									</div>
-								</div>
-							</div>
-
-							{/* Tags */}
-							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
-								<label className="block text-white font-semibold mb-3">
-									Tags
-								</label>
-								<input
-									{...register("tags")}
-									className="w-full px-6 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300"
-									placeholder="f1, verstappen, corrida"
-								/>
-								<p className="text-gray-400 text-sm mt-2">
-									Separe as tags com vírgulas
-								</p>
-							</div>
-
-							{/* Markdown Guide */}
-							<MarkdownGuide />
 
 							{/* Save Button */}
 							<button
@@ -871,7 +938,7 @@ Use o botão 'Imagem' na toolbar para inserir imagens facilmente!"
 									loading ||
 									createPostMutation.isLoading ||
 									updatePostMutation.isLoading ||
-									!imageData.image_url // Desabilitar se não há imagem
+									!imageData.image_url
 								}
 								className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white py-4 rounded-2xl font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center space-x-3"
 							>
@@ -904,12 +971,24 @@ Use o botão 'Imagem' na toolbar para inserir imagens facilmente!"
 				</form>
 			</div>
 
-			{/* Modal de Upload de Imagem Inline */}
+			{/* Modals */}
 			<ImageUploadModal
 				isOpen={showImageModal}
 				onClose={() => setShowImageModal(false)}
 				onImageUploaded={handleImageUploaded}
 				postSlug={watchSlug || `temp-${Date.now()}`}
+			/>
+
+			<LinkInsertModal
+				isOpen={showLinkModal}
+				onClose={() => setShowLinkModal(false)}
+				onLinkInserted={handleLinkInserted}
+			/>
+
+			<TableGeneratorModal
+				isOpen={showTableModal}
+				onClose={() => setShowTableModal(false)}
+				onTableInserted={handleTableInserted}
 			/>
 		</div>
 	);

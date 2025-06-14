@@ -47,11 +47,11 @@ const PUBLIC_CACHE_CONFIG = {
 };
 
 const ADMIN_CACHE_CONFIG = {
-	staleTime: 30 * 1000, // REDUZIDO: 30 segundos (era 2 minutos)
+	//staleTime: 30 * 1000, // REDUZIDO: 30 segundos (era 2 minutos)
 	gcTime: 5 * 60 * 1000, // 5 minutos
-	refetchOnWindowFocus: true,
-	refetchOnMount: true,
-	retry: 1,
+	refetchOnWindowFocus: false,
+	refetchOnMount: false,
+	//retry: 1,
 };
 
 /**
@@ -179,8 +179,6 @@ export const useAllPostsAdmin = (options = {}) => {
 		},
 		enabled: isAdmin,
 		...ADMIN_CACHE_CONFIG,
-		// Refetch automático a cada 1 minuto para admin
-		refetchInterval: 60 * 1000,
 		meta: {
 			errorMessage: "Erro ao carregar posts admin",
 		},
