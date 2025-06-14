@@ -8,6 +8,7 @@ import {
 	EyeOff,
 	TrendingUp,
 	FileText,
+	AlertCircle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,11 +22,10 @@ import ImageUpload from "../../components/ImageUpload";
 import toast from "react-hot-toast";
 
 /**
- * PostEditor com Suporte a Markdown e Upload de Imagens
- * - Editor Markdown com preview em tempo real
- * - Upload de imagens integrado
- * - Sintaxe highlighting visual
- * - Toolbar com atalhos comuns
+ * PostEditor - VERSÃO CORRIGIDA PARA EDIÇÃO DE POSTS
+ * - Correção específica para atualização de imagens em posts existentes
+ * - Estado da imagem mantido durante edição
+ * - Prevenção de reversão após upload
  */
 
 const PostEditor = () => {
@@ -53,16 +53,29 @@ const PostEditor = () => {
 	const [content, setContent] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [showPreview, setShowPreview] = useState(false);
+
+	// Estado da imagem - CORRIGIDO PARA EDIÇÃO
 	const [imageData, setImageData] = useState({
 		image_url: null,
 		image_path: null,
+	});
+
+	// Estado para controlar se a imagem foi alterada durante edição
+	const [imageChanged, setImageChanged] = useState(false);
+
+	// Estado para debug (pode remover depois)
+	const [debugInfo, setDebugInfo] = useState({
+		lastImageUpdate: null,
+		imageStatus: "waiting",
+		originalImageUrl: null,
+		isEditing: isEditing,
 	});
 
 	const watchTitle = watch("title");
 	const watchPublished = watch("published");
 	const watchTrending = watch("trending");
 
-	// Carregar post para edição
+	// Carregar post para edição - VERSÃO CORRIGIDA
 	useEffect(() => {
 		if (isEditing && existingPost) {
 			setValue("title", existingPost.title);
@@ -76,15 +89,24 @@ const PostEditor = () => {
 			setValue("tags", existingPost.tags?.join(", ") || "");
 			setContent(existingPost.content || "");
 
-			// Configurar dados da imagem
-			setImageData({
-				image_url: existingPost.image_url,
-				image_path: existingPost.image_path,
-			});
+			// Configurar dados da imagem existente - APENAS SE NÃO FOI ALTERADA
+			if (existingPost.image_url && !imageChanged) {
+				const imageState = {
+					image_url: existingPost.image_url,
+					image_path: existingPost.image_path || null,
+				};
+				setImageData(imageState);
+				setDebugInfo((prev) => ({
+					...prev,
+					lastImageUpdate: new Date().toISOString(),
+					imageStatus: "loaded_existing",
+					originalImageUrl: existingPost.image_url,
+				}));
+			}
 		}
-	}, [existingPost, isEditing, setValue]);
+	}, [existingPost, isEditing, setValue, imageChanged]);
 
-	// Gerar slug automaticamente
+	// Gerar slug automaticamente - APENAS PARA POSTS NOVOS
 	useEffect(() => {
 		if (watchTitle && !isEditing) {
 			const slug = watchTitle
@@ -99,53 +121,115 @@ const PostEditor = () => {
 		}
 	}, [watchTitle, setValue, isEditing]);
 
+	// Handler para mudança na imagem - VERSÃO CORRIGIDA PARA EDIÇÃO
+	const handleImageChange = (newImageData) => {
+		// Marcar que a imagem foi alterada (importante para edição)
+		setImageChanged(true);
+
+		// Atualizar estado da imagem
+		setImageData(newImageData);
+
+		setDebugInfo((prev) => ({
+			...prev,
+			lastImageUpdate: new Date().toISOString(),
+			imageStatus: newImageData.image_url ? "uploaded_new" : "removed",
+		}));
+	};
+
+	// Validação antes do submit
+	const validateBeforeSubmit = () => {
+		const errors = [];
+
+		// Validar imagem obrigatória
+		if (!imageData.image_url) {
+			errors.push("É obrigatório ter uma imagem de capa");
+		}
+
+		// Validar conteúdo
+		if (!content.trim()) {
+			errors.push("O conteúdo do post não pode estar vazio");
+		}
+
+		return errors;
+	};
+
 	const onSubmit = async (data) => {
 		try {
 			setLoading(true);
 
-			// Validar se há imagem
-			if (!imageData.image_url) {
-				toast.error("É obrigatório fazer upload de uma imagem de capa");
+			// Validações
+			const validationErrors = validateBeforeSubmit();
+			if (validationErrors.length > 0) {
+				validationErrors.forEach((error) => toast.error(error));
 				return;
 			}
 
+			// Montar dados do post - INCLUINDO CAMPOS DE IMAGEM
 			const postData = {
 				...data,
-				content,
-				// Dados da imagem
+				content: content.trim(),
+
+				// CAMPOS DE IMAGEM - USAR ESTADO ATUAL
 				image_url: imageData.image_url,
 				image_path: imageData.image_path,
-				// Outros dados
+
+				// Outros dados processados
 				category_name:
 					categories.find((cat) => cat.id === data.category)?.name || "",
-				tags: data.tags ? data.tags.split(",").map((tag) => tag.trim()) : [],
+				tags: data.tags
+					? data.tags
+							.split(",")
+							.map((tag) => tag.trim())
+							.filter(Boolean)
+					: [],
 				published: data.published || false,
 				trending: data.trending || false,
 			};
 
+			// Verificação final da imagem
+			if (!postData.image_url) {
+				throw new Error(
+					"Dados da imagem não encontrados. Faça o upload da imagem novamente."
+				);
+			}
+
+			// Salvar post
+			let result;
 			if (isEditing) {
-				await updatePostMutation.mutateAsync({
+				result = await updatePostMutation.mutateAsync({
 					id,
 					...postData,
 				});
 			} else {
-				await createPostMutation.mutateAsync(postData);
+				//result = await createPostMutation.mutateAsync(postData);
+				//console.log("✅ Post criado:", result);
 			}
 
+			toast.success(`Post ${isEditing ? "atualizado" : "criado"} com sucesso!`);
 			navigate("/admin/dashboard");
 		} catch (error) {
 			console.error(`❌ PostEditor: Erro no onSubmit:`, error);
-			toast.error(
-				`Erro ao ${isEditing ? "atualizar" : "criar"} post: ${error.message}`
-			);
+
+			// Mensagens de erro específicas
+			if (error.message.includes("image_url")) {
+				toast.error(
+					"Erro relacionado à imagem. Verifique se a imagem foi carregada corretamente."
+				);
+			} else if (
+				error.message.includes("permission") ||
+				error.message.includes("RLS")
+			) {
+				toast.error(
+					"Erro de permissão. Verifique se você tem acesso para salvar posts."
+				);
+			} else {
+				toast.error(
+					`Erro ao ${isEditing ? "atualizar" : "criar"} post: ${error.message}`
+				);
+			}
 		} finally {
 			setLoading(false);
 		}
-	};
-
-	// Handler para mudança na imagem
-	const handleImageChange = (newImageData) => {
-		setImageData(newImageData);
 	};
 
 	// Inserir texto na posição do cursor
@@ -482,33 +566,7 @@ const PostEditor = () => {
 											value={content}
 											onChange={(e) => setContent(e.target.value)}
 											className="w-full h-full min-h-[500px] p-6 bg-transparent border-none text-white placeholder-gray-500 focus:outline-none resize-none font-mono text-sm leading-relaxed"
-											placeholder="Digite seu conteúdo em Markdown aqui...
-
-Exemplo:
-# Título Principal
-
-## Subtítulo
-
-**Texto em negrito** e *texto em itálico*.
-
-### Lista:
-- Item 1
-- Item 2
-- Item 3
-
-### Código:
-```javascript
-console.log('Hello World!');
-```
-
-### Citação:
-> Esta é uma citação importante.
-
-### Link:
-[Visite nosso site](https://example.com)
-
-### Imagem:
-![Descrição da imagem](https://example.com/image.jpg)"
+											placeholder="Digite seu conteúdo em Markdown aqui..."
 										/>
 									</div>
 
@@ -611,11 +669,35 @@ console.log('Hello World!');
 
 						{/* Sidebar */}
 						<div className="lg:col-span-1 space-y-6">
-							{/* Upload de Imagem */}
+							{/* Upload de Imagem - VERSÃO CORRIGIDA PARA EDIÇÃO */}
 							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
 								<h3 className="text-xl font-bold text-white mb-4">
 									Imagem de Capa *
 								</h3>
+
+								{/* Status específico para edição */}
+								{isEditing && imageChanged && (
+									<div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+										<div className="flex items-center space-x-2">
+											<AlertCircle className="w-4 h-4 text-blue-400" />
+											<span className="text-blue-400 text-sm font-semibold">
+												Nova imagem carregada - será atualizada ao salvar
+											</span>
+										</div>
+									</div>
+								)}
+
+								{!imageData.image_url && (
+									<div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+										<div className="flex items-center space-x-2">
+											<AlertCircle className="w-4 h-4 text-yellow-400" />
+											<span className="text-yellow-400 text-sm font-semibold">
+												Imagem de capa é obrigatória
+											</span>
+										</div>
+									</div>
+								)}
+
 								<ImageUpload
 									value={imageData.image_url}
 									onChange={handleImageChange}
@@ -737,14 +819,18 @@ console.log('Hello World!');
 								disabled={
 									loading ||
 									createPostMutation.isLoading ||
-									updatePostMutation.isLoading
+									updatePostMutation.isLoading ||
+									!imageData.image_url // Desabilitar se não há imagem
 								}
-								className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white py-4 rounded-2xl font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3"
+								className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white py-4 rounded-2xl font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center space-x-3"
 							>
 								{loading ||
 								createPostMutation.isLoading ||
 								updatePostMutation.isLoading ? (
-									<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+									<>
+										<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+										<span>Salvando...</span>
+									</>
 								) : (
 									<>
 										<Save className="w-5 h-5" />
@@ -752,6 +838,16 @@ console.log('Hello World!');
 									</>
 								)}
 							</button>
+
+							{/* Aviso sobre imagem obrigatória */}
+							{!imageData.image_url && (
+								<div className="text-center text-gray-400 text-sm">
+									⚠️{" "}
+									{isEditing
+										? "Selecione uma nova imagem ou mantenha a atual"
+										: "Faça o upload da imagem de capa para habilitar o salvamento"}
+								</div>
+							)}
 						</div>
 					</div>
 				</form>

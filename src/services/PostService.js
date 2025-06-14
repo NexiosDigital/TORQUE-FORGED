@@ -3,11 +3,12 @@ import { dataAPIService } from "./DataAPIService";
 import { ImageUploadService } from "./ImageUploadService";
 
 /**
- * PostService - IMPLEMENTAÇÃO HÍBRIDA com Upload de Imagens
+ * PostService - IMPLEMENTAÇÃO HÍBRIDA com Upload de Imagens - VERSÃO CORRIGIDA
  * - Data API para queries públicas (performance)
  * - SDK para operações administrativas (type safety)
  * - Integração com ImageUploadService
  * - Fallback automático
+ * - CORREÇÃO: Garantir que image_url e image_path sejam salvos
  */
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
@@ -253,7 +254,7 @@ export class PostService {
 
 	/**
 	 * ======================================
-	 * MÉTODOS ADMINISTRATIVOS - MANTÉM SDK
+	 * MÉTODOS ADMINISTRATIVOS - MANTÉM SDK - VERSÃO CORRIGIDA
 	 * ======================================
 	 */
 
@@ -311,22 +312,73 @@ export class PostService {
 		}
 	}
 
+	// MÉTODO CREATEPOST - VERSÃO CORRIGIDA
 	static async createPost(postData) {
 		try {
+			// Validar dados obrigatórios
+			if (!postData.title) {
+				throw new Error("Título é obrigatório");
+			}
+
+			if (!postData.image_url) {
+				throw new Error("Imagem de capa é obrigatória");
+			}
+
+			// Preparar dados para inserção - INCLUINDO CAMPOS DE IMAGEM
+			const dataToInsert = {
+				// Campos básicos
+				title: postData.title,
+				slug: postData.slug,
+				excerpt: postData.excerpt,
+				content: postData.content,
+
+				// CAMPOS DE IMAGEM - CRÍTICOS
+				image_url: postData.image_url,
+				image_path: postData.image_path || null,
+
+				// Categoria e metadados
+				category: postData.category,
+				category_name: postData.category_name,
+
+				// Metadados
+				author: postData.author || "Equipe TF",
+				read_time: postData.read_time || "5 min",
+
+				// Estados
+				published: Boolean(postData.published),
+				trending: Boolean(postData.trending),
+
+				// Tags
+				tags: Array.isArray(postData.tags) ? postData.tags : [],
+
+				// Timestamps
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString(),
+			};
+
+			// Verificação final
+			if (!dataToInsert.image_url) {
+				throw new Error("CRÍTICO: image_url não foi definida");
+			}
+
 			const { data, error } = await adminClient
 				.from("posts")
-				.insert([
-					{
-						...postData,
-						created_at: new Date().toISOString(),
-						updated_at: new Date().toISOString(),
-					},
-				])
+				.insert([dataToInsert])
 				.select()
 				.single();
 
 			if (error) {
 				console.error("❌ createPost error:", error);
+
+				// Mensagens de erro específicas
+				if (error.message.includes("duplicate")) {
+					throw new Error("Já existe um post com este slug");
+				} else if (error.message.includes("null value")) {
+					throw new Error("Alguns campos obrigatórios não foram preenchidos");
+				} else if (error.message.includes("foreign key")) {
+					throw new Error("Categoria inválida selecionada");
+				}
+
 				throw error;
 			}
 
@@ -340,9 +392,23 @@ export class PostService {
 		}
 	}
 
+	// MÉTODO UPDATEPOST - VERSÃO CORRIGIDA
 	static async updatePost(id, postData) {
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
+
+			if (isNaN(postId)) {
+				throw new Error(`ID inválido: ${id}`);
+			}
+
+			// Validar dados obrigatórios
+			if (!postData.title) {
+				throw new Error("Título é obrigatório");
+			}
+
+			if (!postData.image_url) {
+				throw new Error("Imagem de capa é obrigatória");
+			}
 
 			// Buscar post atual para comparar imagens
 			const { data: currentPost } = await adminClient
@@ -351,18 +417,61 @@ export class PostService {
 				.eq("id", postId)
 				.single();
 
+			// Preparar dados para atualização - INCLUINDO CAMPOS DE IMAGEM
+			const dataToUpdate = {
+				// Campos básicos
+				title: postData.title,
+				slug: postData.slug,
+				excerpt: postData.excerpt,
+				content: postData.content,
+
+				// CAMPOS DE IMAGEM - CRÍTICOS
+				image_url: postData.image_url,
+				image_path: postData.image_path || null,
+
+				// Categoria e metadados
+				category: postData.category,
+				category_name: postData.category_name,
+
+				// Metadados
+				author: postData.author || "Equipe TF",
+				read_time: postData.read_time || "5 min",
+
+				// Estados
+				published: Boolean(postData.published),
+				trending: Boolean(postData.trending),
+
+				// Tags
+				tags: Array.isArray(postData.tags) ? postData.tags : [],
+
+				// Timestamp de atualização
+				updated_at: new Date().toISOString(),
+			};
+
+			// Verificação final
+			if (!dataToUpdate.image_url) {
+				throw new Error("CRÍTICO: image_url não foi definida para atualização");
+			}
+
 			const { data, error } = await adminClient
 				.from("posts")
-				.update({
-					...postData,
-					updated_at: new Date().toISOString(),
-				})
+				.update(dataToUpdate)
 				.eq("id", postId)
 				.select()
 				.single();
 
 			if (error) {
 				console.error("❌ updatePost error:", error);
+
+				// Mensagens de erro específicas
+				if (error.message.includes("duplicate")) {
+					throw new Error("Já existe um post com este slug");
+				} else if (error.message.includes("null value")) {
+					throw new Error("Alguns campos obrigatórios não foram preenchidos");
+				} else if (error.message.includes("foreign key")) {
+					throw new Error("Categoria inválida selecionada");
+				}
+
 				throw error;
 			}
 
@@ -521,5 +630,72 @@ export class PostService {
 				color: "from-indigo-500 to-purple-500",
 			},
 		];
+	}
+
+	/**
+	 * ======================================
+	 * MÉTODOS DE DEBUG (remover em produção)
+	 * ======================================
+	 */
+
+	// Verificar schema da tabela posts
+	static async debugTableSchema() {
+		try {
+			const { data, error } = await adminClient.rpc("get_table_columns", {
+				table_name: "posts",
+			});
+
+			if (error) {
+				console.error("❌ Erro ao verificar schema:", error);
+				return null;
+			}
+
+			return data;
+		} catch (error) {
+			console.error("❌ debugTableSchema error:", error);
+			return null;
+		}
+	}
+
+	// Testar inserção simples
+	static async debugTestInsert() {
+		try {
+			const testData = {
+				title: "Post de Teste",
+				slug: "post-de-teste-" + Date.now(),
+				excerpt: "Este é um post de teste",
+				content: "Conteúdo do post de teste",
+				image_url: "https://example.com/test.jpg",
+				image_path: "test/image.jpg",
+				category: "f1",
+				category_name: "Fórmula 1",
+				author: "Admin",
+				read_time: "5 min",
+				published: false,
+				trending: false,
+				tags: ["teste"],
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString(),
+			};
+
+			const { data, error } = await adminClient
+				.from("posts")
+				.insert([testData])
+				.select()
+				.single();
+
+			if (error) {
+				console.error("❌ debugTestInsert error:", error);
+				return { success: false, error };
+			}
+
+			// Limpar teste
+			await adminClient.from("posts").delete().eq("id", data.id);
+
+			return { success: true, data };
+		} catch (error) {
+			console.error("❌ debugTestInsert error:", error);
+			return { success: false, error };
+		}
 	}
 }

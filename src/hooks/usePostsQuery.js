@@ -9,10 +9,9 @@ import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 
 /**
- * Hooks com Cache Otimizado para Data API
- * - QUERY_KEYS mantidos iguais (compatibilidade)
- * - Cache configurado para aproveitar Data API
- * - Fallback automático
+ * CONFIGURAÇÕES AJUSTADAS PARA DADOS MAIS FRESCOS
+ * - Cache reduzido para detectar mudanças rapidamente
+ * - Refetch habilitado para atualizações automáticas
  */
 
 // Query keys INALTERADOS (compatibilidade total)
@@ -33,22 +32,22 @@ export const QUERY_KEYS = {
 	},
 };
 
-// Configurações OTIMIZADAS para Data API
+// Configurações REDUZIDAS para detectar mudanças mais rápido
 const PUBLIC_CACHE_CONFIG = {
-	staleTime: 10 * 60 * 1000, // 10 minutos (aumentado devido ao cache HTTP)
-	gcTime: 60 * 60 * 1000, // 1 hora (aumentado)
-	refetchOnWindowFocus: false,
-	refetchOnMount: false, // MUDANÇA: confiar mais no cache HTTP nativo
+	staleTime: 2 * 60 * 1000, // REDUZIDO: 2 minutos (era 10)
+	gcTime: 10 * 60 * 1000, // 10 minutos
+	refetchOnWindowFocus: true, // HABILITADO: refetch ao focar janela
+	refetchOnMount: true, // HABILITADO: refetch ao montar componente
 	retry: (failureCount, error) => {
 		if (error?.message?.includes("não encontrado")) return false;
-		return failureCount < 1; // Menos retries devido à velocidade da Data API
+		return failureCount < 1;
 	},
-	retryDelay: 500, // Delay menor
+	retryDelay: 500,
 };
 
 const ADMIN_CACHE_CONFIG = {
-	staleTime: 2 * 60 * 1000, // 2 minutos
-	gcTime: 10 * 60 * 1000, // 10 minutos
+	staleTime: 30 * 1000, // REDUZIDO: 30 segundos (era 2 minutos)
+	gcTime: 5 * 60 * 1000, // 5 minutos
 	refetchOnWindowFocus: true,
 	refetchOnMount: true,
 	retry: 1,
@@ -56,18 +55,20 @@ const ADMIN_CACHE_CONFIG = {
 
 /**
  * ======================================
- * HOOKS PÚBLICOS - OTIMIZADOS PARA DATA API
+ * HOOKS PÚBLICOS - CONFIGURAÇÕES AJUSTADAS
  * ======================================
  */
 
-// Posts em destaque - AGORA usa Data API
+// Posts em destaque - AGORA com refetch automático
 export const useFeaturedPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.featured,
 		queryFn: () => {
-			return PostService.getFeaturedPosts(); // Agora usa Data API com fallback
+			return PostService.getFeaturedPosts();
 		},
 		...PUBLIC_CACHE_CONFIG,
+		// Forçar refetch a cada 2 minutos
+		refetchInterval: 2 * 60 * 1000,
 		meta: {
 			errorMessage: "Erro ao carregar posts em destaque",
 		},
@@ -75,14 +76,16 @@ export const useFeaturedPosts = (options = {}) => {
 	});
 };
 
-// Todos os posts - AGORA usa Data API
+// Todos os posts - AGORA com refetch automático
 export const useAllPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.posts,
 		queryFn: () => {
-			return PostService.getAllPosts(); // Agora usa Data API com fallback
+			return PostService.getAllPosts();
 		},
 		...PUBLIC_CACHE_CONFIG,
+		// Forçar refetch a cada 2 minutos
+		refetchInterval: 2 * 60 * 1000,
 		meta: {
 			errorMessage: "Erro ao carregar posts",
 		},
@@ -90,15 +93,17 @@ export const useAllPosts = (options = {}) => {
 	});
 };
 
-// Posts por categoria - AGORA usa Data API
+// Posts por categoria - AGORA com refetch automático
 export const usePostsByCategory = (categoryId, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byCategory(categoryId),
 		queryFn: () => {
-			return PostService.getPostsByCategory(categoryId); // Agora usa Data API com fallback
+			return PostService.getPostsByCategory(categoryId);
 		},
 		enabled: !!categoryId && typeof categoryId === "string",
 		...PUBLIC_CACHE_CONFIG,
+		// Forçar refetch a cada 2 minutos
+		refetchInterval: 2 * 60 * 1000,
 		meta: {
 			errorMessage: `Erro ao carregar posts da categoria ${categoryId}`,
 		},
@@ -106,16 +111,16 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 	});
 };
 
-// Post individual - AGORA usa Data API
+// Post individual - Cache um pouco maior
 export const usePostById = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
 		queryFn: () => {
-			return PostService.getPostById(id); // Agora usa Data API com fallback
+			return PostService.getPostById(id);
 		},
 		enabled: !!id,
 		...PUBLIC_CACHE_CONFIG,
-		staleTime: 30 * 60 * 1000, // Cache mais longo para posts individuais
+		staleTime: 5 * 60 * 1000, // 5 minutos para posts individuais
 		meta: {
 			errorMessage: `Erro ao carregar post ${id}`,
 		},
@@ -123,17 +128,17 @@ export const usePostById = (id, options = {}) => {
 	});
 };
 
-// Categorias - AGORA usa Data API
+// Categorias - Cache moderado (categorias mudam pouco)
 export const useCategories = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.categories,
 		queryFn: () => {
-			return PostService.getCategories(); // Agora usa Data API com fallback
+			return PostService.getCategories();
 		},
-		staleTime: 60 * 60 * 1000, // 1 hora (categorias são muito estáveis)
-		gcTime: 2 * 60 * 60 * 1000, // 2 horas
+		staleTime: 10 * 60 * 1000, // 10 minutos (categorias são estáveis)
+		gcTime: 30 * 60 * 1000, // 30 minutos
 		refetchOnWindowFocus: false,
-		refetchOnMount: false, // Categorias raramente mudam
+		refetchOnMount: false,
 		meta: {
 			errorMessage: "Erro ao carregar categorias",
 		},
@@ -141,16 +146,16 @@ export const useCategories = (options = {}) => {
 	});
 };
 
-// Busca - AGORA usa Data API
+// Busca - sem cache
 export const useSearchPosts = (query, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.search(query),
 		queryFn: () => {
-			return PostService.searchPosts(query); // Agora usa Data API com fallback
+			return PostService.searchPosts(query);
 		},
 		enabled: !!query && query.length >= 2,
-		staleTime: 2 * 60 * 1000, // Cache curto para buscas
-		gcTime: 5 * 60 * 1000,
+		staleTime: 0, // SEM CACHE para buscas
+		gcTime: 2 * 60 * 1000,
 		refetchOnWindowFocus: false,
 		...options,
 	});
@@ -158,11 +163,11 @@ export const useSearchPosts = (query, options = {}) => {
 
 /**
  * ======================================
- * HOOKS ADMIN - MANTÉM SDK (inalterado)
+ * HOOKS ADMIN - CACHE REDUZIDO
  * ======================================
  */
 
-// Posts admin - SEMPRE usa cliente autenticado
+// Posts admin - Cache muito curto
 export const useAllPostsAdmin = (options = {}) => {
 	const { isAdmin } = useAuth();
 
@@ -171,8 +176,10 @@ export const useAllPostsAdmin = (options = {}) => {
 		queryFn: () => {
 			return PostService.getAllPostsAdmin();
 		},
-		enabled: isAdmin, // Só executa se for admin
+		enabled: isAdmin,
 		...ADMIN_CACHE_CONFIG,
+		// Refetch automático a cada 1 minuto para admin
+		refetchInterval: 60 * 1000,
 		meta: {
 			errorMessage: "Erro ao carregar posts admin",
 		},
@@ -180,7 +187,7 @@ export const useAllPostsAdmin = (options = {}) => {
 	});
 };
 
-// Post admin individual - SEMPRE usa cliente autenticado
+// Post admin individual - Cache muito curto
 export const usePostByIdAdmin = (id, options = {}) => {
 	const { isAdmin } = useAuth();
 
@@ -189,7 +196,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 		queryFn: () => {
 			return PostService.getPostByIdAdmin(id);
 		},
-		enabled: !!id && isAdmin, // Só executa se tiver ID e for admin
+		enabled: !!id && isAdmin,
 		...ADMIN_CACHE_CONFIG,
 		meta: {
 			errorMessage: `Erro ao carregar post admin ${id}`,
@@ -200,7 +207,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 
 /**
  * ======================================
- * MUTATIONS - MANTÉM INALTERADO
+ * MUTATIONS - INVALIDAÇÃO MELHORADA
  * ======================================
  */
 export const useCreatePost = () => {
@@ -212,10 +219,20 @@ export const useCreatePost = () => {
 		},
 		onSuccess: () => {
 			toast.success("Post criado com sucesso!");
-			// Invalidar AMBOS os caches
+
+			// INVALIDAÇÃO COMPLETA - força refresh de todos os caches
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
+
+			// Invalidar TODAS as categorias
+			queryClient.invalidateQueries({
+				queryKey: ["public", "posts", "category"],
+			});
+
+			// FORÇAR REFETCH imediato
+			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
+			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
 		},
 		onError: (err) => {
 			toast.error(`Erro ao criar post: ${err.message}`);
@@ -232,16 +249,22 @@ export const useUpdatePost = () => {
 		},
 		onSuccess: (data) => {
 			toast.success("Post atualizado com sucesso!");
-			// Invalidar AMBOS os caches
+
+			// INVALIDAÇÃO COMPLETA
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
 
+			// Invalidar categoria específica se disponível
 			if (data?.category) {
 				queryClient.invalidateQueries({
 					queryKey: QUERY_KEYS.public.byCategory(data.category),
 				});
 			}
+
+			// FORÇAR REFETCH imediato
+			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
+			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
 		},
 		onError: (err) => {
 			toast.error(`Erro ao atualizar post: ${err.message}`);
@@ -258,10 +281,20 @@ export const useDeletePost = () => {
 		},
 		onSuccess: () => {
 			toast.success("Post deletado com sucesso!");
-			// Invalidar AMBOS os caches
+
+			// INVALIDAÇÃO COMPLETA
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
+
+			// Invalidar TODAS as categorias
+			queryClient.invalidateQueries({
+				queryKey: ["public", "posts", "category"],
+			});
+
+			// FORÇAR REFETCH imediato
+			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
+			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
 		},
 		onError: (err) => {
 			toast.error(`Erro ao deletar post: ${err.message}`);
@@ -271,7 +304,7 @@ export const useDeletePost = () => {
 
 /**
  * ======================================
- * UTILITIES - MANTÉM INALTERADO
+ * UTILITIES - MELHORADOS
  * ======================================
  */
 export const usePrefetch = () => {
@@ -282,8 +315,8 @@ export const usePrefetch = () => {
 
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byId(id),
-			queryFn: () => PostService.getPostById(id), // Agora usa Data API
-			staleTime: 30 * 60 * 1000, // Cache longo para prefetch
+			queryFn: () => PostService.getPostById(id),
+			staleTime: 30 * 1000, // Cache curto para prefetch
 		});
 	};
 
@@ -292,8 +325,8 @@ export const usePrefetch = () => {
 
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byCategory(categoryId),
-			queryFn: () => PostService.getPostsByCategory(categoryId), // Agora usa Data API
-			staleTime: 10 * 60 * 1000,
+			queryFn: () => PostService.getPostsByCategory(categoryId),
+			staleTime: 30 * 1000,
 		});
 	};
 
@@ -314,6 +347,27 @@ export const useCacheUtils = () => {
 		toast.success("Cache limpo com sucesso!");
 	};
 
+	// NOVA FUNÇÃO: Force refresh de todos os dados
+	const forceRefreshAll = () => {
+		queryClient.invalidateQueries();
+		queryClient.refetchQueries();
+		toast.success("Dados atualizados!");
+	};
+
+	// NOVA FUNÇÃO: Refresh específico para posts
+	const refreshPosts = () => {
+		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
+		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
+		queryClient.invalidateQueries({
+			queryKey: ["public", "posts", "category"],
+		});
+
+		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
+		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
+
+		toast.success("Posts atualizados!");
+	};
+
 	const getCacheStats = () => {
 		const cache = queryClient.getQueryCache();
 		const queries = cache.getAll();
@@ -325,12 +379,8 @@ export const useCacheUtils = () => {
 			errors: queries.filter((q) => q.state.status === "error").length,
 			loading: queries.filter((q) => q.state.status === "pending").length,
 			success: queries.filter((q) => q.state.status === "success").length,
+			stale: queries.filter((q) => q.isStale()).length,
 		};
-	};
-
-	const forceRefreshAll = () => {
-		queryClient.invalidateQueries();
-		queryClient.refetchQueries();
 	};
 
 	return {
@@ -338,16 +388,18 @@ export const useCacheUtils = () => {
 		clearCache,
 		getCacheStats,
 		forceRefreshAll,
+		refreshPosts, // NOVA
 	};
 };
 
-// Suspense hook - AGORA usa Data API
+// Suspense hook - Cache reduzido
 export const usePostByIdSuspense = (id) => {
 	return useSuspenseQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
 		queryFn: () => {
-			return PostService.getPostById(id); // Agora usa Data API com fallback
+			return PostService.getPostById(id);
 		},
+		staleTime: 2 * 60 * 1000, // Cache reduzido
 	});
 };
 

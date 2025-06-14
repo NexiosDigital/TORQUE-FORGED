@@ -1,10 +1,8 @@
 /**
- * DataAPIService - Performance-focused HTTP API client com suporte a imagens
- * - Direto para PostgREST via HTTP
- * - 20-30% mais rápido que SDK
- * - Cache HTTP nativo
- * - Bundle size reduzido
- * - Suporte aos novos campos de imagem
+ * DataAPIService - CACHE REDUZIDO para dados mais frescos
+ * - Cache HTTP mais curto
+ * - Opção para bypass de cache
+ * - Headers ajustados para detecção de mudanças
  */
 
 class DataAPIService {
@@ -19,7 +17,7 @@ class DataAPIService {
 	}
 
 	/**
-	 * Fetch wrapper com cache HTTP nativo
+	 * Fetch wrapper com cache HTTP reduzido
 	 */
 	async fetch(endpoint, options = {}) {
 		const url = `${this.baseURL}${endpoint}`;
@@ -30,7 +28,7 @@ class DataAPIService {
 				...this.headers,
 				...options.headers,
 			},
-			// Habilitar cache HTTP nativo
+			// Cache mais agressivo apenas quando solicitado
 			cache: options.cache || "default",
 		};
 
@@ -52,54 +50,58 @@ class DataAPIService {
 	}
 
 	/**
-	 * Posts públicos - Query otimizada com campos de imagem
+	 * Posts públicos - Cache REDUZIDO
 	 */
-	async getAllPosts() {
+	async getAllPosts(bypassCache = false) {
 		const endpoint = "/posts?select=*&published=eq.true&order=created_at.desc";
+
 		return this.fetch(endpoint, {
-			cache: "force-cache", // Cache agressivo para posts
+			cache: bypassCache ? "no-cache" : "default",
 			headers: {
-				"Cache-Control": "max-age=300", // 5 minutos
+				"Cache-Control": bypassCache ? "no-cache" : "max-age=60", // REDUZIDO: 1 minuto
 			},
 		});
 	}
 
 	/**
-	 * Posts em destaque - Cache otimizado com campos de imagem
+	 * Posts em destaque - Cache REDUZIDO
 	 */
-	async getFeaturedPosts() {
+	async getFeaturedPosts(bypassCache = false) {
 		const endpoint =
 			"/posts?select=*&published=eq.true&trending=eq.true&order=created_at.desc&limit=6";
+
 		return this.fetch(endpoint, {
-			cache: "force-cache",
+			cache: bypassCache ? "no-cache" : "default",
 			headers: {
-				"Cache-Control": "max-age=180", // 3 minutos para featured
+				"Cache-Control": bypassCache ? "no-cache" : "max-age=60", // REDUZIDO: 1 minuto
 			},
 		});
 	}
 
 	/**
-	 * Posts por categoria - Cache por categoria com campos de imagem
+	 * Posts por categoria - Cache REDUZIDO
 	 */
-	async getPostsByCategory(categoryId) {
+	async getPostsByCategory(categoryId, bypassCache = false) {
 		const endpoint = `/posts?select=*&published=eq.true&category=eq.${categoryId}&order=created_at.desc`;
+
 		return this.fetch(endpoint, {
-			cache: "force-cache",
+			cache: bypassCache ? "no-cache" : "default",
 			headers: {
-				"Cache-Control": "max-age=300",
+				"Cache-Control": bypassCache ? "no-cache" : "max-age=60", // REDUZIDO: 1 minuto
 			},
 		});
 	}
 
 	/**
-	 * Post individual - Cache longo com campos de imagem
+	 * Post individual - Cache moderado
 	 */
-	async getPostById(id) {
+	async getPostById(id, bypassCache = false) {
 		const endpoint = `/posts?select=*&id=eq.${id}&published=eq.true&limit=1`;
+
 		const data = await this.fetch(endpoint, {
-			cache: "force-cache",
+			cache: bypassCache ? "no-cache" : "default",
 			headers: {
-				"Cache-Control": "max-age=600", // 10 minutos para posts individuais
+				"Cache-Control": bypassCache ? "no-cache" : "max-age=120", // 2 minutos para posts individuais
 			},
 		});
 
@@ -111,25 +113,25 @@ class DataAPIService {
 	}
 
 	/**
-	 * Categorias - Cache muito longo
+	 * Categorias - Cache moderado (categorias mudam pouco)
 	 */
-	async getCategories() {
+	async getCategories(bypassCache = false) {
 		const endpoint = "/categories?select=*&order=name";
+
 		return this.fetch(endpoint, {
-			cache: "force-cache",
+			cache: bypassCache ? "no-cache" : "force-cache",
 			headers: {
-				"Cache-Control": "max-age=3600", // 1 hora para categorias
+				"Cache-Control": bypassCache ? "no-cache" : "max-age=600", // 10 minutos para categorias
 			},
 		});
 	}
 
 	/**
-	 * Busca de posts - Cache curto com campos de imagem
+	 * Busca de posts - SEM cache
 	 */
 	async searchPosts(query) {
 		if (!query || query.length < 2) return [];
 
-		// PostgREST full-text search incluindo todos os campos
 		const endpoint = `/posts?select=*&published=eq.true&or=(title.ilike.*${encodeURIComponent(
 			query
 		)}*,excerpt.ilike.*${encodeURIComponent(
@@ -143,12 +145,34 @@ class DataAPIService {
 		)}*)&order=created_at.desc&limit=20`;
 
 		return this.fetch(endpoint, {
-			cache: "no-cache", // Não cachear buscas
+			cache: "no-cache", // SEMPRE sem cache para buscas
+			headers: {
+				"Cache-Control": "no-cache",
+			},
 		});
 	}
 
 	/**
-	 * Busca avançada com filtros (para futuras implementações)
+	 * NOVO: Método para buscar dados frescos (bypass total de cache)
+	 */
+	async getAllPostsFresh() {
+		return this.getAllPosts(true);
+	}
+
+	async getFeaturedPostsFresh() {
+		return this.getFeaturedPosts(true);
+	}
+
+	async getPostsByCategoryFresh(categoryId) {
+		return this.getPostsByCategory(categoryId, true);
+	}
+
+	async getCategoriesFresh() {
+		return this.getCategories(true);
+	}
+
+	/**
+	 * Busca avançada com filtros
 	 */
 	async searchPostsAdvanced(filters = {}) {
 		const { query, category, author, trending, limit = 20 } = filters;
@@ -183,18 +207,22 @@ class DataAPIService {
 
 		return this.fetch(endpoint, {
 			cache: "no-cache",
+			headers: {
+				"Cache-Control": "no-cache",
+			},
 		});
 	}
 
 	/**
-	 * Posts relacionados por categoria (excluindo post atual)
+	 * Posts relacionados por categoria
 	 */
 	async getRelatedPosts(categoryId, excludePostId, limit = 3) {
 		const endpoint = `/posts?select=*&published=eq.true&category=eq.${categoryId}&id=neq.${excludePostId}&order=created_at.desc&limit=${limit}`;
+
 		return this.fetch(endpoint, {
-			cache: "force-cache",
+			cache: "default",
 			headers: {
-				"Cache-Control": "max-age=300",
+				"Cache-Control": "max-age=120", // 2 minutos
 			},
 		});
 	}
@@ -202,12 +230,13 @@ class DataAPIService {
 	/**
 	 * Posts mais recentes (para widgets)
 	 */
-	async getLatestPosts(limit = 5) {
+	async getLatestPosts(limit = 5, bypassCache = false) {
 		const endpoint = `/posts?select=id,title,excerpt,image_url,image_path,category_name,created_at,author&published=eq.true&order=created_at.desc&limit=${limit}`;
+
 		return this.fetch(endpoint, {
-			cache: "force-cache",
+			cache: bypassCache ? "no-cache" : "default",
 			headers: {
-				"Cache-Control": "max-age=180", // 3 minutos
+				"Cache-Control": bypassCache ? "no-cache" : "max-age=60", // 1 minuto
 			},
 		});
 	}
@@ -219,27 +248,32 @@ class DataAPIService {
 		const endpoint = `/posts?select=*&published=eq.true&author.ilike.*${encodeURIComponent(
 			author
 		)}*&order=created_at.desc&limit=${limit}`;
+
 		return this.fetch(endpoint, {
-			cache: "force-cache",
+			cache: "default",
 			headers: {
-				"Cache-Control": "max-age=300",
+				"Cache-Control": "max-age=180", // 3 minutos
 			},
 		});
 	}
 
 	/**
-	 * Estatísticas básicas (para dashboards públicos)
+	 * Estatísticas básicas
 	 */
 	async getPublicStats() {
-		// Múltiplas queries para estatísticas
 		const [totalPosts, featuredPosts, categories] = await Promise.all([
 			this.fetch("/posts?select=count&published=eq.true", {
-				cache: "force-cache",
+				cache: "default",
+				headers: { "Cache-Control": "max-age=300" }, // 5 minutos para stats
 			}),
 			this.fetch("/posts?select=count&published=eq.true&trending=eq.true", {
-				cache: "force-cache",
+				cache: "default",
+				headers: { "Cache-Control": "max-age=300" },
 			}),
-			this.fetch("/categories?select=count", { cache: "force-cache" }),
+			this.fetch("/categories?select=count", {
+				cache: "default",
+				headers: { "Cache-Control": "max-age=600" }, // 10 minutos para contagem de categorias
+			}),
 		]);
 
 		return {
@@ -250,12 +284,15 @@ class DataAPIService {
 	}
 
 	/**
-	 * Verificar se post existe (para validações)
+	 * Verificar se post existe
 	 */
 	async postExists(id) {
 		try {
 			const endpoint = `/posts?select=id&id=eq.${id}&published=eq.true&limit=1`;
-			const data = await this.fetch(endpoint, { cache: "force-cache" });
+			const data = await this.fetch(endpoint, {
+				cache: "default",
+				headers: { "Cache-Control": "max-age=60" },
+			});
 			return data && data.length > 0;
 		} catch (error) {
 			return false;
@@ -263,16 +300,19 @@ class DataAPIService {
 	}
 
 	/**
-	 * Invalidar cache HTTP para uma rota específica
+	 * MELHORADA: Invalidar cache HTTP para rotas específicas
 	 */
 	async invalidateCache(endpoint) {
 		try {
 			const url = `${this.baseURL}${endpoint}`;
+
+			// Fazer uma requisição HEAD com no-cache para forçar invalidação
 			await fetch(url, {
 				method: "HEAD",
 				headers: {
 					...this.headers,
 					"Cache-Control": "no-cache",
+					Pragma: "no-cache",
 				},
 			});
 		} catch (error) {
@@ -281,12 +321,30 @@ class DataAPIService {
 	}
 
 	/**
-	 * Invalidar cache de múltiplas rotas
+	 * MELHORADA: Invalidar cache de múltiplas rotas
 	 */
 	async invalidateMultipleCache(endpoints) {
-		await Promise.all(
+		const results = await Promise.allSettled(
 			endpoints.map((endpoint) => this.invalidateCache(endpoint))
 		);
+
+		const failed = results.filter((r) => r.status === "rejected");
+		if (failed.length > 0) {
+			console.warn(`Failed to invalidate ${failed.length} cache entries`);
+		}
+	}
+
+	/**
+	 * NOVA: Invalidar todos os caches de posts
+	 */
+	async invalidateAllPostsCache() {
+		const endpoints = [
+			"/posts",
+			"/posts?published=eq.true",
+			"/posts?published=eq.true&trending=eq.true",
+		];
+
+		await this.invalidateMultipleCache(endpoints);
 	}
 
 	/**
@@ -295,7 +353,10 @@ class DataAPIService {
 	async healthCheck() {
 		try {
 			const endpoint = "/posts?select=count&limit=1";
-			await this.fetch(endpoint, { cache: "no-cache" });
+			await this.fetch(endpoint, {
+				cache: "no-cache",
+				headers: { "Cache-Control": "no-cache" },
+			});
 			return { status: "healthy", timestamp: new Date().toISOString() };
 		} catch (error) {
 			return {
@@ -307,29 +368,29 @@ class DataAPIService {
 	}
 
 	/**
-	 * Buscar posts por tags (para implementações futuras)
+	 * Buscar posts por tags
 	 */
 	async getPostsByTag(tag, limit = 10) {
-		// Assumindo que tags estão armazenadas como array JSON
 		const endpoint = `/posts?select=*&published=eq.true&tags.cs.["${tag}"]&order=created_at.desc&limit=${limit}`;
+
 		return this.fetch(endpoint, {
-			cache: "force-cache",
+			cache: "default",
 			headers: {
-				"Cache-Control": "max-age=300",
+				"Cache-Control": "max-age=180", // 3 minutos
 			},
 		});
 	}
 
 	/**
-	 * Buscar todas as tags únicas (para nuvem de tags)
+	 * Buscar todas as tags únicas
 	 */
 	async getAllTags() {
-		// Buscar todos os posts com tags e processar no cliente
 		const endpoint = "/posts?select=tags&published=eq.true&not.tags.is.null";
+
 		const posts = await this.fetch(endpoint, {
 			cache: "force-cache",
 			headers: {
-				"Cache-Control": "max-age=1800", // 30 minutos
+				"Cache-Control": "max-age=900", // 15 minutos para tags
 			},
 		});
 
