@@ -9,6 +9,7 @@ import {
 	TrendingUp,
 	FileText,
 	AlertCircle,
+	Image as ImageIcon,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -19,14 +20,15 @@ import {
 	useCategories,
 } from "../../hooks/usePostsQuery";
 import ImageUpload from "../../components/ImageUpload";
+import ImageUploadModal from "../../components/ImageUploadModal";
 import toast from "react-hot-toast";
 
 /**
- * PostEditor - VERSÃO CORRIGIDA
- * - CRIAÇÃO DE POSTS FUNCIONANDO
- * - Correção específica para atualização de imagens em posts existentes
- * - Estado da imagem mantido durante edição
- * - Prevenção de reversão após upload
+ * PostEditor - VERSÃO ATUALIZADA COM UPLOAD INLINE
+ * - Upload de imagens durante a escrita
+ * - Inserção automática de markdown na posição do cursor
+ * - Toolbar expandida com novas funcionalidades
+ * - Gerenciamento de imagens de conteúdo
  */
 
 const PostEditor = () => {
@@ -55,7 +57,11 @@ const PostEditor = () => {
 	const [loading, setLoading] = useState(false);
 	const [showPreview, setShowPreview] = useState(false);
 
-	// Estado da imagem - CORRIGIDO PARA EDIÇÃO
+	// Estados para upload inline de imagens
+	const [showImageModal, setShowImageModal] = useState(false);
+	const [cursorPosition, setCursorPosition] = useState(0);
+
+	// Estado da imagem de capa - CORRIGIDO PARA EDIÇÃO
 	const [imageData, setImageData] = useState({
 		image_url: null,
 		image_path: null,
@@ -64,17 +70,10 @@ const PostEditor = () => {
 	// Estado para controlar se a imagem foi alterada durante edição
 	const [imageChanged, setImageChanged] = useState(false);
 
-	// Estado para debug (pode remover depois)
-	const [debugInfo, setDebugInfo] = useState({
-		lastImageUpdate: null,
-		imageStatus: "waiting",
-		originalImageUrl: null,
-		isEditing: isEditing,
-	});
-
 	const watchTitle = watch("title");
 	const watchPublished = watch("published");
 	const watchTrending = watch("trending");
+	const watchSlug = watch("slug");
 
 	// Carregar post para edição - VERSÃO CORRIGIDA
 	useEffect(() => {
@@ -97,12 +96,6 @@ const PostEditor = () => {
 					image_path: existingPost.image_path || null,
 				};
 				setImageData(imageState);
-				setDebugInfo((prev) => ({
-					...prev,
-					lastImageUpdate: new Date().toISOString(),
-					imageStatus: "loaded_existing",
-					originalImageUrl: existingPost.image_url,
-				}));
 			}
 		}
 	}, [existingPost, isEditing, setValue, imageChanged]);
@@ -122,19 +115,56 @@ const PostEditor = () => {
 		}
 	}, [watchTitle, setValue, isEditing]);
 
-	// Handler para mudança na imagem - VERSÃO CORRIGIDA PARA EDIÇÃO
+	// Handler para mudança na imagem de capa
 	const handleImageChange = (newImageData) => {
-		// Marcar que a imagem foi alterada (importante para edição)
 		setImageChanged(true);
-
-		// Atualizar estado da imagem
 		setImageData(newImageData);
+	};
 
-		setDebugInfo((prev) => ({
-			...prev,
-			lastImageUpdate: new Date().toISOString(),
-			imageStatus: newImageData.image_url ? "uploaded_new" : "removed",
-		}));
+	// NOVA FUNÇÃO: Salvar posição do cursor antes de abrir modal
+	const handleSaveCursorPosition = () => {
+		const textarea = document.getElementById("markdown-editor");
+		if (textarea) {
+			setCursorPosition(textarea.selectionStart);
+		}
+	};
+
+	// NOVA FUNÇÃO: Inserir markdown na posição do cursor
+	const insertMarkdownAtCursor = (markdownText) => {
+		const textarea = document.getElementById("markdown-editor");
+		if (!textarea) return;
+
+		const start = cursorPosition;
+		const end = cursorPosition;
+
+		// Inserir markdown no conteúdo
+		const newContent =
+			content.substring(0, start) +
+			"\n\n" +
+			markdownText +
+			"\n\n" +
+			content.substring(end);
+
+		setContent(newContent);
+
+		// Focar no textarea e posicionar cursor após a inserção
+		setTimeout(() => {
+			textarea.focus();
+			const newPosition = start + markdownText.length + 4; // +4 para as quebras de linha
+			textarea.setSelectionRange(newPosition, newPosition);
+		}, 100);
+	};
+
+	// NOVA FUNÇÃO: Handler para imagem inserida
+	const handleImageUploaded = (imageResult) => {
+		insertMarkdownAtCursor(imageResult.markdown);
+		toast.success("Imagem inserida no editor!");
+	};
+
+	// NOVA FUNÇÃO: Abrir modal de upload de imagem
+	const handleAddImage = () => {
+		handleSaveCursorPosition();
+		setShowImageModal(true);
 	};
 
 	// Validação antes do submit
@@ -165,6 +195,9 @@ const PostEditor = () => {
 				return;
 			}
 
+			// Usar slug atual ou slug temporário para organizar imagens
+			const currentSlug = data.slug || `temp-${Date.now()}`;
+
 			// Montar dados do post - INCLUINDO CAMPOS DE IMAGEM
 			const postData = {
 				...data,
@@ -194,6 +227,11 @@ const PostEditor = () => {
 				);
 			}
 
+			console.log("📝 PostEditor: Dados do post:", {
+				...postData,
+				content: postData.content.substring(0, 100) + "...",
+			});
+
 			// Salvar post
 			let result;
 			if (isEditing) {
@@ -201,10 +239,10 @@ const PostEditor = () => {
 					id,
 					...postData,
 				});
+				console.log("✅ Post atualizado:", result);
 			} else {
-				// CORRIGIDO: Descomentar a criação de posts
 				result = await createPostMutation.mutateAsync(postData);
-				//console.log("✅ Post criado:", result);
+				console.log("✅ Post criado:", result);
 			}
 
 			toast.success(`Post ${isEditing ? "atualizado" : "criado"} com sucesso!`);
@@ -263,7 +301,7 @@ const PostEditor = () => {
 		}, 10);
 	};
 
-	// Toolbar com atalhos Markdown
+	// Toolbar com atalhos Markdown - EXPANDIDA COM BOTÃO DE IMAGEM
 	const MarkdownToolbar = () => (
 		<div className="flex flex-wrap items-center gap-2 p-4 bg-gray-800/30 border-b border-gray-700/30">
 			<button
@@ -298,14 +336,18 @@ const PostEditor = () => {
 			>
 				Link
 			</button>
+
+			{/* NOVO BOTÃO: Inserir Imagem */}
 			<button
 				type="button"
-				onClick={() => insertText("![alt]({text})", true)}
-				className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors duration-300"
-				title="Imagem"
+				onClick={handleAddImage}
+				className="flex items-center space-x-1 px-3 py-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-lg text-sm transition-all duration-300 shadow-lg hover:shadow-blue-500/25"
+				title="Inserir Imagem"
 			>
-				Img
+				<ImageIcon className="w-4 h-4" />
+				<span>Imagem</span>
 			</button>
+
 			<button
 				type="button"
 				onClick={() => insertText("```\n{text}\n```", true)}
@@ -352,7 +394,7 @@ const PostEditor = () => {
 		</div>
 	);
 
-	// Guia de sintaxe Markdown
+	// Guia de sintaxe Markdown - ATUALIZADA
 	const MarkdownGuide = () => (
 		<div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/30">
 			<h4 className="text-white font-semibold mb-4 flex items-center space-x-2">
@@ -377,7 +419,8 @@ const PostEditor = () => {
 					<code className="text-red-400">[link](url)</code> - Link
 				</div>
 				<div>
-					<code className="text-red-400">![alt](img)</code> - Imagem
+					<code className="text-blue-400">![alt](img)</code> - Imagem (use o
+					botão!)
 				</div>
 				<div>
 					<code className="text-red-400">`código`</code> - Código inline
@@ -453,7 +496,7 @@ const PostEditor = () => {
 							<p className="text-gray-400">
 								{isEditing
 									? `Editando: ${existingPost?.title || "Carregando..."}`
-									: "Crie um novo post em Markdown"}
+									: "Crie um novo post em Markdown com imagens inline"}
 							</p>
 						</div>
 					</div>
@@ -542,12 +585,16 @@ const PostEditor = () => {
 								)}
 							</div>
 
-							{/* Markdown Editor */}
+							{/* Markdown Editor - ATUALIZADO COM TOOLBAR EXPANDIDA */}
 							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl border border-gray-700/50 overflow-hidden">
 								<div className="p-6 border-b border-gray-700/50">
 									<label className="block text-white font-semibold mb-0">
 										Conteúdo em Markdown *
 									</label>
+									<p className="text-blue-400 text-sm mt-1">
+										💡 Use o botão "Imagem" para adicionar imagens durante a
+										escrita!
+									</p>
 								</div>
 
 								<MarkdownToolbar />
@@ -568,7 +615,9 @@ const PostEditor = () => {
 											value={content}
 											onChange={(e) => setContent(e.target.value)}
 											className="w-full h-full min-h-[500px] p-6 bg-transparent border-none text-white placeholder-gray-500 focus:outline-none resize-none font-mono text-sm leading-relaxed"
-											placeholder="Digite seu conteúdo em Markdown aqui..."
+											placeholder="Digite seu conteúdo em Markdown aqui...
+
+Use o botão 'Imagem' na toolbar para inserir imagens facilmente!"
 										/>
 									</div>
 
@@ -653,7 +702,7 @@ const PostEditor = () => {
 														),
 														img: ({ node, ...props }) => (
 															<img
-																className="rounded-lg max-w-full h-auto mb-4"
+																className="rounded-lg max-w-full h-auto mb-4 border border-gray-700"
 																{...props}
 															/>
 														),
@@ -671,7 +720,7 @@ const PostEditor = () => {
 
 						{/* Sidebar */}
 						<div className="lg:col-span-1 space-y-6">
-							{/* Upload de Imagem - VERSÃO CORRIGIDA PARA EDIÇÃO */}
+							{/* Upload de Imagem de Capa */}
 							<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-6 border border-gray-700/50">
 								<h3 className="text-xl font-bold text-white mb-4">
 									Imagem de Capa *
@@ -703,7 +752,7 @@ const PostEditor = () => {
 								<ImageUpload
 									value={imageData.image_url}
 									onChange={handleImageChange}
-									postSlug={watch("slug")}
+									postSlug={watchSlug}
 									disabled={loading}
 								/>
 							</div>
@@ -850,26 +899,18 @@ const PostEditor = () => {
 										: "Faça o upload da imagem de capa para habilitar o salvamento"}
 								</div>
 							)}
-
-							{/* Debug info em desenvolvimento */}
-							{process.env.NODE_ENV === "development" && (
-								<div className="bg-gray-900/50 rounded-xl p-4 text-xs text-gray-500">
-									<h4 className="text-white mb-2">🔧 Debug Info:</h4>
-									<div className="space-y-1">
-										<p>isEditing: {isEditing.toString()}</p>
-										<p>
-											imageData.image_url: {imageData.image_url ? "✅" : "❌"}
-										</p>
-										<p>imageChanged: {imageChanged.toString()}</p>
-										<p>lastUpdate: {debugInfo.lastImageUpdate}</p>
-										<p>status: {debugInfo.imageStatus}</p>
-									</div>
-								</div>
-							)}
 						</div>
 					</div>
 				</form>
 			</div>
+
+			{/* Modal de Upload de Imagem Inline */}
+			<ImageUploadModal
+				isOpen={showImageModal}
+				onClose={() => setShowImageModal(false)}
+				onImageUploaded={handleImageUploaded}
+				postSlug={watchSlug || `temp-${Date.now()}`}
+			/>
 		</div>
 	);
 };
