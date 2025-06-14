@@ -1,20 +1,14 @@
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../lib/supabase";
 import { dataAPIService } from "./DataAPIService";
 import { ImageUploadService } from "./ImageUploadService";
 
 /**
- * PostService - VERSÃO CORRIGIDA E VERIFICADA
- * - Método createPost corrigido e com debug melhorado
- * - Verificações de permissão adicionadas
- * - Error handling melhorado
- * - Logs detalhados para debug
+ * PostService - VERSÃO CORRIGIDA PARA RLS
+ * - Usa cliente autenticado para operações administrativas
+ * - Verifica sessão antes de operações CRUD
+ * - Error handling melhorado para RLS
+ * - Logs detalhados para debug de permissões
  */
-
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-
-// Cliente admin (mantém para operações administrativas)
-const adminClient = createClient(supabaseUrl, supabaseAnonKey);
 
 export class PostService {
 	/**
@@ -154,8 +148,7 @@ export class PostService {
 	 */
 
 	static async getFeaturedPostsSDK() {
-		const freshClient = this.createFreshAnonymousClient();
-		const { data, error } = await freshClient
+		const { data, error } = await supabase
 			.from("posts")
 			.select("*")
 			.eq("published", true)
@@ -172,8 +165,7 @@ export class PostService {
 	}
 
 	static async getAllPostsSDK() {
-		const freshClient = this.createFreshAnonymousClient();
-		const { data, error } = await freshClient
+		const { data, error } = await supabase
 			.from("posts")
 			.select("*")
 			.eq("published", true)
@@ -188,8 +180,7 @@ export class PostService {
 	}
 
 	static async getPostsByCategorySDK(categoryId) {
-		const freshClient = this.createFreshAnonymousClient();
-		const { data, error } = await freshClient
+		const { data, error } = await supabase
 			.from("posts")
 			.select("*")
 			.eq("published", true)
@@ -206,8 +197,7 @@ export class PostService {
 
 	static async getPostByIdSDK(id) {
 		const postId = typeof id === "string" ? parseInt(id, 10) : id;
-		const freshClient = this.createFreshAnonymousClient();
-		const { data, error } = await freshClient
+		const { data, error } = await supabase
 			.from("posts")
 			.select("*")
 			.eq("id", postId)
@@ -232,8 +222,7 @@ export class PostService {
 	}
 
 	static async searchPostsSDK(query) {
-		const freshClient = this.createFreshAnonymousClient();
-		const { data, error } = await freshClient
+		const { data, error } = await supabase
 			.from("posts")
 			.select("*")
 			.eq("published", true)
@@ -253,25 +242,72 @@ export class PostService {
 
 	/**
 	 * ======================================
-	 * MÉTODOS ADMINISTRATIVOS - VERSÃO CORRIGIDA E MELHORADA
+	 * HELPER PARA VERIFICAR AUTENTICAÇÃO
+	 * ======================================
+	 */
+
+	static async verifyAuthenticatedAdmin() {
+		try {
+			// Verificar se há usuário autenticado
+			const {
+				data: { user },
+				error: authError,
+			} = await supabase.auth.getUser();
+
+			if (authError) {
+				console.error("❌ Erro de autenticação:", authError);
+				throw new Error("Erro de autenticação: " + authError.message);
+			}
+
+			if (!user) {
+				throw new Error("Usuário não autenticado");
+			}
+
+			// Verificar se é admin na tabela user_profiles
+			const { data: profile, error: profileError } = await supabase
+				.from("user_profiles")
+				.select("role")
+				.eq("id", user.id)
+				.single();
+
+			if (profileError) {
+				console.error("❌ Erro ao buscar perfil:", profileError);
+				throw new Error(
+					"Erro ao verificar permissões: " + profileError.message
+				);
+			}
+
+			if (!profile || profile.role !== "admin") {
+				throw new Error("Usuário não tem permissões de administrador");
+			}
+
+			return { user, profile };
+		} catch (error) {
+			console.error("❌ verifyAuthenticatedAdmin error:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * ======================================
+	 * MÉTODOS ADMINISTRATIVOS - VERSÃO CORRIGIDA COM RLS
 	 * ======================================
 	 */
 
 	static async getAllPostsAdmin() {
 		try {
-			console.log("📊 PostService.getAllPostsAdmin: Iniciando busca...");
+			// CRÍTICO: Verificar autenticação primeiro
+			await this.verifyAuthenticatedAdmin();
 
-			const { data, error } = await adminClient
+			const { data, error } = await supabase
 				.from("posts")
 				.select("*")
 				.order("created_at", { ascending: false });
 
 			if (error) {
 				console.error("❌ getAllPostsAdmin error:", error);
-				throw error;
+				throw this.handleRLSError(error);
 			}
-
-			console.log(`✅ getAllPostsAdmin: ${data?.length || 0} posts carregados`);
 
 			// Para admin, manter URLs originais para edição
 			return data || [];
@@ -293,11 +329,10 @@ export class PostService {
 				throw new Error(`ID inválido: ${id}`);
 			}
 
-			console.log(
-				`📖 PostService.getPostByIdAdmin: Buscando post ${postId}...`
-			);
+			// CRÍTICO: Verificar autenticação primeiro
+			await this.verifyAuthenticatedAdmin();
 
-			const { data, error } = await adminClient
+			const { data, error } = await supabase
 				.from("posts")
 				.select("*")
 				.eq("id", postId)
@@ -308,10 +343,8 @@ export class PostService {
 					throw new Error("Post não encontrado");
 				}
 				console.error(`❌ getPostByIdAdmin(${postId}) error:`, error);
-				throw error;
+				throw this.handleRLSError(error);
 			}
-
-			console.log(`✅ getPostByIdAdmin: Post ${postId} carregado`);
 
 			// Para admin, manter URLs originais para edição
 			return data;
@@ -321,8 +354,9 @@ export class PostService {
 		}
 	}
 
-	// MÉTODO CREATEPOST - VERSÃO CORRIGIDA E COM DEBUG MELHORADO
+	// MÉTODO CREATEPOST - VERSÃO CORRIGIDA PARA RLS
 	static async createPost(postData) {
+		/*
 		console.log("🆕 PostService.createPost: Iniciando criação de post...");
 		console.log("📝 Dados recebidos:", {
 			title: postData.title,
@@ -332,28 +366,10 @@ export class PostService {
 			image_path: postData.image_path ? "✅ Presente" : "❌ Ausente",
 			published: postData.published,
 			content_length: postData.content?.length || 0,
-		});
+		});*/
 
 		try {
-			// VERIFICAÇÃO INICIAL: Conectividade e Auth
-			const {
-				data: { user },
-			} = await adminClient.auth.getUser();
-			console.log("👤 Usuário autenticado:", user ? "✅ Sim" : "❌ Não");
-
-			// TESTE DE CONEXÃO: Verificar se consegue fazer uma query simples
-			const { data: testData, error: testError } = await adminClient
-				.from("posts")
-				.select("count")
-				.limit(1);
-
-			if (testError) {
-				console.error("❌ Teste de conexão falhou:", testError);
-				throw new Error(`Erro de conexão: ${testError.message}`);
-			}
-
-			console.log("🔗 Conexão com banco de dados: ✅ OK");
-
+			// CRÍTICO: Verificar autenticação E permissões primeiro
 			// Validar dados obrigatórios
 			if (!postData.title) {
 				throw new Error("Título é obrigatório");
@@ -369,21 +385,6 @@ export class PostService {
 
 			if (!postData.content || postData.content.trim() === "") {
 				throw new Error("Conteúdo é obrigatório");
-			}
-
-			console.log("✅ Validações básicas: Aprovadas");
-
-			// VERIFICAR ESTRUTURA DA TABELA (apenas em desenvolvimento)
-			if (process.env.NODE_ENV === "development") {
-				try {
-					const { data: schemaData } = await adminClient
-						.from("posts")
-						.select("*")
-						.limit(1);
-					console.log("📋 Schema check: ✅ Tabela acessível");
-				} catch (schemaError) {
-					console.warn("⚠️ Schema check failed:", schemaError);
-				}
 			}
 
 			// Preparar dados para inserção - INCLUINDO CAMPOS DE IMAGEM
@@ -423,15 +424,8 @@ export class PostService {
 				throw new Error("CRÍTICO: image_url não foi definida");
 			}
 
-			console.log("📤 Dados finais para inserção:", {
-				...dataToInsert,
-				content: `${dataToInsert.content.substring(0, 100)}...`,
-			});
-
-			// REALIZAR INSERÇÃO
-			console.log("💾 Iniciando inserção no banco de dados...");
-
-			const { data, error } = await adminClient
+			// REALIZAR INSERÇÃO COM CLIENTE AUTENTICADO
+			const { data, error } = await supabase
 				.from("posts")
 				.insert([dataToInsert])
 				.select()
@@ -446,39 +440,14 @@ export class PostService {
 					hint: error.hint,
 				});
 
-				// Mensagens de erro específicas
-				if (error.message.includes("duplicate")) {
-					throw new Error("Já existe um post com este slug");
-				} else if (error.message.includes("null value")) {
-					throw new Error("Alguns campos obrigatórios não foram preenchidos");
-				} else if (error.message.includes("foreign key")) {
-					throw new Error("Categoria inválida selecionada");
-				} else if (
-					error.message.includes("permission") ||
-					error.code === "42501"
-				) {
-					throw new Error(
-						"Erro de permissão. Verifique se você tem acesso para criar posts"
-					);
-				} else if (error.message.includes("policy")) {
-					throw new Error("Política de segurança bloqueou a operação");
-				}
-
-				throw new Error(`Erro na criação: ${error.message}`);
+				// Throw do erro tratado pelo RLS handler
+				throw this.handleRLSError(error);
 			}
-
-			console.log("✅ Post criado com sucesso!");
-			console.log("🎉 Dados do post criado:", {
-				id: data.id,
-				title: data.title,
-				slug: data.slug,
-				published: data.published,
-			});
 
 			// Invalidar cache do Data API
 			try {
 				await this.invalidatePublicCache();
-				console.log("🗑️ Cache invalidado com sucesso");
+				//console.log("🗑️ Cache invalidado com sucesso");
 			} catch (cacheError) {
 				console.warn("⚠️ Erro ao invalidar cache:", cacheError);
 			}
@@ -494,20 +463,21 @@ export class PostService {
 				stack: error.stack,
 			});
 
-			throw new Error(`Erro ao criar post: ${error.message}`);
+			throw error; // Re-throw o erro já tratado
 		}
 	}
 
-	// MÉTODO UPDATEPOST - VERSÃO CORRIGIDA
+	// MÉTODO UPDATEPOST - VERSÃO CORRIGIDA PARA RLS
 	static async updatePost(id, postData) {
-		console.log(`📝 PostService.updatePost: Atualizando post ${id}...`);
-
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
 			if (isNaN(postId)) {
 				throw new Error(`ID inválido: ${id}`);
 			}
+
+			// CRÍTICO: Verificar autenticação primeiro
+			await this.verifyAuthenticatedAdmin();
 
 			// Validar dados obrigatórios
 			if (!postData.title) {
@@ -519,7 +489,7 @@ export class PostService {
 			}
 
 			// Buscar post atual para comparar imagens
-			const { data: currentPost } = await adminClient
+			const { data: currentPost } = await supabase
 				.from("posts")
 				.select("image_path")
 				.eq("id", postId)
@@ -561,12 +531,7 @@ export class PostService {
 				throw new Error("CRÍTICO: image_url não foi definida para atualização");
 			}
 
-			console.log("📤 Dados para atualização:", {
-				...dataToUpdate,
-				content: `${dataToUpdate.content.substring(0, 100)}...`,
-			});
-
-			const { data, error } = await adminClient
+			const { data, error } = await supabase
 				.from("posts")
 				.update(dataToUpdate)
 				.eq("id", postId)
@@ -575,20 +540,8 @@ export class PostService {
 
 			if (error) {
 				console.error("❌ updatePost error:", error);
-
-				// Mensagens de erro específicas
-				if (error.message.includes("duplicate")) {
-					throw new Error("Já existe um post com este slug");
-				} else if (error.message.includes("null value")) {
-					throw new Error("Alguns campos obrigatórios não foram preenchidos");
-				} else if (error.message.includes("foreign key")) {
-					throw new Error("Categoria inválida selecionada");
-				}
-
-				throw error;
+				throw this.handleRLSError(error);
 			}
-
-			console.log("✅ Post atualizado com sucesso!");
 
 			// Se a imagem mudou, agendar limpeza da imagem antiga
 			if (
@@ -605,7 +558,7 @@ export class PostService {
 			return data;
 		} catch (error) {
 			console.error("❌ PostService.updatePost error:", error);
-			throw new Error(`Erro ao atualizar post: ${error.message}`);
+			throw error; // Re-throw o erro já tratado
 		}
 	}
 
@@ -613,26 +566,22 @@ export class PostService {
 		try {
 			const postId = typeof id === "string" ? parseInt(id, 10) : id;
 
-			console.log(`🗑️ PostService.deletePost: Removendo post ${postId}...`);
+			// CRÍTICO: Verificar autenticação primeiro
+			await this.verifyAuthenticatedAdmin();
 
 			// Buscar imagem do post antes de deletar
-			const { data: postToDelete } = await adminClient
+			const { data: postToDelete } = await supabase
 				.from("posts")
 				.select("image_path")
 				.eq("id", postId)
 				.single();
 
-			const { error } = await adminClient
-				.from("posts")
-				.delete()
-				.eq("id", postId);
+			const { error } = await supabase.from("posts").delete().eq("id", postId);
 
 			if (error) {
 				console.error("❌ deletePost error:", error);
-				throw error;
+				throw this.handleRLSError(error);
 			}
-
-			console.log("✅ Post deletado com sucesso!");
 
 			// Agendar limpeza da imagem
 			if (postToDelete?.image_path) {
@@ -643,8 +592,62 @@ export class PostService {
 			await this.invalidatePublicCache();
 		} catch (error) {
 			console.error("❌ PostService.deletePost error:", error);
-			throw new Error(`Erro ao deletar post: ${error.message}`);
+			throw error; // Re-throw o erro já tratado
 		}
+	}
+
+	/**
+	 * ======================================
+	 * ERROR HANDLING MELHORADO PARA RLS
+	 * ======================================
+	 */
+
+	static handleRLSError(error) {
+		console.error("🔍 Analisando erro RLS:", error);
+
+		// Erros de permissão específicos
+		if (
+			error.code === "42501" ||
+			error.message?.includes("permission denied")
+		) {
+			return new Error(
+				"Erro de permissão: Verifique se você está logado como administrador"
+			);
+		}
+
+		// Erros de política RLS
+		if (
+			error.code === "PGRST301" ||
+			error.message?.includes("policy") ||
+			error.message?.includes("RLS")
+		) {
+			return new Error(
+				"Política de segurança: Suas permissões não permitem esta operação"
+			);
+		}
+
+		// Erros de autenticação
+		if (error.code === "PGRST302" || error.message?.includes("JWT")) {
+			return new Error("Sessão expirada: Faça login novamente para continuar");
+		}
+
+		// Erros de dados duplicados
+		if (error.message?.includes("duplicate") || error.code === "23505") {
+			return new Error("Já existe um post com este slug");
+		}
+
+		// Erros de campos obrigatórios
+		if (error.message?.includes("null value") || error.code === "23502") {
+			return new Error("Alguns campos obrigatórios não foram preenchidos");
+		}
+
+		// Erros de chave estrangeira
+		if (error.message?.includes("foreign key") || error.code === "23503") {
+			return new Error("Categoria inválida selecionada");
+		}
+
+		// Erro genérico com mais contexto
+		return new Error(`Erro no banco de dados: ${error.message}`);
 	}
 
 	/**
@@ -697,22 +700,10 @@ export class PostService {
 		setTimeout(async () => {
 			try {
 				await ImageUploadService.removePostImage(imagePath);
-				console.log(`🧹 Imagem antiga removida: ${imagePath}`);
 			} catch (error) {
 				console.warn("⚠️ Erro ao remover imagem antiga:", error);
 			}
 		}, 5 * 60 * 1000); // 5 minutos de delay
-	}
-
-	static createFreshAnonymousClient() {
-		return createClient(supabaseUrl, supabaseAnonKey, {
-			auth: {
-				persistSession: false,
-				autoRefreshToken: false,
-				detectSessionInUrl: false,
-				storageKey: `supabase.auth.token.anonymous.${Date.now()}`,
-			},
-		});
 	}
 
 	static async invalidatePublicCache() {
@@ -777,12 +768,7 @@ export class PostService {
 	// Verificar schema da tabela posts
 	static async debugTableSchema() {
 		try {
-			console.log("🔍 Verificando schema da tabela posts...");
-
-			const { data, error } = await adminClient
-				.from("posts")
-				.select("*")
-				.limit(1);
+			const { data, error } = await supabase.from("posts").select("*").limit(1);
 
 			if (error) {
 				console.error("❌ Erro ao verificar schema:", error);
@@ -790,7 +776,6 @@ export class PostService {
 			}
 
 			const columns = data.length > 0 ? Object.keys(data[0]) : [];
-			console.log("📋 Colunas da tabela posts:", columns);
 
 			return { success: true, columns, sampleData: data[0] };
 		} catch (error) {
@@ -802,7 +787,8 @@ export class PostService {
 	// Testar inserção simples
 	static async debugTestInsert() {
 		try {
-			console.log("🧪 Testando inserção simples...");
+			// Verificar autenticação primeiro
+			await this.verifyAuthenticatedAdmin();
 
 			const testData = {
 				title: "Post de Teste",
@@ -822,7 +808,7 @@ export class PostService {
 				updated_at: new Date().toISOString(),
 			};
 
-			const { data, error } = await adminClient
+			const { data, error } = await supabase
 				.from("posts")
 				.insert([testData])
 				.select()
@@ -830,14 +816,11 @@ export class PostService {
 
 			if (error) {
 				console.error("❌ debugTestInsert error:", error);
-				return { success: false, error };
+				return { success: false, error: this.handleRLSError(error) };
 			}
 
-			console.log("✅ Teste de inserção bem-sucedido:", data);
-
 			// Limpar teste
-			await adminClient.from("posts").delete().eq("id", data.id);
-			console.log("🧹 Post de teste removido");
+			await supabase.from("posts").delete().eq("id", data.id);
 
 			return { success: true, data };
 		} catch (error) {
@@ -849,10 +832,13 @@ export class PostService {
 	// Verificar permissões RLS
 	static async debugCheckPermissions() {
 		try {
-			console.log("🔐 Verificando permissões...");
+			// Primeiro verificar autenticação
+			const authResult = await this.verifyAuthenticatedAdmin();
 
 			// Tentar diferentes operações
 			const tests = {
+				auth: !!authResult.user,
+				isAdmin: authResult.profile?.role === "admin",
 				select: false,
 				insert: false,
 				update: false,
@@ -861,7 +847,7 @@ export class PostService {
 
 			// Teste SELECT
 			try {
-				await adminClient.from("posts").select("id").limit(1);
+				await supabase.from("posts").select("id").limit(1);
 				tests.select = true;
 			} catch (error) {
 				console.warn("⚠️ SELECT falhou:", error.message);
@@ -869,7 +855,7 @@ export class PostService {
 
 			// Teste INSERT (com dados de teste)
 			try {
-				const { data, error } = await adminClient
+				const { data, error } = await supabase
 					.from("posts")
 					.insert([
 						{
@@ -888,24 +874,21 @@ export class PostService {
 				if (!error) {
 					tests.insert = true;
 					// Limpar imediatamente
-					await adminClient.from("posts").delete().eq("id", data.id);
+					await supabase.from("posts").delete().eq("id", data.id);
 				}
 			} catch (error) {
 				console.warn("⚠️ INSERT falhou:", error.message);
 			}
 
-			console.log("🔐 Resultados dos testes de permissão:", tests);
 			return tests;
 		} catch (error) {
 			console.error("❌ debugCheckPermissions error:", error);
-			return { error };
+			return { error: error.message };
 		}
 	}
 
 	// Método principal de diagnóstico
 	static async runDiagnostics() {
-		console.log("🩺 Iniciando diagnósticos completos...");
-
 		const results = {
 			timestamp: new Date().toISOString(),
 			schema: await this.debugTableSchema(),
@@ -913,7 +896,6 @@ export class PostService {
 			testInsert: await this.debugTestInsert(),
 		};
 
-		console.log("📊 Relatório de diagnósticos:", results);
 		return results;
 	}
 }

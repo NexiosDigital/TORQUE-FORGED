@@ -194,11 +194,6 @@ const PostEditor = () => {
 				);
 			}
 
-			console.log("📝 PostEditor: Dados do post:", {
-				...postData,
-				content: postData.content.substring(0, 100) + "...",
-			});
-
 			// Salvar post
 			let result;
 			if (isEditing) {
@@ -206,11 +201,10 @@ const PostEditor = () => {
 					id,
 					...postData,
 				});
-				console.log("✅ Post atualizado:", result);
 			} else {
 				// CORRIGIDO: Descomentar a criação de posts
 				result = await createPostMutation.mutateAsync(postData);
-				console.log("✅ Post criado:", result);
+				//console.log("✅ Post criado:", result);
 			}
 
 			toast.success(`Post ${isEditing ? "atualizado" : "criado"} com sucesso!`);

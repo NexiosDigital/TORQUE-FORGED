@@ -175,7 +175,6 @@ export const useAllPostsAdmin = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.admin.posts,
 		queryFn: () => {
-			console.log("🔍 useAllPostsAdmin: Executando query...");
 			return PostService.getAllPostsAdmin();
 		},
 		enabled: isAdmin,
@@ -185,9 +184,7 @@ export const useAllPostsAdmin = (options = {}) => {
 		meta: {
 			errorMessage: "Erro ao carregar posts admin",
 		},
-		onSuccess: (data) => {
-			console.log(`✅ useAllPostsAdmin: ${data?.length || 0} posts carregados`);
-		},
+		onSuccess: (data) => {},
 		onError: (error) => {
 			console.error("❌ useAllPostsAdmin error:", error);
 		},
@@ -202,7 +199,6 @@ export const usePostByIdAdmin = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.admin.byId(id),
 		queryFn: () => {
-			console.log(`🔍 usePostByIdAdmin: Carregando post ${id}...`);
 			return PostService.getPostByIdAdmin(id);
 		},
 		enabled: !!id && isAdmin,
@@ -210,9 +206,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 		meta: {
 			errorMessage: `Erro ao carregar post admin ${id}`,
 		},
-		onSuccess: (data) => {
-			console.log(`✅ usePostByIdAdmin: Post ${id} carregado`);
-		},
+		onSuccess: (data) => {},
 		onError: (error) => {
 			console.error(`❌ usePostByIdAdmin(${id}) error:`, error);
 		},
@@ -230,27 +224,13 @@ export const useCreatePost = () => {
 
 	return useMutation({
 		mutationFn: async (postData) => {
-			console.log("🚀 useCreatePost: Iniciando criação...");
-			console.log("📋 Dados da mutation:", {
-				title: postData.title,
-				slug: postData.slug,
-				category: postData.category,
-				image_url: postData.image_url ? "✅ Presente" : "❌ Ausente",
-				published: postData.published,
-				content_length: postData.content?.length || 0,
-			});
-
 			const result = await PostService.createPost(postData);
-			console.log("✅ useCreatePost: Post criado com sucesso!", result);
 			return result;
 		},
 		onSuccess: (data) => {
-			console.log("🎉 useCreatePost onSuccess:", data);
 			toast.success("Post criado com sucesso!");
 
 			// INVALIDAÇÃO COMPLETA - força refresh de todos os caches
-			console.log("🗑️ Invalidando caches...");
-
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -264,16 +244,12 @@ export const useCreatePost = () => {
 			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
 			queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
-
-			console.log("✅ Caches invalidados e refetch disparado");
 		},
 		onError: (error) => {
 			console.error("❌ useCreatePost onError:", error);
 			toast.error(`Erro ao criar post: ${error.message}`);
 		},
-		onMutate: (variables) => {
-			console.log("⏳ useCreatePost onMutate:", variables.title);
-		},
+		onMutate: (variables) => {},
 	});
 };
 
@@ -282,13 +258,10 @@ export const useUpdatePost = () => {
 
 	return useMutation({
 		mutationFn: async ({ id, ...postData }) => {
-			console.log(`🔄 useUpdatePost: Atualizando post ${id}...`);
 			const result = await PostService.updatePost(id, postData);
-			console.log("✅ useUpdatePost: Post atualizado com sucesso!");
 			return result;
 		},
 		onSuccess: (data) => {
-			console.log("🎉 useUpdatePost onSuccess:", data);
 			toast.success("Post atualizado com sucesso!");
 
 			// INVALIDAÇÃO COMPLETA
@@ -330,13 +303,10 @@ export const useDeletePost = () => {
 
 	return useMutation({
 		mutationFn: async (id) => {
-			console.log(`🗑️ useDeletePost: Removendo post ${id}...`);
 			const result = await PostService.deletePost(id);
-			console.log("✅ useDeletePost: Post removido com sucesso!");
 			return result;
 		},
 		onSuccess: (data, variables) => {
-			console.log("🎉 useDeletePost onSuccess:", variables);
 			toast.success("Post deletado com sucesso!");
 
 			// INVALIDAÇÃO COMPLETA
@@ -404,21 +374,18 @@ export const useCacheUtils = () => {
 	const queryClient = useQueryClient();
 
 	const invalidateAllPosts = () => {
-		console.log("🗑️ Invalidando todos os posts...");
 		queryClient.invalidateQueries({ queryKey: ["posts"] });
 		queryClient.invalidateQueries({ queryKey: ["public"] });
 		queryClient.invalidateQueries({ queryKey: ["admin"] });
 	};
 
 	const clearCache = () => {
-		console.log("🧹 Limpando todo o cache...");
 		queryClient.clear();
 		toast.success("Cache limpo com sucesso!");
 	};
 
 	// NOVA FUNÇÃO: Force refresh de todos os dados
 	const forceRefreshAll = () => {
-		console.log("🔄 Forçando refresh de todos os dados...");
 		queryClient.invalidateQueries();
 		queryClient.refetchQueries();
 		toast.success("Dados atualizados!");
@@ -426,7 +393,6 @@ export const useCacheUtils = () => {
 
 	// NOVA FUNÇÃO: Refresh específico para posts
 	const refreshPosts = () => {
-		console.log("🔄 Refrescando posts...");
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
 		queryClient.invalidateQueries({
@@ -461,18 +427,6 @@ export const useCacheUtils = () => {
 		const cache = queryClient.getMutationCache();
 		const mutations = cache.getAll();
 
-		console.log("🔍 Debug Mutations:", {
-			total: mutations.length,
-			pending: mutations.filter((m) => m.state.status === "pending").length,
-			success: mutations.filter((m) => m.state.status === "success").length,
-			error: mutations.filter((m) => m.state.status === "error").length,
-			recent: mutations.slice(-5).map((m) => ({
-				status: m.state.status,
-				mutationKey: m.options.mutationKey,
-				submittedAt: m.state.submittedAt,
-			})),
-		});
-
 		return mutations;
 	};
 
@@ -503,14 +457,9 @@ export const usePostByIdSuspense = (id) => {
  * ======================================
  */
 export const usePostsDebug = () => {
-	const queryClient = useQueryClient();
-
 	const runDiagnostics = async () => {
-		console.log("🩺 Executando diagnósticos do PostService...");
-
 		try {
 			const results = await PostService.runDiagnostics();
-			console.log("📊 Resultados dos diagnósticos:", results);
 			return results;
 		} catch (error) {
 			console.error("❌ Erro nos diagnósticos:", error);
@@ -519,8 +468,6 @@ export const usePostsDebug = () => {
 	};
 
 	const testCreatePost = async () => {
-		console.log("🧪 Testando criação de post...");
-
 		const testData = {
 			title: "Post de Teste DEBUG",
 			slug: "post-teste-debug-" + Date.now(),
@@ -540,13 +487,11 @@ export const usePostsDebug = () => {
 
 		try {
 			const result = await PostService.createPost(testData);
-			console.log("✅ Teste de criação bem-sucedido:", result);
 
 			// Limpar o post de teste
 			setTimeout(async () => {
 				try {
 					await PostService.deletePost(result.id);
-					console.log("🧹 Post de teste removido");
 				} catch (cleanupError) {
 					console.warn("⚠️ Erro ao limpar post de teste:", cleanupError);
 				}
