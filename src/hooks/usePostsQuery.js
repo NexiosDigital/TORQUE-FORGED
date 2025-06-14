@@ -8,13 +8,6 @@ import { PostService } from "../services/PostService";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 
-/**
- * CONFIGURAÇÕES AJUSTADAS PARA DADOS MAIS FRESCOS
- * - Cache reduzido para detectar mudanças rapidamente
- * - Refetch habilitado para atualizações automáticas
- * - MUTATIONS VERIFICADAS E CORRIGIDAS
- */
-
 // Query keys INALTERADOS (compatibilidade total)
 export const QUERY_KEYS = {
 	// Posts públicos - SEMPRE as mesmas keys independente de auth
@@ -33,34 +26,36 @@ export const QUERY_KEYS = {
 	},
 };
 
-// Configurações REDUZIDAS para detectar mudanças mais rápido
+// Configurações CORRIGIDAS para evitar refetch desnecessário
 const PUBLIC_CACHE_CONFIG = {
-	staleTime: 2 * 60 * 1000, // REDUZIDO: 2 minutos (era 10)
-	gcTime: 10 * 60 * 1000, // 10 minutos
-	refetchOnWindowFocus: true, // HABILITADO: refetch ao focar janela
-	refetchOnMount: true, // HABILITADO: refetch ao montar componente
+	staleTime: 5 * 60 * 1000, // 5 minutos (aumentado)
+	gcTime: 15 * 60 * 1000, // 15 minutos
+	refetchOnWindowFocus: false, // DESABILITADO para evitar recarregamentos
+	refetchOnMount: true, // Refetch apenas ao montar
+	// REMOVIDO: refetchInterval que causava recarregamentos automáticos
 	retry: (failureCount, error) => {
 		if (error?.message?.includes("não encontrado")) return false;
 		return failureCount < 1;
 	},
-	retryDelay: 500,
+	retryDelay: 1000,
 };
 
 const ADMIN_CACHE_CONFIG = {
-	//staleTime: 30 * 1000, // REDUZIDO: 30 segundos (era 2 minutos)
-	gcTime: 5 * 60 * 1000, // 5 minutos
-	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	//retry: 1,
+	staleTime: 10 * 60 * 1000, // 10 minutos para admin (mais tempo)
+	gcTime: 30 * 60 * 1000, // 30 minutos
+	refetchOnWindowFocus: false, // DESABILITADO - crítico para editor
+	refetchOnMount: false, // DESABILITADO para admin para preservar dados
+	// SEM refetchInterval - evita perda de dados no editor
+	retry: 0, // Sem retry automático para admin
 };
 
 /**
  * ======================================
- * HOOKS PÚBLICOS - CONFIGURAÇÕES AJUSTADAS
+ * HOOKS PÚBLICOS - SEM REFETCH AUTOMÁTICO
  * ======================================
  */
 
-// Posts em destaque - AGORA com refetch automático
+// Posts em destaque - SEM refetch interval
 export const useFeaturedPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.featured,
@@ -68,8 +63,7 @@ export const useFeaturedPosts = (options = {}) => {
 			return PostService.getFeaturedPosts();
 		},
 		...PUBLIC_CACHE_CONFIG,
-		// Forçar refetch a cada 2 minutos
-		refetchInterval: 2 * 60 * 1000,
+		// REMOVIDO: refetchInterval que causava recarregamentos
 		meta: {
 			errorMessage: "Erro ao carregar posts em destaque",
 		},
@@ -77,7 +71,7 @@ export const useFeaturedPosts = (options = {}) => {
 	});
 };
 
-// Todos os posts - AGORA com refetch automático
+// Todos os posts - SEM refetch interval
 export const useAllPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.posts,
@@ -85,8 +79,7 @@ export const useAllPosts = (options = {}) => {
 			return PostService.getAllPosts();
 		},
 		...PUBLIC_CACHE_CONFIG,
-		// Forçar refetch a cada 2 minutos
-		refetchInterval: 2 * 60 * 1000,
+		// REMOVIDO: refetchInterval que causava recarregamentos
 		meta: {
 			errorMessage: "Erro ao carregar posts",
 		},
@@ -94,7 +87,7 @@ export const useAllPosts = (options = {}) => {
 	});
 };
 
-// Posts por categoria - AGORA com refetch automático
+// Posts por categoria - SEM refetch interval
 export const usePostsByCategory = (categoryId, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byCategory(categoryId),
@@ -103,8 +96,7 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 		},
 		enabled: !!categoryId && typeof categoryId === "string",
 		...PUBLIC_CACHE_CONFIG,
-		// Forçar refetch a cada 2 minutos
-		refetchInterval: 2 * 60 * 1000,
+		// REMOVIDO: refetchInterval que causava recarregamentos
 		meta: {
 			errorMessage: `Erro ao carregar posts da categoria ${categoryId}`,
 		},
@@ -112,7 +104,7 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 	});
 };
 
-// Post individual - Cache um pouco maior
+// Post individual - Cache longo, sem refetch
 export const usePostById = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
@@ -121,7 +113,8 @@ export const usePostById = (id, options = {}) => {
 		},
 		enabled: !!id,
 		...PUBLIC_CACHE_CONFIG,
-		staleTime: 5 * 60 * 1000, // 5 minutos para posts individuais
+		staleTime: 15 * 60 * 1000, // 15 minutos para posts individuais
+		refetchOnWindowFocus: false, // CRÍTICO: não refetch no foco
 		meta: {
 			errorMessage: `Erro ao carregar post ${id}`,
 		},
@@ -129,15 +122,15 @@ export const usePostById = (id, options = {}) => {
 	});
 };
 
-// Categorias - Cache moderado (categorias mudam pouco)
+// Categorias - Cache longo (categorias mudam pouco)
 export const useCategories = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.categories,
 		queryFn: () => {
 			return PostService.getCategories();
 		},
-		staleTime: 10 * 60 * 1000, // 10 minutos (categorias são estáveis)
-		gcTime: 30 * 60 * 1000, // 30 minutos
+		staleTime: 30 * 60 * 1000, // 30 minutos (categorias são estáveis)
+		gcTime: 60 * 60 * 1000, // 60 minutos
 		refetchOnWindowFocus: false,
 		refetchOnMount: false,
 		meta: {
@@ -164,11 +157,11 @@ export const useSearchPosts = (query, options = {}) => {
 
 /**
  * ======================================
- * HOOKS ADMIN - CACHE REDUZIDO
+ * HOOKS ADMIN - CONFIGURAÇÕES SEGURAS PARA EDITOR
  * ======================================
  */
 
-// Posts admin - Cache muito curto
+// Posts admin - CONFIGURAÇÃO SEGURA para não perder dados no editor
 export const useAllPostsAdmin = (options = {}) => {
 	const { isAdmin } = useAuth();
 
@@ -179,10 +172,16 @@ export const useAllPostsAdmin = (options = {}) => {
 		},
 		enabled: isAdmin,
 		...ADMIN_CACHE_CONFIG,
+		// CRÍTICO: Configurações para não perder dados no editor
+		refetchOnWindowFocus: false, // NUNCA refetch ao focar janela
+		refetchOnMount: false, // NUNCA refetch ao montar (preserva dados)
+		refetchOnReconnect: false, // NUNCA refetch ao reconectar
 		meta: {
 			errorMessage: "Erro ao carregar posts admin",
 		},
-		onSuccess: (data) => {},
+		onSuccess: (data) => {
+			// Log opcional para debug
+		},
 		onError: (error) => {
 			console.error("❌ useAllPostsAdmin error:", error);
 		},
@@ -190,7 +189,7 @@ export const useAllPostsAdmin = (options = {}) => {
 	});
 };
 
-// Post admin individual - Cache muito curto
+// Post admin individual - CONFIGURAÇÃO SEGURA para edição
 export const usePostByIdAdmin = (id, options = {}) => {
 	const { isAdmin } = useAuth();
 
@@ -201,10 +200,19 @@ export const usePostByIdAdmin = (id, options = {}) => {
 		},
 		enabled: !!id && isAdmin,
 		...ADMIN_CACHE_CONFIG,
+		// CRÍTICO: Nunca refetch durante edição
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		refetchOnReconnect: false,
+		// Cache extra longo para editor
+		staleTime: 60 * 60 * 1000, // 1 hora
+		gcTime: 2 * 60 * 60 * 1000, // 2 horas
 		meta: {
 			errorMessage: `Erro ao carregar post admin ${id}`,
 		},
-		onSuccess: (data) => {},
+		onSuccess: (data) => {
+			// Log opcional para debug
+		},
 		onError: (error) => {
 			console.error(`❌ usePostByIdAdmin(${id}) error:`, error);
 		},
@@ -214,7 +222,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 
 /**
  * ======================================
- * MUTATIONS - VERSÃO CORRIGIDA E MELHORADA
+ * MUTATIONS - VERSÃO CORRIGIDA
  * ======================================
  */
 export const useCreatePost = () => {
@@ -228,7 +236,7 @@ export const useCreatePost = () => {
 		onSuccess: (data) => {
 			toast.success("Post criado com sucesso!");
 
-			// INVALIDAÇÃO COMPLETA - força refresh de todos os caches
+			// INVALIDAÇÃO MANUAL (não automática)
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -237,17 +245,11 @@ export const useCreatePost = () => {
 			queryClient.invalidateQueries({
 				queryKey: ["public", "posts", "category"],
 			});
-
-			// FORÇAR REFETCH imediato
-			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
-			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
-			queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
 		},
 		onError: (error) => {
 			console.error("❌ useCreatePost onError:", error);
 			toast.error(`Erro ao criar post: ${error.message}`);
 		},
-		onMutate: (variables) => {},
 	});
 };
 
@@ -262,7 +264,7 @@ export const useUpdatePost = () => {
 		onSuccess: (data) => {
 			toast.success("Post atualizado com sucesso!");
 
-			// INVALIDAÇÃO COMPLETA
+			// INVALIDAÇÃO MANUAL ESPECÍFICA
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -283,11 +285,6 @@ export const useUpdatePost = () => {
 					queryKey: QUERY_KEYS.admin.byId(data.id),
 				});
 			}
-
-			// FORÇAR REFETCH imediato
-			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
-			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
-			queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
 		},
 		onError: (error) => {
 			console.error("❌ useUpdatePost onError:", error);
@@ -307,7 +304,7 @@ export const useDeletePost = () => {
 		onSuccess: (data, variables) => {
 			toast.success("Post deletado com sucesso!");
 
-			// INVALIDAÇÃO COMPLETA
+			// INVALIDAÇÃO MANUAL
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -324,11 +321,6 @@ export const useDeletePost = () => {
 			queryClient.removeQueries({
 				queryKey: QUERY_KEYS.admin.byId(variables),
 			});
-
-			// FORÇAR REFETCH imediato
-			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
-			queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
-			queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
 		},
 		onError: (error) => {
 			console.error("❌ useDeletePost onError:", error);
@@ -351,7 +343,7 @@ export const usePrefetch = () => {
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byId(id),
 			queryFn: () => PostService.getPostById(id),
-			staleTime: 30 * 1000, // Cache curto para prefetch
+			staleTime: 5 * 60 * 1000, // 5 minutos para prefetch
 		});
 	};
 
@@ -361,7 +353,7 @@ export const usePrefetch = () => {
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byCategory(categoryId),
 			queryFn: () => PostService.getPostsByCategory(categoryId),
-			staleTime: 30 * 1000,
+			staleTime: 5 * 60 * 1000,
 		});
 	};
 
@@ -382,14 +374,14 @@ export const useCacheUtils = () => {
 		toast.success("Cache limpo com sucesso!");
 	};
 
-	// NOVA FUNÇÃO: Force refresh de todos os dados
+	// MANUAL: Force refresh - não automático
 	const forceRefreshAll = () => {
 		queryClient.invalidateQueries();
 		queryClient.refetchQueries();
 		toast.success("Dados atualizados!");
 	};
 
-	// NOVA FUNÇÃO: Refresh específico para posts
+	// MANUAL: Refresh específico para posts
 	const refreshPosts = () => {
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -398,6 +390,7 @@ export const useCacheUtils = () => {
 		});
 		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 
+		// MANUAL refetch - não automático
 		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
 		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
 		queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
@@ -420,11 +413,9 @@ export const useCacheUtils = () => {
 		};
 	};
 
-	// NOVA FUNÇÃO: Debug mutations
 	const debugMutations = () => {
 		const cache = queryClient.getMutationCache();
 		const mutations = cache.getAll();
-
 		return mutations;
 	};
 
@@ -434,18 +425,19 @@ export const useCacheUtils = () => {
 		getCacheStats,
 		forceRefreshAll,
 		refreshPosts,
-		debugMutations, // NOVA
+		debugMutations,
 	};
 };
 
-// Suspense hook - Cache reduzido
+// Suspense hook - Cache seguro
 export const usePostByIdSuspense = (id) => {
 	return useSuspenseQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
 		queryFn: () => {
 			return PostService.getPostById(id);
 		},
-		staleTime: 2 * 60 * 1000, // Cache reduzido
+		staleTime: 10 * 60 * 1000, // 10 minutos
+		refetchOnWindowFocus: false, // NUNCA refetch automático
 	});
 };
 
@@ -523,6 +515,6 @@ export default {
 	useDeletePost,
 	usePrefetch,
 	useCacheUtils,
-	usePostsDebug, // NOVO
+	usePostsDebug,
 	QUERY_KEYS,
 };

@@ -29,6 +29,13 @@ import TableGeneratorModal from "../../components/TableGeneratorModal";
 import PostImageGallery from "../../components/PostImageGallery";
 import toast from "react-hot-toast";
 
+/**
+ * PostEditor - CORRIGIDO PARA EVITAR PERDA DE DADOS
+ * - Configurações de cache seguras para preservar dados durante edição
+ * - Removido qualquer refetch automático
+ * - Proteção contra recarregamentos durante edição
+ */
+
 const PostEditor = () => {
 	const navigate = useNavigate();
 	const { id } = useParams();
@@ -37,11 +44,26 @@ const PostEditor = () => {
 	const createPostMutation = useCreatePost();
 	const updatePostMutation = useUpdatePost();
 
+	// Hook para carregar post existente com configurações SEGURAS
 	const { data: existingPost, isLoading: loadingPost } = usePostByIdAdmin(id, {
 		enabled: isEditing,
+		// CONFIGURAÇÕES CRÍTICAS para evitar perda de dados
+		refetchOnWindowFocus: false, // NUNCA refetch ao focar
+		refetchOnMount: false, // NUNCA refetch ao montar (preserva dados)
+		refetchOnReconnect: false, // NUNCA refetch ao reconectar
+		refetchInterval: false, // NUNCA refetch automático
+		staleTime: 60 * 60 * 1000, // 1 hora - cache extra longo
+		gcTime: 2 * 60 * 60 * 1000, // 2 horas
+		retry: 0, // Sem retry para evitar interferência
 	});
 
-	const { data: categories = [] } = useCategories();
+	// Hook para categorias com configurações estáveis
+	const { data: categories = [] } = useCategories({
+		// Configurações estáveis para categorias
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		staleTime: 60 * 60 * 1000, // 1 hora
+	});
 
 	const {
 		register,
@@ -72,14 +94,19 @@ const PostEditor = () => {
 
 	const [imageChanged, setImageChanged] = useState(false);
 
+	// Estado para detectar mudanças não salvas
+	const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
 	const watchTitle = watch("title");
 	const watchPublished = watch("published");
 	const watchTrending = watch("trending");
 	const watchSlug = watch("slug");
 
-	// Carregar post para edição
+	// Carregar post para edição APENAS UMA VEZ
 	useEffect(() => {
-		if (isEditing && existingPost) {
+		if (isEditing && existingPost && !hasUnsavedChanges) {
+			console.log("📝 Carregando dados do post para edição (apenas uma vez)");
+
 			setValue("title", existingPost.title);
 			setValue("slug", existingPost.slug);
 			setValue("category", existingPost.category);
@@ -99,7 +126,14 @@ const PostEditor = () => {
 				setImageData(imageState);
 			}
 		}
-	}, [existingPost, isEditing, setValue, imageChanged]);
+	}, [existingPost, isEditing, setValue, imageChanged, hasUnsavedChanges]);
+
+	// Detectar mudanças para marcar como não salvo
+	useEffect(() => {
+		if (watchTitle || content) {
+			setHasUnsavedChanges(true);
+		}
+	}, [watchTitle, content]);
 
 	// Gerar slug automaticamente para posts novos
 	useEffect(() => {
@@ -116,10 +150,29 @@ const PostEditor = () => {
 		}
 	}, [watchTitle, setValue, isEditing]);
 
+	// Proteção contra saída com mudanças não salvas
+	useEffect(() => {
+		const handleBeforeUnload = (event) => {
+			if (hasUnsavedChanges && !loading) {
+				event.preventDefault();
+				event.returnValue =
+					"Você tem alterações não salvas. Deseja sair mesmo assim?";
+				return event.returnValue;
+			}
+		};
+
+		window.addEventListener("beforeunload", handleBeforeUnload);
+
+		return () => {
+			window.removeEventListener("beforeunload", handleBeforeUnload);
+		};
+	}, [hasUnsavedChanges, loading]);
+
 	// Handler para mudança na imagem de capa
 	const handleImageChange = (newImageData) => {
 		setImageChanged(true);
 		setImageData(newImageData);
+		setHasUnsavedChanges(true);
 	};
 
 	// Salvar posição do cursor
@@ -146,6 +199,7 @@ const PostEditor = () => {
 			content.substring(end);
 
 		setContent(newContent);
+		setHasUnsavedChanges(true);
 
 		setTimeout(() => {
 			textarea.focus();
@@ -211,6 +265,7 @@ const PostEditor = () => {
 			content.substring(0, start) + newText + content.substring(end);
 
 		setContent(newContent);
+		setHasUnsavedChanges(true);
 
 		setTimeout(() => {
 			textarea.focus();
@@ -277,8 +332,15 @@ const PostEditor = () => {
 				result = await createPostMutation.mutateAsync(postData);
 			}
 
+			// Marcar como salvo
+			setHasUnsavedChanges(false);
+
 			toast.success(`Post ${isEditing ? "atualizado" : "criado"} com sucesso!`);
-			navigate("/admin/dashboard");
+
+			// Pequeno delay antes de navegar
+			setTimeout(() => {
+				navigate("/admin/dashboard");
+			}, 1000);
 		} catch (error) {
 			console.error(`❌ PostEditor: Erro no onSubmit:`, error);
 
@@ -300,6 +362,21 @@ const PostEditor = () => {
 			}
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	// Função para voltar com confirmação se há mudanças
+	const handleGoBack = () => {
+		if (hasUnsavedChanges && !loading) {
+			if (
+				window.confirm(
+					"Você tem alterações não salvas. Deseja sair mesmo assim?"
+				)
+			) {
+				navigate("/admin/dashboard");
+			}
+		} else {
+			navigate("/admin/dashboard");
 		}
 	};
 
@@ -391,6 +468,13 @@ const PostEditor = () => {
 			</button>
 
 			<div className="ml-auto flex items-center space-x-2">
+				{/* Indicador de mudanças não salvas */}
+				{hasUnsavedChanges && (
+					<span className="text-yellow-400 text-sm font-medium px-2 py-1 bg-yellow-500/10 rounded-lg">
+						● Não salvo
+					</span>
+				)}
+
 				<button
 					type="button"
 					onClick={() => setShowPreview(!showPreview)}
@@ -489,7 +573,7 @@ const PostEditor = () => {
 						O post que você está tentando editar não foi encontrado.
 					</p>
 					<button
-						onClick={() => navigate("/admin/dashboard")}
+						onClick={handleGoBack}
 						className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300"
 					>
 						Voltar ao Dashboard
@@ -506,7 +590,7 @@ const PostEditor = () => {
 				<div className="flex items-center justify-between mb-8">
 					<div className="flex items-center space-x-4">
 						<button
-							onClick={() => navigate("/admin/dashboard")}
+							onClick={handleGoBack}
 							className="p-3 bg-gray-800 hover:bg-gray-700 rounded-xl transition-colors duration-300"
 						>
 							<ArrowLeft className="w-5 h-5 text-white" />
@@ -524,6 +608,14 @@ const PostEditor = () => {
 					</div>
 
 					<div className="flex items-center space-x-3">
+						{/* Indicador de mudanças não salvas */}
+						{hasUnsavedChanges && (
+							<span className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+								<div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+								<span className="text-sm font-semibold">Não salvo</span>
+							</span>
+						)}
+
 						<span
 							className={`flex items-center space-x-2 px-4 py-2 rounded-xl ${
 								watchPublished
@@ -635,7 +727,10 @@ const PostEditor = () => {
 										<textarea
 											id="markdown-editor"
 											value={content}
-											onChange={(e) => setContent(e.target.value)}
+											onChange={(e) => {
+												setContent(e.target.value);
+												setHasUnsavedChanges(true);
+											}}
 											className="w-full h-full min-h-[500px] p-6 bg-transparent border-none text-white placeholder-gray-500 focus:outline-none resize-none font-mono text-sm leading-relaxed"
 											placeholder="Digite seu conteúdo em Markdown aqui...
 
@@ -964,6 +1059,21 @@ Use os botões 'Link', 'Imagem' e 'Tabela' na toolbar para inserir elementos fac
 									{isEditing
 										? "Selecione uma nova imagem ou mantenha a atual"
 										: "Faça o upload da imagem de capa para habilitar o salvamento"}
+								</div>
+							)}
+
+							{/* Aviso sobre mudanças não salvas */}
+							{hasUnsavedChanges && (
+								<div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
+									<div className="flex items-center space-x-2">
+										<AlertCircle className="w-4 h-4 text-yellow-400" />
+										<span className="text-yellow-400 text-sm font-semibold">
+											Você tem alterações não salvas
+										</span>
+									</div>
+									<p className="text-yellow-300 text-xs mt-1">
+										Lembre-se de salvar antes de sair da página
+									</p>
 								</div>
 							)}
 						</div>

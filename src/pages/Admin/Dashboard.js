@@ -22,10 +22,10 @@ import {
 import { ErrorBoundary } from "react-error-boundary";
 
 /**
- * Dashboard Admin - Limpo e Sem Debug
- * - Usa hooks administrativos separados
- * - Cache específico para admin
- * - Interface clean e funcional
+ * Dashboard Admin - CORRIGIDO SEM REFETCH AUTOMÁTICO
+ * - Removido qualquer refetch automático que causa recarregamentos
+ * - Uso apenas de refetch manual através do botão
+ * - Cache estável para preservar dados
  */
 
 // Loading skeleton para dashboard
@@ -357,8 +357,21 @@ const PostsTable = React.memo(({ posts, filter }) => {
 const DashboardContent = () => {
 	const { signOut, isAdmin, getDisplayName } = useAuth();
 
-	// Hook admin específico
-	const { data: posts = [], isLoading, error, refetch } = useAllPostsAdmin();
+	// Hook admin com configurações SEGURAS - sem refetch automático
+	const {
+		data: posts = [],
+		isLoading,
+		error,
+		refetch,
+	} = useAllPostsAdmin({
+		// CONFIGURAÇÕES EXPLÍCITAS para evitar refetch automático
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		refetchOnReconnect: false,
+		refetchInterval: false, // NUNCA refetch automático
+		staleTime: 30 * 60 * 1000, // 30 minutos - cache longo
+		gcTime: 60 * 60 * 1000, // 1 hora
+	});
 
 	const [filter, setFilter] = React.useState("all");
 
@@ -377,7 +390,9 @@ const DashboardContent = () => {
 		};
 	}, [posts]);
 
-	const handleRefresh = () => {
+	// Refetch MANUAL apenas
+	const handleManualRefresh = () => {
+		console.log("🔄 Manual refresh iniciado pelo usuário");
 		refetch();
 	};
 
@@ -411,10 +426,12 @@ const DashboardContent = () => {
 							<span>Voltar ao Início</span>
 						</Link>
 
+						{/* Botão de refresh MANUAL */}
 						<button
-							onClick={handleRefresh}
+							onClick={handleManualRefresh}
 							disabled={isLoading}
-							className="flex items-center justify-center space-x-2 border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-4 py-2 rounded-xl font-semibold transition-all duration-300"
+							className="flex items-center justify-center space-x-2 border border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-4 py-2 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50"
+							title="Atualizar dados manualmente"
 						>
 							<RefreshCw
 								className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`}
@@ -483,6 +500,14 @@ const DashboardContent = () => {
 					</div>
 
 					<PostsTable posts={posts} filter={filter} />
+				</div>
+
+				{/* Info sobre refresh manual */}
+				<div className="mt-6 text-center">
+					<p className="text-gray-500 text-sm">
+						💡 Os dados não são atualizados automaticamente. Use o botão
+						"Atualizar" para ver as últimas alterações.
+					</p>
 				</div>
 			</div>
 		</div>
