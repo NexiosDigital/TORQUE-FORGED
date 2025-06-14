@@ -9,17 +9,19 @@ import {
 	X,
 	AlertCircle,
 	Folder,
+	Download,
+	ZoomIn,
+	Check,
 } from "lucide-react";
 import { ContentImageService } from "../services/ContentImageService";
 import toast from "react-hot-toast";
 
 /**
- * PostImageGallery - Galeria de imagens do post atual
- * - Lista todas as imagens já enviadas para o post
- * - Preview em grid responsivo
- * - Ações: inserir no editor, remover, visualizar
- * - Gerenciamento de imagens não utilizadas
- * - Integração com ContentImageService
+ * PostImageGallery - Galeria de imagens do post atual (VERSÃO FINAL)
+ * - Botões de ação posicionados abaixo da imagem
+ * - Sem sobreposição na área da imagem
+ * - Modal corrigido para não disparar eventos externos
+ * - Layout limpo e organizado
  */
 
 const PostImageGallery = ({
@@ -36,6 +38,7 @@ const PostImageGallery = ({
 	const [showPreview, setShowPreview] = useState(false);
 	const [unusedImages, setUnusedImages] = useState([]);
 	const [loadingCleanup, setLoadingCleanup] = useState(false);
+	const [copiedUrl, setCopiedUrl] = useState(null);
 
 	// Carregar imagens do post
 	const loadPostImages = async () => {
@@ -90,7 +93,9 @@ const PostImageGallery = ({
 	};
 
 	// Remover imagem específica
-	const handleRemoveImage = async (image) => {
+	const handleRemoveImage = async (image, event) => {
+		event?.stopPropagation();
+
 		if (!window.confirm(`Tem certeza que deseja remover "${image.name}"?`)) {
 			return;
 		}
@@ -142,62 +147,152 @@ const PostImageGallery = ({
 	};
 
 	// Copiar URL da imagem
-	const handleCopyUrl = async (image) => {
+	const handleCopyUrl = async (image, event) => {
+		event?.stopPropagation();
+
 		try {
 			await navigator.clipboard.writeText(image.url);
+			setCopiedUrl(image.path);
 			toast.success("URL copiada!");
+
+			// Reset do ícone após 2s
+			setTimeout(() => setCopiedUrl(null), 2000);
 		} catch (error) {
 			toast.error("Erro ao copiar URL");
 		}
 	};
 
-	// Preview modal
+	// Fazer download da imagem
+	const handleDownloadImage = async (image, event) => {
+		event?.stopPropagation();
+
+		try {
+			const response = await fetch(image.url);
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = image.name;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			window.URL.revokeObjectURL(url);
+			toast.success("Download iniciado!");
+		} catch (error) {
+			toast.error("Erro ao fazer download");
+		}
+	};
+
+	// Abrir preview
+	const handleOpenPreview = (image, event) => {
+		event?.stopPropagation();
+		setSelectedImage(image);
+		setShowPreview(true);
+	};
+
+	// Preview modal melhorado
 	const ImagePreviewModal = ({ image, isOpen, onClose }) => {
 		if (!isOpen || !image) return null;
 
+		// Fechar modal sem propagar eventos
+		const handleClose = (event) => {
+			event?.stopPropagation();
+			onClose();
+		};
+
 		return (
-			<div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-				<div className="relative max-w-4xl max-h-[90vh] w-full">
+			<div
+				className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4"
+				onClick={handleClose}
+			>
+				<div
+					className="relative max-w-6xl max-h-[95vh] w-full"
+					onClick={(e) => e.stopPropagation()}
+				>
+					{/* Botão fechar */}
 					<button
-						onClick={onClose}
-						className="absolute -top-12 right-0 p-2 rounded-full bg-gray-800 hover:bg-gray-700 text-white transition-colors duration-300"
+						onClick={handleClose}
+						className="absolute -top-16 right-0 p-3 rounded-full bg-gradient-to-r from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 text-white transition-all duration-300 shadow-xl border border-gray-600/50 z-10"
 					>
-						<X className="w-5 h-5" />
+						<X className="w-6 h-6" />
 					</button>
 
-					<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl overflow-hidden border border-gray-700/50">
-						<div className="p-4 border-b border-gray-700/50">
-							<h3 className="text-white font-semibold">{image.name}</h3>
-							<p className="text-gray-400 text-sm">
-								{image.size
-									? `${(image.size / 1024).toFixed(1)} KB`
-									: "Tamanho não disponível"}
-							</p>
+					{/* Modal content */}
+					<div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl overflow-hidden border border-gray-600/50 shadow-2xl">
+						{/* Header */}
+						<div className="p-6 border-b border-gray-700/50 bg-gradient-to-r from-gray-800/50 to-gray-700/50">
+							<div className="flex items-center justify-between">
+								<div>
+									<h3 className="text-xl font-bold text-white mb-1">
+										{image.name}
+									</h3>
+									<div className="flex items-center space-x-4 text-sm text-gray-400">
+										<span>
+											{image.size
+												? `${(image.size / 1024).toFixed(1)} KB`
+												: "Tamanho não disponível"}
+										</span>
+										<span>•</span>
+										<span>Clique para ampliar</span>
+									</div>
+								</div>
+							</div>
 						</div>
 
-						<div className="max-h-[70vh] overflow-auto">
+						{/* Image container */}
+						<div className="relative max-h-[70vh] overflow-auto bg-gray-950/30">
 							<img
 								src={image.url}
 								alt={image.name}
-								className="w-full h-auto"
+								className="w-full h-auto cursor-zoom-in hover:scale-105 transition-transform duration-500"
 								loading="lazy"
+								onClick={(e) => {
+									e.stopPropagation();
+									window.open(image.url, "_blank");
+								}}
 							/>
+
+							{/* Zoom hint overlay */}
+							<div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm text-white px-3 py-2 rounded-lg text-sm flex items-center space-x-2">
+								<ZoomIn className="w-4 h-4" />
+								<span>Clique para ampliar</span>
+							</div>
 						</div>
 
-						<div className="p-4 flex justify-center space-x-3">
+						{/* Actions */}
+						<div className="p-6 bg-gradient-to-r from-gray-800/30 to-gray-700/30 flex flex-wrap justify-center gap-3">
 							<button
-								onClick={() => handleInsertImage(image)}
-								className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-4 py-2 rounded-xl font-semibold transition-all duration-300"
+								onClick={(e) => {
+									e.stopPropagation();
+									handleInsertImage(image);
+									handleClose(e);
+								}}
+								className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-blue-500/25 hover:scale-105"
 							>
-								<Plus className="w-4 h-4" />
+								<Plus className="w-5 h-5" />
 								<span>Inserir no Editor</span>
 							</button>
+
 							<button
-								onClick={() => handleCopyUrl(image)}
-								className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-xl font-semibold transition-colors duration-300"
+								onClick={(e) => handleCopyUrl(image, e)}
+								className="flex items-center space-x-2 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:scale-105"
 							>
-								<Copy className="w-4 h-4" />
-								<span>Copiar URL</span>
+								{copiedUrl === image.path ? (
+									<Check className="w-5 h-5" />
+								) : (
+									<Copy className="w-5 h-5" />
+								)}
+								<span>
+									{copiedUrl === image.path ? "Copiado!" : "Copiar URL"}
+								</span>
+							</button>
+
+							<button
+								onClick={(e) => handleDownloadImage(image, e)}
+								className="flex items-center space-x-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-green-500/25 hover:scale-105"
+							>
+								<Download className="w-5 h-5" />
+								<span>Download</span>
 							</button>
 						</div>
 					</div>
@@ -209,15 +304,16 @@ const PostImageGallery = ({
 	// Loading state
 	if (loading) {
 		return (
-			<div className={`space-y-4 ${className}`}>
+			<div className={`space-y-8 ${className}`}>
 				<div className="flex items-center justify-between">
 					<h3 className="text-xl font-bold text-white">Galeria de Imagens</h3>
 				</div>
 
-				<div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-					{Array.from({ length: 6 }).map((_, i) => (
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+					{Array.from({ length: 4 }).map((_, i) => (
 						<div key={i} className="animate-pulse">
-							<div className="aspect-square bg-gray-700 rounded-xl"></div>
+							<div className="aspect-[4/3] bg-gradient-to-br from-gray-700 to-gray-800 rounded-2xl border border-gray-600/30 mb-4"></div>
+							<div className="h-16 bg-gray-700/50 rounded-xl"></div>
 						</div>
 					))}
 				</div>
@@ -228,9 +324,11 @@ const PostImageGallery = ({
 	// Empty state
 	if (!postSlug) {
 		return (
-			<div className={`text-center py-8 ${className}`}>
-				<Folder className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-				<h3 className="text-gray-400 font-semibold mb-2">
+			<div className={`text-center py-12 ${className}`}>
+				<div className="w-20 h-20 bg-gradient-to-br from-gray-700 to-gray-800 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-gray-600/30">
+					<Folder className="w-10 h-10 text-gray-400" />
+				</div>
+				<h3 className="text-gray-300 font-bold text-lg mb-2">
 					Galeria não disponível
 				</h3>
 				<p className="text-gray-500 text-sm">
@@ -241,24 +339,32 @@ const PostImageGallery = ({
 	}
 
 	return (
-		<div className={`space-y-6 ${className}`}>
+		<div className={`space-y-8 ${className}`}>
 			{/* Header */}
-			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+			<div className="space-y-6">
 				<div>
-					<h3 className="text-xl font-bold text-white">Galeria de Imagens</h3>
+					<h3 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+						Galeria de Imagens
+					</h3>
 					<p className="text-gray-400 text-sm">
 						{images.length === 0
 							? "Nenhuma imagem enviada ainda"
-							: `${images.length} imagem(ns) • ${unusedImages.length} não utilizada(s)`}
+							: `${images.length} imagem(ns) disponível(eis)`}
+						{unusedImages.length > 0 && (
+							<span className="text-orange-400 ml-2">
+								• {unusedImages.length} não utilizada(s)
+							</span>
+						)}
 					</p>
 				</div>
 
-				<div className="flex items-center space-x-3">
+				{/* Botões de controle */}
+				<div className="flex flex-wrap items-center gap-3">
 					{unusedImages.length > 0 && (
 						<button
 							onClick={handleCleanupUnused}
 							disabled={loadingCleanup}
-							className="flex items-center space-x-2 bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-xl text-sm font-semibold transition-colors duration-300 disabled:opacity-50"
+							className="flex items-center space-x-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-orange-500/25 disabled:opacity-50 hover:scale-105 disabled:hover:scale-100"
 						>
 							{loadingCleanup ? (
 								<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -271,7 +377,7 @@ const PostImageGallery = ({
 
 					<button
 						onClick={loadPostImages}
-						className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-xl text-sm font-semibold transition-colors duration-300"
+						className="flex items-center space-x-2 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:scale-105"
 					>
 						<RotateCcw className="w-4 h-4" />
 						<span>Atualizar</span>
@@ -280,7 +386,7 @@ const PostImageGallery = ({
 					{onUploadNewImage && (
 						<button
 							onClick={onUploadNewImage}
-							className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-3 py-2 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-blue-500/25"
+							className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-blue-500/25 hover:scale-105"
 						>
 							<Plus className="w-4 h-4" />
 							<span>Nova Imagem</span>
@@ -289,28 +395,31 @@ const PostImageGallery = ({
 				</div>
 			</div>
 
-			{/* Gallery Grid */}
+			{/* Gallery Grid - LAYOUT CORRIGIDO */}
 			{images.length === 0 ? (
-				<div className="text-center py-12 bg-gray-800/30 rounded-2xl border-2 border-dashed border-gray-600">
-					<ImageIcon className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-					<h4 className="text-gray-400 font-semibold mb-2">
+				<div className="text-center py-16 bg-gradient-to-br from-gray-800/20 to-gray-900/20 rounded-3xl border-2 border-dashed border-gray-600/50 backdrop-blur-sm">
+					<div className="w-24 h-24 bg-gradient-to-br from-gray-700 to-gray-800 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-gray-600/30">
+						<ImageIcon className="w-12 h-12 text-gray-400" />
+					</div>
+					<h4 className="text-gray-300 font-bold text-lg mb-3">
 						Nenhuma imagem na galeria
 					</h4>
-					<p className="text-gray-500 text-sm mb-6">
-						Use o botão "Imagem" na toolbar para fazer upload
+					<p className="text-gray-500 text-sm mb-8 max-w-md mx-auto">
+						Use o botão "Imagem" na toolbar para fazer upload da primeira imagem
+						para este post
 					</p>
 					{onUploadNewImage && (
 						<button
 							onClick={onUploadNewImage}
-							className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-blue-500/25"
+							className="inline-flex items-center space-x-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-lg hover:shadow-blue-500/25 hover:scale-105"
 						>
-							<Plus className="w-4 h-4" />
+							<Plus className="w-5 h-5" />
 							<span>Adicionar Primeira Imagem</span>
 						</button>
 					)}
 				</div>
 			) : (
-				<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 					{images.map((image, index) => {
 						const isUnused = unusedImages.some(
 							(unused) => unused.path === image.path
@@ -319,19 +428,20 @@ const PostImageGallery = ({
 						return (
 							<div
 								key={`${image.path}-${index}`}
-								className={`group relative rounded-2xl overflow-hidden border-2 transition-all duration-300 ${
+								className={`group bg-gradient-to-br from-gray-800/30 to-gray-900/30 rounded-3xl border-2 transition-all duration-500 hover:scale-[1.02] overflow-hidden ${
 									isUnused
-										? "border-orange-500/30 bg-orange-500/5"
-										: "border-gray-700/50 hover:border-blue-500/50"
+										? "border-orange-500/40 shadow-lg shadow-orange-500/10"
+										: "border-gray-600/30 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10"
 								}`}
 							>
-								{/* Image */}
-								<div className="aspect-square relative overflow-hidden bg-gray-800">
+								{/* Container da imagem - SEM BOTÕES SOBREPOSTOS */}
+								<div className="aspect-[3/2] relative overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900 cursor-pointer">
 									<img
 										src={image.url}
 										alt={image.name}
-										className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+										className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
 										loading="lazy"
+										onClick={(e) => handleOpenPreview(image, e)}
 										onError={(e) => {
 											e.target.style.display = "none";
 											e.target.nextSibling.style.display = "flex";
@@ -339,62 +449,72 @@ const PostImageGallery = ({
 									/>
 
 									{/* Fallback quando imagem falha */}
-									<div className="hidden w-full h-full flex items-center justify-center bg-gray-700">
-										<ImageIcon className="w-8 h-8 text-gray-500" />
+									<div className="hidden w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800">
+										<ImageIcon className="w-12 h-12 text-gray-500" />
+									</div>
+
+									{/* Status badge */}
+									{isUnused && (
+										<div className="absolute top-4 left-4 z-10">
+											<span className="px-3 py-1.5 bg-gradient-to-r from-orange-600 to-red-600 text-white text-xs font-bold rounded-full shadow-lg border border-orange-400/30">
+												Não usada
+											</span>
+										</div>
+									)}
+
+									{/* Hover overlay sutil */}
+									<div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+										<div className="bg-black/60 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-sm flex items-center space-x-2">
+											<Eye className="w-4 h-4" />
+											<span>Clique para visualizar</span>
+										</div>
 									</div>
 								</div>
 
-								{/* Overlay */}
-								<div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+								{/* Info e botões SEPARADOS - Abaixo da imagem */}
+								<div className="p-4 space-y-3">
+									{/* Nome e tamanho */}
+									<div>
+										<h4 className="text-white font-semibold text-sm mb-1 truncate">
+											{image.name}
+										</h4>
+										<p className="text-gray-400 text-xs">
+											{image.size
+												? `${(image.size / 1024).toFixed(1)} KB`
+												: "Sem info de tamanho"}
+										</p>
+									</div>
+
+									{/* Botões de ação - Em linha horizontal */}
 									<div className="flex items-center space-x-2">
 										<button
-											onClick={() => handleInsertImage(image)}
-											className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-colors duration-300"
-											title="Inserir no editor"
-										>
-											<Plus className="w-4 h-4" />
-										</button>
-
-										<button
-											onClick={() => {
-												setSelectedImage(image);
-												setShowPreview(true);
-											}}
-											className="p-2 bg-gray-600 hover:bg-gray-700 text-white rounded-full transition-colors duration-300"
+											onClick={(e) => handleOpenPreview(image, e)}
+											className="p-2 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 text-white rounded-lg transition-all duration-300 shadow-lg hover:scale-105"
 											title="Visualizar"
 										>
-											<Eye className="w-4 h-4" />
+											<Eye className="w-3 h-3" />
 										</button>
 
 										<button
-											onClick={() => handleRemoveImage(image)}
-											className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors duration-300"
+											onClick={(e) => handleCopyUrl(image, e)}
+											className="p-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-lg transition-all duration-300 shadow-lg hover:shadow-green-500/25 hover:scale-105"
+											title="Copiar URL"
+										>
+											{copiedUrl === image.path ? (
+												<Check className="w-3 h-3" />
+											) : (
+												<Copy className="w-3 h-3" />
+											)}
+										</button>
+
+										<button
+											onClick={(e) => handleRemoveImage(image, e)}
+											className="p-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white rounded-lg transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
 											title="Remover"
 										>
-											<Trash2 className="w-4 h-4" />
+											<Trash2 className="w-3 h-3" />
 										</button>
 									</div>
-								</div>
-
-								{/* Labels */}
-								<div className="absolute top-2 left-2 flex items-center space-x-1">
-									{isUnused && (
-										<span className="px-2 py-1 bg-orange-600 text-white text-xs font-bold rounded-full">
-											Não usada
-										</span>
-									)}
-								</div>
-
-								{/* Info */}
-								<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-									<p className="text-white text-xs font-medium truncate">
-										{image.name}
-									</p>
-									{image.size && (
-										<p className="text-gray-300 text-xs">
-											{(image.size / 1024).toFixed(1)} KB
-										</p>
-									)}
 								</div>
 							</div>
 						);
@@ -404,29 +524,32 @@ const PostImageGallery = ({
 
 			{/* Alerta sobre imagens não utilizadas */}
 			{unusedImages.length > 0 && (
-				<div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
-					<div className="flex items-start space-x-3">
-						<AlertCircle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+				<div className="bg-gradient-to-r from-orange-500/10 via-red-500/10 to-orange-500/10 border border-orange-500/30 rounded-2xl p-6 backdrop-blur-sm">
+					<div className="flex items-start space-x-4">
+						<div className="w-12 h-12 bg-gradient-to-r from-orange-600 to-red-600 rounded-2xl flex items-center justify-center flex-shrink-0">
+							<AlertCircle className="w-6 h-6 text-white" />
+						</div>
 						<div className="flex-1">
-							<h4 className="text-orange-400 font-semibold mb-2">
+							<h4 className="text-orange-300 font-bold text-lg mb-2">
 								{unusedImages.length} imagem(ns) não utilizada(s)
 							</h4>
-							<p className="text-orange-300 text-sm mb-3">
+							<p className="text-orange-200 text-sm mb-4 leading-relaxed">
 								Estas imagens foram enviadas mas não estão sendo usadas no
-								conteúdo do post. Você pode removê-las para economizar espaço.
+								conteúdo do post. Você pode removê-las para economizar espaço de
+								armazenamento.
 							</p>
-							<div className="flex flex-wrap gap-2">
+							<div className="flex flex-wrap gap-2 mb-4">
 								{unusedImages.slice(0, 5).map((image, index) => (
 									<span
 										key={index}
-										className="text-orange-200 text-xs bg-orange-500/20 px-2 py-1 rounded"
+										className="text-orange-100 text-xs bg-orange-600/30 backdrop-blur-sm px-3 py-1 rounded-full border border-orange-500/30"
 									>
 										{image.name}
 									</span>
 								))}
 								{unusedImages.length > 5 && (
-									<span className="text-orange-200 text-xs">
-										+{unusedImages.length - 5} mais
+									<span className="text-orange-200 text-xs bg-orange-600/20 px-3 py-1 rounded-full">
+										+{unusedImages.length - 5} mais...
 									</span>
 								)}
 							</div>
