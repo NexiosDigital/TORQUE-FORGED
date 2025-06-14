@@ -468,13 +468,6 @@ const PostEditor = () => {
 			</button>
 
 			<div className="ml-auto flex items-center space-x-2">
-				{/* Indicador de mudanças não salvas */}
-				{hasUnsavedChanges && (
-					<span className="text-yellow-400 text-sm font-medium px-2 py-1 bg-yellow-500/10 rounded-lg">
-						● Não salvo
-					</span>
-				)}
-
 				<button
 					type="button"
 					onClick={() => setShowPreview(!showPreview)}
@@ -608,14 +601,6 @@ const PostEditor = () => {
 					</div>
 
 					<div className="flex items-center space-x-3">
-						{/* Indicador de mudanças não salvas */}
-						{hasUnsavedChanges && (
-							<span className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-								<div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-								<span className="text-sm font-semibold">Não salvo</span>
-							</span>
-						)}
-
 						<span
 							className={`flex items-center space-x-2 px-4 py-2 rounded-xl ${
 								watchPublished
@@ -1059,21 +1044,6 @@ Use os botões 'Link', 'Imagem' e 'Tabela' na toolbar para inserir elementos fac
 									{isEditing
 										? "Selecione uma nova imagem ou mantenha a atual"
 										: "Faça o upload da imagem de capa para habilitar o salvamento"}
-								</div>
-							)}
-
-							{/* Aviso sobre mudanças não salvas */}
-							{hasUnsavedChanges && (
-								<div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
-									<div className="flex items-center space-x-2">
-										<AlertCircle className="w-4 h-4 text-yellow-400" />
-										<span className="text-yellow-400 text-sm font-semibold">
-											Você tem alterações não salvas
-										</span>
-									</div>
-									<p className="text-yellow-300 text-xs mt-1">
-										Lembre-se de salvar antes de sair da página
-									</p>
 								</div>
 							)}
 						</div>
