@@ -21,7 +21,6 @@ RUN npm install --silent
 COPY . .
 
 # Build da aplicação para produção
-# NODE_ENV=production garante otimizações máximas
 RUN npm run build
 
 # Stage 2: Servidor nginx otimizado
