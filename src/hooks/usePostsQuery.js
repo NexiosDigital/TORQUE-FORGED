@@ -8,9 +8,8 @@ import { PostService } from "../services/PostService";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 
-// Query keys INALTERADOS (compatibilidade total)
+// Query keys INALTERADOS (compatibilidade)
 export const QUERY_KEYS = {
-	// Posts públicos - SEMPRE as mesmas keys independente de auth
 	public: {
 		posts: ["public", "posts"],
 		featured: ["public", "posts", "featured"],
@@ -19,51 +18,79 @@ export const QUERY_KEYS = {
 		search: (query) => ["public", "posts", "search", query],
 		categories: ["public", "categories"],
 	},
-	// Posts admin - SEMPRE separados
 	admin: {
 		posts: ["admin", "posts"],
 		byId: (id) => ["admin", "posts", "detail", id],
 	},
 };
 
-// Configurações ULTRA AGRESSIVAS para carregamento instantâneo
-const ULTRA_CACHE_CONFIG = {
-	staleTime: 30 * 60 * 1000, // 30 minutos - dados ficam fresh por muito tempo
-	gcTime: 2 * 60 * 60 * 1000, // 2 horas - manter em memória por muito tempo
-	refetchOnWindowFocus: false, // NUNCA refetch ao focar
-	refetchOnMount: false, // NUNCA refetch ao montar - usar cache
-	refetchOnReconnect: false, // NUNCA refetch ao reconectar
-	refetchInterval: false, // NUNCA refetch automático
-	networkMode: "offlineFirst", // Priorizar cache offline
-	retry: false, // SEM retry para ser mais rápido
-	retryOnMount: false,
-	retryDelay: () => 0,
+// Funções de placeholder data INTELIGENTES
+const getBootstrapData = (key, fallback = []) => {
+	if (
+		window.TORQUE_FORGED_BOOTSTRAP?.ready &&
+		window.TORQUE_FORGED_BOOTSTRAP.data[key]
+	) {
+		return window.TORQUE_FORGED_BOOTSTRAP.data[key];
+	}
+	return fallback;
 };
 
-const FEATURED_CACHE_CONFIG = {
-	staleTime: 45 * 60 * 1000, // 45 minutos - featured posts mudam menos
-	gcTime: 3 * 60 * 60 * 1000, // 3 horas
-	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	refetchOnReconnect: false,
-	refetchInterval: false,
-	networkMode: "offlineFirst",
-	retry: false,
+const INSTANT_PLACEHOLDERS = {
+	featuredPosts: () => getBootstrapData("featuredPosts", []),
+	allPosts: () => getBootstrapData("allPosts", []),
+	categories: () =>
+		getBootstrapData("categories", [
+			{
+				id: "f1",
+				name: "Fórmula 1",
+				description: "A elite do automobilismo mundial",
+				color: "from-red-500 to-orange-500",
+			},
+			{
+				id: "nascar",
+				name: "NASCAR",
+				description: "A categoria mais popular dos EUA",
+				color: "from-blue-500 to-cyan-500",
+			},
+			{
+				id: "endurance",
+				name: "Endurance",
+				description: "Corridas de resistência épicas",
+				color: "from-green-500 to-emerald-500",
+			},
+			{
+				id: "drift",
+				name: "Formula Drift",
+				description: "A arte de deslizar com estilo",
+				color: "from-purple-500 to-pink-500",
+			},
+			{
+				id: "tuning",
+				name: "Tuning & Custom",
+				description: "Personalização e modificações",
+				color: "from-yellow-500 to-orange-500",
+			},
+			{
+				id: "engines",
+				name: "Motores",
+				description: "Tecnologia e performance",
+				color: "from-indigo-500 to-purple-500",
+			},
+		]),
+	postsByCategory: (categoryId) => {
+		const allPosts = getBootstrapData("allPosts", []);
+		return allPosts.filter((post) => post.category === categoryId);
+	},
+	postById: (id) => {
+		const allPosts = getBootstrapData("allPosts", []);
+		const postId = typeof id === "string" ? parseInt(id, 10) : id;
+		return allPosts.find((post) => post.id === postId) || null;
+	},
 };
 
-const CATEGORIES_CACHE_CONFIG = {
-	staleTime: 2 * 60 * 60 * 1000, // 2 horas - categorias quase nunca mudam
-	gcTime: 6 * 60 * 60 * 1000, // 6 horas
-	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	refetchOnReconnect: false,
-	refetchInterval: false,
-	networkMode: "offlineFirst",
-	retry: false,
-};
-
-const POST_DETAIL_CACHE_CONFIG = {
-	staleTime: 60 * 60 * 1000, // 1 hora para posts individuais
+// Configurações INSTANTÂNEAS - nunca loading
+const INSTANT_CONFIG = {
+	staleTime: 5 * 60 * 1000, // 10 min
 	gcTime: 4 * 60 * 60 * 1000, // 4 horas
 	refetchOnWindowFocus: false,
 	refetchOnMount: false,
@@ -71,16 +98,8 @@ const POST_DETAIL_CACHE_CONFIG = {
 	refetchInterval: false,
 	networkMode: "offlineFirst",
 	retry: false,
-};
-
-const ADMIN_CACHE_CONFIG = {
-	staleTime: 30 * 60 * 1000, // 30 minutos para admin
-	gcTime: 2 * 60 * 60 * 1000, // 2 horas
-	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	refetchOnReconnect: false,
-	refetchInterval: false,
-	retry: 0,
+	// CRÍTICO: sempre usar placeholder data
+	placeholderData: (previousData) => previousData,
 };
 
 /**
@@ -89,15 +108,27 @@ const ADMIN_CACHE_CONFIG = {
  * ======================================
  */
 
-// Posts em destaque - CACHE ULTRA AGRESSIVO
+// Posts em destaque - SEMPRE instantâneo
 export const useFeaturedPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.featured,
 		queryFn: () => PostService.getFeaturedPosts(),
-		...FEATURED_CACHE_CONFIG,
-		// CRÍTICO: Não depender de nenhum estado externo
-		enabled: true, // SEMPRE habilitado
-		placeholderData: (previousData) => previousData, // Manter dados antigos enquanto carrega
+		...INSTANT_CONFIG,
+		enabled: true,
+		// SEMPRE retornar dados mesmo se query falhar
+		placeholderData: () => INSTANT_PLACEHOLDERS.featuredPosts(),
+		// Dados iniciais do bootstrap
+		initialData: () => {
+			const bootstrapData = INSTANT_PLACEHOLDERS.featuredPosts();
+			return bootstrapData.length > 0 ? bootstrapData : undefined;
+		},
+		// Fallback se tudo falhar
+		select: (data) => {
+			if (!data || data.length === 0) {
+				return INSTANT_PLACEHOLDERS.featuredPosts();
+			}
+			return data;
+		},
 		meta: {
 			errorMessage: "Erro ao carregar posts em destaque",
 		},
@@ -105,19 +136,25 @@ export const useFeaturedPosts = (options = {}) => {
 	});
 };
 
-// Todos os posts - CACHE ULTRA AGRESSIVO
+// Todos os posts - SEMPRE instantâneo
 export const useAllPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.posts,
 		queryFn: () => PostService.getAllPosts(),
-		...ULTRA_CACHE_CONFIG,
+		...INSTANT_CONFIG,
 		enabled: true,
-		placeholderData: (previousData) => previousData,
+		placeholderData: () => INSTANT_PLACEHOLDERS.allPosts(),
+		initialData: () => {
+			const bootstrapData = INSTANT_PLACEHOLDERS.allPosts();
+			return bootstrapData.length > 0 ? bootstrapData : undefined;
+		},
 		select: (data) => {
-			// Ordenação e otimização no cliente para cache mais eficiente
-			return (
-				data?.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) ||
-				[]
+			if (!data || data.length === 0) {
+				return INSTANT_PLACEHOLDERS.allPosts();
+			}
+			// Ordenação garantida
+			return data.sort(
+				(a, b) => new Date(b.created_at) - new Date(a.created_at)
 			);
 		},
 		meta: {
@@ -127,14 +164,25 @@ export const useAllPosts = (options = {}) => {
 	});
 };
 
-// Posts por categoria - CACHE AGRESSIVO
+// Posts por categoria - SEMPRE instantâneo
 export const usePostsByCategory = (categoryId, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byCategory(categoryId),
 		queryFn: () => PostService.getPostsByCategory(categoryId),
 		enabled: !!categoryId && typeof categoryId === "string",
-		...ULTRA_CACHE_CONFIG,
-		placeholderData: (previousData) => previousData,
+		...INSTANT_CONFIG,
+		placeholderData: () => INSTANT_PLACEHOLDERS.postsByCategory(categoryId),
+		initialData: () => {
+			if (!categoryId) return undefined;
+			const bootstrapData = INSTANT_PLACEHOLDERS.postsByCategory(categoryId);
+			return bootstrapData.length > 0 ? bootstrapData : undefined;
+		},
+		select: (data) => {
+			if (!data || data.length === 0) {
+				return INSTANT_PLACEHOLDERS.postsByCategory(categoryId);
+			}
+			return data;
+		},
 		meta: {
 			errorMessage: `Erro ao carregar posts da categoria ${categoryId}`,
 		},
@@ -142,14 +190,30 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 	});
 };
 
-// Post individual - CACHE MUITO AGRESSIVO
+// Post individual - SEMPRE instantâneo
 export const usePostById = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
 		queryFn: () => PostService.getPostById(id),
 		enabled: !!id,
-		...POST_DETAIL_CACHE_CONFIG,
-		placeholderData: (previousData) => previousData,
+		...INSTANT_CONFIG,
+		placeholderData: () => INSTANT_PLACEHOLDERS.postById(id),
+		initialData: () => {
+			if (!id) return undefined;
+			const bootstrapData = INSTANT_PLACEHOLDERS.postById(id);
+			return bootstrapData || undefined;
+		},
+		select: (data) => {
+			if (!data) {
+				// Se não encontrar, tentar bootstrap novamente
+				const fallback = INSTANT_PLACEHOLDERS.postById(id);
+				if (!fallback) {
+					throw new Error("Post não encontrado");
+				}
+				return fallback;
+			}
+			return data;
+		},
 		meta: {
 			errorMessage: `Erro ao carregar post ${id}`,
 		},
@@ -157,18 +221,21 @@ export const usePostById = (id, options = {}) => {
 	});
 };
 
-// Categorias - CACHE ULTRA LONGO
+// Categorias - SEMPRE instantâneo
 export const useCategories = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.categories,
 		queryFn: () => PostService.getCategories(),
-		...CATEGORIES_CACHE_CONFIG,
+		...INSTANT_CONFIG,
 		enabled: true,
-		placeholderData: (previousData) => previousData,
-		// Fallback para categorias padrão se não conseguir carregar
+		placeholderData: () => INSTANT_PLACEHOLDERS.categories(),
+		initialData: () => {
+			const bootstrapData = INSTANT_PLACEHOLDERS.categories();
+			return bootstrapData.length > 0 ? bootstrapData : undefined;
+		},
 		select: (data) => {
 			if (!data || data.length === 0) {
-				return PostService.getFallbackCategories();
+				return INSTANT_PLACEHOLDERS.categories();
 			}
 			return data;
 		},
@@ -179,24 +246,27 @@ export const useCategories = (options = {}) => {
 	});
 };
 
-// Busca - cache moderado
+// Busca - cache moderado mas sem loading desnecessário
 export const useSearchPosts = (query, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.search(query),
 		queryFn: () => PostService.searchPosts(query),
 		enabled: !!query && query.length >= 2,
-		staleTime: 5 * 60 * 1000, // 5 min para buscas
+		staleTime: 5 * 60 * 1000, // 5min para buscas
 		gcTime: 10 * 60 * 1000,
 		refetchOnWindowFocus: false,
 		refetchOnMount: false,
-		placeholderData: (previousData) => previousData,
+		placeholderData: () => [], // Lista vazia para buscas
+		meta: {
+			errorMessage: "Erro na busca",
+		},
 		...options,
 	});
 };
 
 /**
  * ======================================
- * HOOKS ADMIN - CONFIGURAÇÕES SEGURAS
+ * HOOKS ADMIN - sem alterações significativas
  * ======================================
  */
 
@@ -207,7 +277,11 @@ export const useAllPostsAdmin = (options = {}) => {
 		queryKey: QUERY_KEYS.admin.posts,
 		queryFn: () => PostService.getAllPostsAdmin(),
 		enabled: isAdmin,
-		...ADMIN_CACHE_CONFIG,
+		staleTime: 30 * 60 * 1000,
+		gcTime: 2 * 60 * 60 * 1000,
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		retry: false,
 		placeholderData: (previousData) => previousData,
 		meta: {
 			errorMessage: "Erro ao carregar posts admin",
@@ -223,7 +297,11 @@ export const usePostByIdAdmin = (id, options = {}) => {
 		queryKey: QUERY_KEYS.admin.byId(id),
 		queryFn: () => PostService.getPostByIdAdmin(id),
 		enabled: !!id && isAdmin,
-		...ADMIN_CACHE_CONFIG,
+		staleTime: 10 * 60 * 1000,
+		gcTime: 2 * 60 * 60 * 1000,
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		retry: false,
 		placeholderData: (previousData) => previousData,
 		meta: {
 			errorMessage: `Erro ao carregar post admin ${id}`,
@@ -234,7 +312,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 
 /**
  * ======================================
- * MUTATIONS OTIMIZADAS
+ * MUTATIONS - sem alterações
  * ======================================
  */
 export const useCreatePost = () => {
@@ -246,7 +324,6 @@ export const useCreatePost = () => {
 			return result;
 		},
 		onMutate: async (newPost) => {
-			// Optimistic updates para UI instantânea
 			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.admin.posts });
 
 			const previousPosts = queryClient.getQueryData(QUERY_KEYS.admin.posts);
@@ -265,7 +342,6 @@ export const useCreatePost = () => {
 			return { previousPosts };
 		},
 		onError: (err, newPost, context) => {
-			// Rollback optimistic update
 			if (context?.previousPosts) {
 				queryClient.setQueryData(QUERY_KEYS.admin.posts, context.previousPosts);
 			}
@@ -274,10 +350,8 @@ export const useCreatePost = () => {
 		onSuccess: (data) => {
 			toast.success("Post criado com sucesso!");
 
-			// Invalidar apenas queries necessárias
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 
-			// Se publicado, invalidar cache público
 			if (data?.published) {
 				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -301,7 +375,6 @@ export const useUpdatePost = () => {
 			return result;
 		},
 		onMutate: async ({ id, ...newData }) => {
-			// Optimistic updates
 			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.admin.byId(id) });
 
 			const previousPost = queryClient.getQueryData(QUERY_KEYS.admin.byId(id));
@@ -328,7 +401,6 @@ export const useUpdatePost = () => {
 		onSuccess: (data) => {
 			toast.success("Post atualizado com sucesso!");
 
-			// Invalidações otimizadas
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 
 			if (data?.published) {
@@ -360,7 +432,6 @@ export const useDeletePost = () => {
 			return result;
 		},
 		onMutate: async (id) => {
-			// Optimistic removal
 			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.admin.posts });
 
 			const previousPosts = queryClient.getQueryData(QUERY_KEYS.admin.posts);
@@ -383,7 +454,6 @@ export const useDeletePost = () => {
 		onSuccess: (data, variables) => {
 			toast.success("Post deletado com sucesso!");
 
-			// Limpeza completa
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
@@ -391,7 +461,6 @@ export const useDeletePost = () => {
 				queryKey: ["public", "posts", "category"],
 			});
 
-			// Remover query específica
 			queryClient.removeQueries({
 				queryKey: QUERY_KEYS.public.byId(variables),
 			});
@@ -404,7 +473,7 @@ export const useDeletePost = () => {
 
 /**
  * ======================================
- * UTILITIES OTIMIZADAS
+ * UTILITIES INSTANTÂNEAS
  * ======================================
  */
 export const usePrefetch = () => {
@@ -413,16 +482,35 @@ export const usePrefetch = () => {
 	const prefetchPost = (id) => {
 		if (!id) return;
 
+		// Verificar se já tem no bootstrap primeiro
+		const bootstrapPost = INSTANT_PLACEHOLDERS.postById(id);
+		if (bootstrapPost) {
+			queryClient.setQueryData(QUERY_KEYS.public.byId(id), bootstrapPost);
+			return;
+		}
+
+		// Prefetch normal se não tem no bootstrap
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byId(id),
 			queryFn: () => PostService.getPostById(id),
-			staleTime: 60 * 60 * 1000, // 1 hora para prefetch
+			staleTime: 60 * 60 * 1000,
 		});
 	};
 
 	const prefetchCategory = (categoryId) => {
 		if (!categoryId) return;
 
+		// Verificar bootstrap primeiro
+		const bootstrapPosts = INSTANT_PLACEHOLDERS.postsByCategory(categoryId);
+		if (bootstrapPosts.length > 0) {
+			queryClient.setQueryData(
+				QUERY_KEYS.public.byCategory(categoryId),
+				bootstrapPosts
+			);
+			return;
+		}
+
+		// Prefetch normal
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byCategory(categoryId),
 			queryFn: () => PostService.getPostsByCategory(categoryId),
@@ -444,6 +532,25 @@ export const useCacheUtils = () => {
 
 	const clearCache = () => {
 		queryClient.clear();
+		// Repopular com bootstrap
+		if (window.TORQUE_FORGED_BOOTSTRAP?.ready) {
+			setTimeout(() => {
+				// Re-popular cache básico
+				const featuredPosts = INSTANT_PLACEHOLDERS.featuredPosts();
+				const allPosts = INSTANT_PLACEHOLDERS.allPosts();
+				const categories = INSTANT_PLACEHOLDERS.categories();
+
+				if (featuredPosts.length > 0) {
+					queryClient.setQueryData(QUERY_KEYS.public.featured, featuredPosts);
+				}
+				if (allPosts.length > 0) {
+					queryClient.setQueryData(QUERY_KEYS.public.posts, allPosts);
+				}
+				if (categories.length > 0) {
+					queryClient.setQueryData(QUERY_KEYS.public.categories, categories);
+				}
+			}, 100);
+		}
 		toast.success("Cache limpo com sucesso!");
 	};
 
@@ -480,13 +587,8 @@ export const useCacheUtils = () => {
 			loading: queries.filter((q) => q.state.status === "pending").length,
 			success: queries.filter((q) => q.state.status === "success").length,
 			stale: queries.filter((q) => q.isStale()).length,
+			hasBootstrap: !!window.TORQUE_FORGED_BOOTSTRAP?.ready,
 		};
-	};
-
-	const debugMutations = () => {
-		const cache = queryClient.getMutationCache();
-		const mutations = cache.getAll();
-		return mutations;
 	};
 
 	return {
@@ -495,32 +597,26 @@ export const useCacheUtils = () => {
 		getCacheStats,
 		forceRefreshAll,
 		refreshPosts,
-		debugMutations,
 	};
 };
 
-// Suspense hook - Cache super agressivo
+// Suspense hook - dados sempre disponíveis
 export const usePostByIdSuspense = (id) => {
 	return useSuspenseQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
 		queryFn: () => PostService.getPostById(id),
-		staleTime: 60 * 60 * 1000, // 1 hora
+		staleTime: 60 * 60 * 1000,
 		refetchOnWindowFocus: false,
 		refetchOnMount: false,
 	});
 };
 
-/**
- * ======================================
- * PRELOAD HOOKS PARA PERFORMANCE
- * ======================================
- */
-
-// Hook para preload de dados críticos
+// Hook de preload crítico (agora via cacheUtils)
 export const usePreloadCriticalData = () => {
 	const queryClient = useQueryClient();
 
 	const preloadAll = async () => {
+		// Com bootstrap, isto é quase instantâneo
 		const promises = [
 			queryClient.prefetchQuery({
 				queryKey: QUERY_KEYS.public.featured,
@@ -541,7 +637,7 @@ export const usePreloadCriticalData = () => {
 
 		try {
 			await Promise.allSettled(promises);
-			console.log("🚀 Critical data preloaded successfully");
+			//console.log("🚀 Critical data preloaded successfully");
 		} catch (error) {
 			console.warn("⚠️ Preload failed:", error);
 		}
@@ -567,4 +663,6 @@ export default {
 	useCacheUtils,
 	usePreloadCriticalData,
 	QUERY_KEYS,
+	// Expor placeholders para debug
+	INSTANT_PLACEHOLDERS,
 };

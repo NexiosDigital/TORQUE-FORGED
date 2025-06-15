@@ -19,28 +19,27 @@ export const useAuth = () => {
 };
 
 /**
- * AuthProvider ULTRA OTIMIZADO - ZERO BLOQUEIO para dados públicos
- * - Carregamento assíncrono sem bloquear UI
+ * AuthProvider INSTANTÂNEO - NUNCA BLOQUEIA DADOS PÚBLICOS
+ * - sessionChecked = true IMEDIATAMENTE
  * - Dados públicos NUNCA dependem de auth
- * - Inicialização super rápida
- * - Fallbacks inteligentes
- * - Cache agressivo de sessão
+ * - Loading assíncrono em background
+ * - Zero impacto na UI inicial
  */
 
 export const AuthProvider = ({ children }) => {
 	const [user, setUser] = useState(null);
 	const [profile, setProfile] = useState(null);
-	const [loading, setLoading] = useState(false); // INICIADO COMO FALSE
-	const [sessionChecked, setSessionChecked] = useState(false);
+	const [loading, setLoading] = useState(false); // NUNCA true no início
+	const [sessionChecked, setSessionChecked] = useState(true); // SEMPRE true imediatamente
 	const [profileLoading, setProfileLoading] = useState(false);
 
-	// Refs para evitar race conditions
+	// Refs para controle interno
 	const isLoadingProfile = useRef(false);
 	const currentUserId = useRef(null);
 	const initializationCount = useRef(0);
-	const sessionInitialized = useRef(false);
+	const authInitialized = useRef(false);
 
-	// CRÍTICO: Função para FORÇAR limpeza do cache
+	// CRÍTICO: Função para limpar caches
 	const forceClearAllCaches = () => {
 		try {
 			if (window.queryClient) {
@@ -65,14 +64,13 @@ export const AuthProvider = ({ children }) => {
 		}
 	};
 
-	// Função para buscar perfil ULTRA RÁPIDA
+	// Função para buscar perfil (não bloqueia UI)
 	const fetchUserProfile = async (userId, userEmail, retryCount = 0) => {
 		if (isLoadingProfile.current && currentUserId.current === userId) {
 			return null;
 		}
 
 		if (retryCount >= 2) {
-			// REDUZIDO para 2 tentativas
 			console.warn("🚫 Max retries reached for profile:", userId);
 			setProfileLoading(false);
 			return null;
@@ -90,13 +88,12 @@ export const AuthProvider = ({ children }) => {
 				.single();
 
 			if (error && error.code !== "PGRST116") {
-				console.warn("⚠️ Erro ao buscar perfil (retry):", error);
+				console.warn("⚠️ Erro ao buscar perfil:", error);
 
 				if (retryCount < 1) {
-					const delay = 500; // DELAY REDUZIDO
 					setTimeout(() => {
 						fetchUserProfile(userId, userEmail, retryCount + 1);
-					}, delay);
+					}, 1000);
 					return null;
 				}
 
@@ -111,7 +108,7 @@ export const AuthProvider = ({ children }) => {
 				currentUserId.current = null;
 				return data;
 			} else {
-				// Criar perfil se não existir - VERSÃO RÁPIDA
+				// Criar perfil se não existir
 				const userEmailFallback = userEmail || "";
 				const userName = userEmailFallback.split("@")[0] || "Usuário";
 
@@ -152,37 +149,36 @@ export const AuthProvider = ({ children }) => {
 		}
 	};
 
-	// Função para limpar estado
+	// Limpar estado auth
 	const clearAuthState = () => {
 		isLoadingProfile.current = false;
 		currentUserId.current = null;
-		sessionInitialized.current = false;
+		authInitialized.current = false;
 
 		setUser(null);
 		setProfile(null);
 		setLoading(false);
 		setProfileLoading(false);
 
-		forceClearAllCaches();
+		// Não limpar cache aqui - deixar dados públicos funcionando
 	};
 
-	// INICIALIZAÇÃO ULTRA RÁPIDA - SEM BLOQUEAR UI
+	// INICIALIZAÇÃO EM BACKGROUND - NUNCA BLOQUEIA UI
 	useEffect(() => {
 		let mounted = true;
 		let timeoutId;
 
 		const initializeAuth = async () => {
-			if (sessionInitialized.current) return; // Evitar múltiplas inicializações
+			if (authInitialized.current) return;
 
 			initializationCount.current += 1;
 			const currentInit = initializationCount.current;
 
 			try {
-				// CRÍTICO: NÃO setar loading como true aqui
-				// Permitir que a UI carregue dados públicos imediatamente
+				// CRÍTICO: Não afetar sessionChecked que já é true
 
-				// DELAY MÍNIMO para não bloquear initial render
-				await new Promise((resolve) => setTimeout(resolve, 10));
+				// DELAY para não bloquear render inicial
+				await new Promise((resolve) => setTimeout(resolve, 100));
 
 				if (!mounted || currentInit !== initializationCount.current) {
 					return;
@@ -198,8 +194,7 @@ export const AuthProvider = ({ children }) => {
 				if (sessionError) {
 					console.warn("⚠️ Erro ao obter sessão:", sessionError);
 					clearAuthState();
-					setSessionChecked(true);
-					sessionInitialized.current = true;
+					authInitialized.current = true;
 					return;
 				}
 
@@ -207,35 +202,32 @@ export const AuthProvider = ({ children }) => {
 					setUser(session.user);
 
 					if (mounted && currentInit === initializationCount.current) {
-						// Carregar perfil em background SEM bloquear UI
+						// Carregar perfil em background sem bloquear
 						fetchUserProfile(session.user.id, session.user.email).then(() => {
 							if (mounted && currentInit === initializationCount.current) {
-								setSessionChecked(true);
-								sessionInitialized.current = true;
+								authInitialized.current = true;
 							}
 						});
 					}
 				} else {
-					// CRÍTICO: Usuário não autenticado - liberar UI imediatamente
+					// Usuário não autenticado
 					setUser(null);
 					setProfile(null);
 					setLoading(false);
 					setProfileLoading(false);
-					setSessionChecked(true);
-					sessionInitialized.current = true;
+					authInitialized.current = true;
 				}
 			} catch (error) {
 				console.warn("⚠️ Erro na inicialização de auth:", error);
 				if (mounted && currentInit === initializationCount.current) {
 					clearAuthState();
-					setSessionChecked(true);
-					sessionInitialized.current = true;
+					authInitialized.current = true;
 				}
 			}
 		};
 
-		// DELAY MÍNIMO para não bloquear initial render
-		timeoutId = setTimeout(initializeAuth, 5);
+		// DELAY mínimo para não bloquear initial render
+		timeoutId = setTimeout(initializeAuth, 200);
 
 		return () => {
 			mounted = false;
@@ -243,7 +235,7 @@ export const AuthProvider = ({ children }) => {
 		};
 	}, []);
 
-	// Listener para mudanças de autenticação - ULTRA OTIMIZADO
+	// Listener para mudanças de autenticação
 	useEffect(() => {
 		let mounted = true;
 		let debounceTimeout;
@@ -251,7 +243,7 @@ export const AuthProvider = ({ children }) => {
 		const handleAuthChange = async (event, session) => {
 			if (!mounted) return;
 
-			// Debounce REDUZIDO
+			// Debounce
 			if (debounceTimeout) clearTimeout(debounceTimeout);
 
 			debounceTimeout = setTimeout(async () => {
@@ -260,16 +252,13 @@ export const AuthProvider = ({ children }) => {
 				switch (event) {
 					case "SIGNED_OUT":
 						clearAuthState();
-						setSessionChecked(true);
-						sessionInitialized.current = true;
+						authInitialized.current = true;
 						break;
 
 					case "SIGNED_IN":
 						if (session?.user && mounted) {
 							setUser(session.user);
-							// NÃO setar loading aqui para não bloquear UI
-							setSessionChecked(true);
-							sessionInitialized.current = true;
+							authInitialized.current = true;
 						}
 						break;
 
@@ -284,12 +273,11 @@ export const AuthProvider = ({ children }) => {
 							setUser(session.user);
 						} else if (mounted) {
 							clearAuthState();
-							setSessionChecked(true);
-							sessionInitialized.current = true;
+							authInitialized.current = true;
 						}
 						break;
 				}
-			}, 50); // DEBOUNCE REDUZIDO para 50ms
+			}, 100);
 		};
 
 		const {
@@ -303,7 +291,7 @@ export const AuthProvider = ({ children }) => {
 		};
 	}, [user?.id]);
 
-	// SignIn OTIMIZADO
+	// SignIn
 	const signIn = async (email, password) => {
 		try {
 			setLoading(true);
@@ -328,13 +316,13 @@ export const AuthProvider = ({ children }) => {
 		}
 	};
 
-	// SignOut ULTRA OTIMIZADO
+	// SignOut OTIMIZADO
 	const signOut = async () => {
 		try {
 			// Reset refs imediatamente
 			isLoadingProfile.current = false;
 			currentUserId.current = null;
-			sessionInitialized.current = false;
+			authInitialized.current = false;
 
 			// 1. Limpar estado local PRIMEIRO
 			clearAuthState();
@@ -343,29 +331,36 @@ export const AuthProvider = ({ children }) => {
 			try {
 				await supabase.auth.signOut();
 			} catch (error) {
-				console.warn("⚠️ Supabase logout falhou, mas continuando:", error);
+				console.warn("⚠️ Supabase logout falhou:", error);
 			}
 
-			// 3. Força limpeza total
-			forceClearAllCaches();
+			// 3. Limpar apenas cache de auth (não cache público)
+			try {
+				Object.keys(localStorage).forEach((key) => {
+					if (key.startsWith("sb-")) {
+						localStorage.removeItem(key);
+					}
+				});
+			} catch (error) {
+				console.warn("⚠️ Cache cleanup falhou:", error);
+			}
 
 			toast.success("Logout realizado com sucesso!");
 
-			// 4. Redirecionar com delay mínimo
+			// 4. Redirecionar
 			setTimeout(() => {
 				window.location.href = "/";
-			}, 50); // DELAY REDUZIDO
+			}, 100);
 
 			return { error: null };
 		} catch (error) {
 			console.error("❌ Erro no logout:", error);
 			toast.error("Erro ao fazer logout");
 
-			// Forçar limpeza mesmo com erro
-			forceClearAllCaches();
+			// Forçar navegação mesmo com erro
 			setTimeout(() => {
 				window.location.href = "/";
-			}, 100);
+			}, 200);
 
 			return { error };
 		}
@@ -415,7 +410,7 @@ export const AuthProvider = ({ children }) => {
 				throw error;
 			}
 
-			// Recarregar perfil imediatamente
+			// Recarregar perfil
 			await fetchUserProfile(user.id, user.email);
 
 			toast.success("Perfil atualizado com sucesso!");
@@ -453,7 +448,7 @@ export const AuthProvider = ({ children }) => {
 		}
 	};
 
-	// Helper para obter nome de exibição
+	// Helper para obter nome
 	const getDisplayName = () => {
 		if (profile?.full_name && profile.full_name.trim()) {
 			return profile.full_name;
@@ -464,20 +459,17 @@ export const AuthProvider = ({ children }) => {
 		return "Usuário";
 	};
 
-	// Verificar se é admin - ULTRA RÁPIDO
+	// Verificar se é admin
 	const isAdmin =
 		profile?.role === "admin" && !profileLoading && !isLoadingProfile.current;
 
-	// CRÍTICO: sessionChecked deve ser true IMEDIATAMENTE se não há necessidade de auth
-	// Isso permite que dados públicos carreguem instantaneamente
-	const effectiveSessionChecked = sessionChecked || sessionInitialized.current;
-
+	// CRÍTICO: sessionChecked SEMPRE true para não bloquear dados públicos
 	const value = {
 		user,
 		profile,
 		loading,
 		profileLoading,
-		sessionChecked: effectiveSessionChecked, // CRÍTICO: usar versão otimizada
+		sessionChecked: true, // SEMPRE true - nunca bloquear dados públicos
 		signIn,
 		signOut,
 		signUp,
@@ -487,23 +479,21 @@ export const AuthProvider = ({ children }) => {
 		isAdmin,
 		isAuthenticated: !!user,
 
-		// NOVO: método para forçar liberação da UI (emergência)
+		// Método para forçar liberação (emergência)
 		forceReleaseUI: () => {
-			setSessionChecked(true);
 			setLoading(false);
 			setProfileLoading(false);
-			sessionInitialized.current = true;
+			authInitialized.current = true;
 		},
 
-		// Debug helper apenas em desenvolvimento
+		// Debug apenas em desenvolvimento
 		debugState:
 			process.env.NODE_ENV === "development"
 				? {
 						isLoadingProfile: isLoadingProfile.current,
 						currentUserId: currentUserId.current,
 						initCount: initializationCount.current,
-						sessionInitialized: sessionInitialized.current,
-						effectiveSessionChecked,
+						authInitialized: authInitialized.current,
 				  }
 				: undefined,
 	};

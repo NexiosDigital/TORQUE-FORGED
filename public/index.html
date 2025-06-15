@@ -80,6 +80,198 @@
     <!-- Title -->
     <title>Torque Forged Motorsport - Blog de Automobilismo</title>
     
+    <!-- CRÍTICO: Variáveis de ambiente para bootstrap -->
+    <script>
+      window.REACT_APP_SUPABASE_URL = '%REACT_APP_SUPABASE_URL%';
+      window.REACT_APP_SUPABASE_ANON_KEY = '%REACT_APP_SUPABASE_ANON_KEY%';
+      
+      // Fallback para desenvolvimento
+      if (window.REACT_APP_SUPABASE_URL === '%REACT_APP_SUPABASE_URL%') {
+        window.REACT_APP_SUPABASE_URL = process?.env?.REACT_APP_SUPABASE_URL || '';
+        window.REACT_APP_SUPABASE_ANON_KEY = process?.env?.REACT_APP_SUPABASE_ANON_KEY || '';
+      }
+    </script>
+
+    <!-- BOOTSTRAP PRELOADER - CRÍTICO PARA CARREGAMENTO INSTANTÂNEO -->
+    <script>
+    /**
+     * Bootstrap Data Preloader INLINE - Carregamento instantâneo
+     * - Executa ANTES do React carregar
+     * - Pré-carrega dados críticos
+     * - Elimina estados de loading
+     */
+    (function() {
+      'use strict';
+
+      // Configuração
+      const SUPABASE_URL = window.REACT_APP_SUPABASE_URL || '';
+      const SUPABASE_ANON_KEY = window.REACT_APP_SUPABASE_ANON_KEY || '';
+      
+      // Skip se não tem credenciais
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        console.warn('🚫 Bootstrap: Missing Supabase credentials, using fallback only');
+        window.TORQUE_FORGED_BOOTSTRAP = {
+          ready: true,
+          data: {
+            featuredPosts: [],
+            allPosts: [],
+            categories: [
+              { id: "f1", name: "Fórmula 1", description: "A elite do automobilismo mundial", color: "from-red-500 to-orange-500" },
+              { id: "nascar", name: "NASCAR", description: "A categoria mais popular dos EUA", color: "from-blue-500 to-cyan-500" },
+              { id: "endurance", name: "Endurance", description: "Corridas de resistência épicas", color: "from-green-500 to-emerald-500" },
+              { id: "drift", name: "Formula Drift", description: "A arte de deslizar com estilo", color: "from-purple-500 to-pink-500" },
+              { id: "tuning", name: "Tuning & Custom", description: "Personalização e modificações", color: "from-yellow-500 to-orange-500" },
+              { id: "engines", name: "Motores", description: "Tecnologia e performance", color: "from-indigo-500 to-purple-500" }
+            ]
+          },
+          error: null,
+          timestamp: Date.now()
+        };
+        return;
+      }
+
+      // Cache settings
+      const CACHE_KEY = 'tf-bootstrap-cache';
+      const CACHE_VERSION = '1.0';
+      const CACHE_TTL = 5 * 60 * 1000; // 15 min
+
+      // Fallback data
+      const FALLBACK_DATA = {
+        featuredPosts: [],
+        allPosts: [],
+        categories: [
+          { id: "f1", name: "Fórmula 1", description: "A elite do automobilismo mundial", color: "from-red-500 to-orange-500" },
+          { id: "nascar", name: "NASCAR", description: "A categoria mais popular dos EUA", color: "from-blue-500 to-cyan-500" },
+          { id: "endurance", name: "Endurance", description: "Corridas de resistência épicas", color: "from-green-500 to-emerald-500" },
+          { id: "drift", name: "Formula Drift", description: "A arte de deslizar com estilo", color: "from-purple-500 to-pink-500" },
+          { id: "tuning", name: "Tuning & Custom", description: "Personalização e modificações", color: "from-yellow-500 to-orange-500" },
+          { id: "engines", name: "Motores", description: "Tecnologia e performance", color: "from-indigo-500 to-purple-500" }
+        ]
+      };
+
+      // Global store
+      window.TORQUE_FORGED_BOOTSTRAP = {
+        ready: true, // SEMPRE ready para não bloquear UI
+        data: FALLBACK_DATA, // Começar com fallback
+        error: null,
+        timestamp: Date.now()
+      };
+
+      // Cache functions
+      function loadCachedData() {
+        try {
+          const cached = localStorage.getItem(CACHE_KEY);
+          if (!cached) return null;
+          const { data, timestamp, version } = JSON.parse(cached);
+          const age = Date.now() - timestamp;
+          if (version === CACHE_VERSION && age < CACHE_TTL) {
+            return data;
+          }
+          localStorage.removeItem(CACHE_KEY);
+          return null;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function saveCachedData(data) {
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            data, timestamp: Date.now(), version: CACHE_VERSION
+          }));
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+      }
+
+      // Load cached data immediately
+      const cachedData = loadCachedData();
+      if (cachedData) {
+        window.TORQUE_FORGED_BOOTSTRAP.data = cachedData;
+      }
+
+      // Fetch function
+      async function supabaseFetch(endpoint) {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1${endpoint}`, {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=1800'
+          },
+          cache: 'force-cache'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }
+
+      // Background data loading
+      async function loadFreshData() {
+        if (!navigator.onLine) return;
+        
+        try {
+          const start = Date.now();
+
+          const [featuredPosts, allPosts, categories] = await Promise.allSettled([
+            supabaseFetch('/posts?select=*&published=eq.true&trending=eq.true&order=created_at.desc&limit=6'),
+            supabaseFetch('/posts?select=*&published=eq.true&order=created_at.desc&limit=20'),
+            supabaseFetch('/categories?select=*&order=name')
+          ]);
+
+          const freshData = {
+            featuredPosts: featuredPosts.status === 'fulfilled' ? featuredPosts.value || [] : [],
+            allPosts: allPosts.status === 'fulfilled' ? allPosts.value || [] : [],
+            categories: categories.status === 'fulfilled' && categories.value?.length > 0 
+              ? categories.value 
+              : FALLBACK_DATA.categories
+          };
+
+          // Update global data
+          window.TORQUE_FORGED_BOOTSTRAP.data = freshData;
+          saveCachedData(freshData);
+
+          const loadTime = Date.now() - start;
+
+          // Update React Query cache if available
+          if (window.queryClient) {
+            setTimeout(() => {
+              try {
+                window.queryClient.setQueryData(['public', 'posts', 'featured'], freshData.featuredPosts);
+                window.queryClient.setQueryData(['public', 'posts'], freshData.allPosts);
+                window.queryClient.setQueryData(['public', 'categories'], freshData.categories);
+              } catch (e) {
+                console.warn('Bootstrap: Query cache update failed', e);
+              }
+            }, 100);
+          }
+
+        } catch (error) {
+          console.warn('Bootstrap: Fresh data load failed', error);
+          window.TORQUE_FORGED_BOOTSTRAP.error = error.message;
+        }
+      }
+
+      // Start background loading
+      setTimeout(loadFreshData, 50);
+
+      // Utility functions
+      window.TORQUE_FORGED_BOOTSTRAP.utils = {
+        refresh: loadFreshData,
+        clearCache: () => {
+          localStorage.removeItem(CACHE_KEY);
+        },
+        getStats: () => ({
+          ready: window.TORQUE_FORGED_BOOTSTRAP.ready,
+          hasData: Object.keys(window.TORQUE_FORGED_BOOTSTRAP.data).length > 0,
+          timestamp: window.TORQUE_FORGED_BOOTSTRAP.timestamp,
+          error: window.TORQUE_FORGED_BOOTSTRAP.error
+        })
+      };
+
+
+    })();
+    </script>
+    
     <!-- Critical CSS for loading performance -->
     <style>
       /* Critical loading styles */
@@ -95,8 +287,10 @@
         overflow-x: hidden;
       }
       
-      /* Loading spinner */
-      .loading-container {
+      /* ELIMINADO: Loading spinner - não precisamos mais dele */
+      
+      /* Minimal loader para primeiro carregamento do React apenas */
+      .react-loading {
         position: fixed;
         top: 0;
         left: 0;
@@ -107,32 +301,24 @@
         align-items: center;
         justify-content: center;
         z-index: 9999;
+        opacity: 1;
+        transition: opacity 0.3s ease;
       }
       
-      .loading-spinner {
-        width: 50px;
-        height: 50px;
-        border: 3px solid #374151;
-        border-top: 3px solid #dc2626;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
+      .react-loading.hidden {
+        opacity: 0;
+        pointer-events: none;
       }
       
-      .loading-text {
-        margin-top: 20px;
-        color: #dc2626;
-        font-weight: 600;
-        letter-spacing: 0.1em;
-      }
-      
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-      
-      /* Hide loading when React loads */
-      #root:not(:empty) ~ .loading-container {
+      /* Hide React loading when app mounts */
+      #root:not(:empty) ~ .react-loading {
         display: none;
+      }
+      
+      /* Instant UI styles */
+      .instant-ui {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #000000 0%, #1f2937 50%, #000000 100%);
       }
     </style>
   </head>
@@ -148,8 +334,8 @@
     <!-- React App Mount Point -->
     <div id="root"></div>
     
-    <!-- Loading Screen (shown while React loads) -->
-    <div class="loading-container">
+    <!-- Minimal React Loading (apenas para casos extremos) -->
+    <div class="react-loading">
       <div style="text-align: center;">
         <div style="display: flex; align-items: center; margin-bottom: 20px;">
           <div style="width: 48px; height: 48px; background: linear-gradient(45deg, #dc2626, #ef4444); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
@@ -169,8 +355,8 @@
             <p style="margin: 0; font-size: 12px; color: #dc2626; font-weight: 500; letter-spacing: 0.2em;">MOTORSPORT</p>
           </div>
         </div>
-        <div class="loading-spinner"></div>
-        <p class="loading-text">Carregando...</p>
+        <div style="width: 32px; height: 32px; border: 3px solid #374151; border-top: 3px solid #dc2626; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+        <p style="margin-top: 16px; color: #dc2626; font-weight: 600; font-size: 14px;">Inicializando sistema...</p>
       </div>
     </div>
     
@@ -191,12 +377,28 @@
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('%PUBLIC_URL%/sw.js')
             .then(function(registration) {
-              //console.log('SW registered: ', registration);
             }).catch(function(registrationError) {
-              //console.log('SW registration failed: ', registrationError);
+              console.warn('🔧 SW registration failed:', registrationError);
             });
         });
       }
     </script>
+
+    <!-- Hide React loading after a timeout (fallback) -->
+    <script>
+      setTimeout(function() {
+        const loader = document.querySelector('.react-loading');
+        if (loader) {
+          loader.classList.add('hidden');
+        }
+      }, 5000); // 5 seconds fallback
+    </script>
+
+    <style>
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
   </body>
 </html>

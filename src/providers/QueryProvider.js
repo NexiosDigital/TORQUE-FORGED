@@ -2,40 +2,109 @@ import React, { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 /**
- * QueryProvider ULTRA OTIMIZADO - Carregamento instantâneo
- * - Cache ULTRA agressivo para performance máxima
- * - Sem refetch automático desnecessário
- * - Persistência em localStorage
- * - Background prefetch otimizado
+ * QueryProvider INSTANTÂNEO - ZERO LOADING STATES
+ * - Usa dados do bootstrap para carregamento instantâneo
+ * - Placeholder data inteligente evita loading
+ * - Cache ultra agressivo com dados pré-populados
+ * - Nunca mostra "Carregando..."
  */
 
-// QueryClient com configurações ULTRA AGRESSIVAS
+// Função para obter dados do bootstrap
+const getBootstrapData = (key) => {
+	if (
+		window.TORQUE_FORGED_BOOTSTRAP?.ready &&
+		window.TORQUE_FORGED_BOOTSTRAP.data[key]
+	) {
+		return window.TORQUE_FORGED_BOOTSTRAP.data[key];
+	}
+	return null;
+};
+
+// Placeholder data functions - NUNCA retornam undefined
+const placeholderData = {
+	featuredPosts: () => getBootstrapData("featuredPosts") || [],
+	allPosts: () => getBootstrapData("allPosts") || [],
+	categories: () =>
+		getBootstrapData("categories") || [
+			{
+				id: "f1",
+				name: "Fórmula 1",
+				description: "A elite do automobilismo mundial",
+				color: "from-red-500 to-orange-500",
+			},
+			{
+				id: "nascar",
+				name: "NASCAR",
+				description: "A categoria mais popular dos EUA",
+				color: "from-blue-500 to-cyan-500",
+			},
+			{
+				id: "endurance",
+				name: "Endurance",
+				description: "Corridas de resistência épicas",
+				color: "from-green-500 to-emerald-500",
+			},
+			{
+				id: "drift",
+				name: "Formula Drift",
+				description: "A arte de deslizar com estilo",
+				color: "from-purple-500 to-pink-500",
+			},
+			{
+				id: "tuning",
+				name: "Tuning & Custom",
+				description: "Personalização e modificações",
+				color: "from-yellow-500 to-orange-500",
+			},
+			{
+				id: "engines",
+				name: "Motores",
+				description: "Tecnologia e performance",
+				color: "from-indigo-500 to-purple-500",
+			},
+		],
+	byCategory: (categoryId) => {
+		const allPosts = getBootstrapData("allPosts") || [];
+		return allPosts.filter((post) => post.category === categoryId);
+	},
+	postById: (id) => {
+		const allPosts = getBootstrapData("allPosts") || [];
+		return allPosts.find((post) => post.id === parseInt(id)) || null;
+	},
+};
+
+// QueryClient com configurações INSTANTÂNEAS
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			// Cache ULTRA longo para carregamento instantâneo
-			staleTime: 30 * 60 * 1000, // 30 minutos - dados ficam fresh por muito tempo
-			gcTime: 4 * 60 * 60 * 1000, // 4 horas - manter em memória por muito tempo
+			// Cache EXTREMAMENTE agressivo
+			staleTime: 60 * 60 * 1000, // 1 hora - dados nunca ficam stale
+			gcTime: 4 * 60 * 60 * 1000, // 4 horas - manter em memória
 
-			// NUNCA refetch automático - sempre usar cache primeiro
+			// NUNCA refetch - usar sempre cache/placeholder
 			refetchOnWindowFocus: false,
 			refetchOnMount: false,
 			refetchOnReconnect: false,
 			refetchInterval: false,
 			refetchIntervalInBackground: false,
 
-			// Offline-first para carregamento instantâneo
+			// Offline first para carregamento instantâneo
 			networkMode: "offlineFirst",
 
-			// Retry mínimo para velocidade
+			// Zero retry para velocidade máxima
 			retry: false,
 			retryOnMount: false,
-			retryDelay: () => 0,
+			retryDelay: 0,
 
-			// Placeholder data para UX suave
-			placeholderData: (previousData, previousQuery) => previousData,
+			// SEMPRE usar placeholder data
+			placeholderData: (previousData) => previousData,
 
-			// Configurações de network otimizadas
+			// Inicializar com bootstrap data
+			initialData: undefined, // Será definido por query
+			initialDataUpdatedAt: Date.now(),
+
+			// Performance otimizada
+			structuralSharing: true,
 			useErrorBoundary: false,
 		},
 		mutations: {
@@ -47,56 +116,48 @@ const queryClient = new QueryClient({
 	},
 });
 
-// Persistência local para cache entre sessões
-const persistCache = {
-	save: (key, data) => {
-		try {
-			const item = {
-				data,
-				timestamp: Date.now(),
-				version: "1.0",
-			};
-			localStorage.setItem(`torque-cache-${key}`, JSON.stringify(item));
-		} catch (error) {
-			console.warn("Failed to save cache:", error);
+// Bootstrap Query Cache com dados pré-carregados
+const bootstrapQueryCache = () => {
+	try {
+		// Popular cache com dados do bootstrap
+		const featuredPosts = getBootstrapData("featuredPosts");
+		const allPosts = getBootstrapData("allPosts");
+		const categories = getBootstrapData("categories");
+
+		if (featuredPosts) {
+			queryClient.setQueryData(["public", "posts", "featured"], featuredPosts);
 		}
-	},
 
-	load: (key, maxAge = 30 * 60 * 1000) => {
-		try {
-			const item = localStorage.getItem(`torque-cache-${key}`);
-			if (!item) return null;
+		if (allPosts) {
+			queryClient.setQueryData(["public", "posts"], allPosts);
 
-			const parsed = JSON.parse(item);
-			const age = Date.now() - parsed.timestamp;
-
-			if (age > maxAge) {
-				localStorage.removeItem(`torque-cache-${key}`);
-				return null;
-			}
-
-			return parsed.data;
-		} catch (error) {
-			console.warn("Failed to load cache:", error);
-			return null;
+			// Popular cache de posts individuais
+			allPosts.forEach((post) => {
+				queryClient.setQueryData(["public", "posts", "detail", post.id], post);
+			});
 		}
-	},
 
-	clear: () => {
-		try {
-			Object.keys(localStorage).forEach((key) => {
-				if (key.startsWith("torque-cache-")) {
-					localStorage.removeItem(key);
+		if (categories) {
+			queryClient.setQueryData(["public", "categories"], categories);
+
+			// Popular cache por categoria
+			categories.forEach((category) => {
+				const categoryPosts = placeholderData.byCategory(category.id);
+				if (categoryPosts.length > 0) {
+					queryClient.setQueryData(
+						["public", "posts", "category", category.id],
+						categoryPosts
+					);
 				}
 			});
-		} catch (error) {
-			console.warn("Failed to clear cache:", error);
 		}
-	},
+	} catch (error) {
+		console.warn("⚠️ Bootstrap: Query Cache population failed", error);
+	}
 };
 
 // Error Boundary minimalista
-class QueryErrorBoundary extends React.Component {
+class InstantQueryErrorBoundary extends React.Component {
 	constructor(props) {
 		super(props);
 		this.state = {
@@ -110,7 +171,7 @@ class QueryErrorBoundary extends React.Component {
 	}
 
 	componentDidCatch(error, errorInfo) {
-		console.error("🔴 QueryErrorBoundary:", error, errorInfo);
+		console.error("🔴 InstantQueryErrorBoundary:", error, errorInfo);
 	}
 
 	render() {
@@ -133,23 +194,19 @@ class QueryErrorBoundary extends React.Component {
 								/>
 							</svg>
 						</div>
-
 						<h2 className="text-2xl font-bold text-white mb-4">
-							Erro no Sistema
+							Sistema Temporariamente Indisponível
 						</h2>
-
 						<p className="text-gray-400 mb-6">
-							Ocorreu um erro inesperado. Tente recarregar a página.
+							Ocorreu um erro inesperado. Recarregue a página para tentar
+							novamente.
 						</p>
-
-						<div className="space-y-3">
-							<button
-								onClick={() => window.location.reload()}
-								className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
-							>
-								Recarregar Página
-							</button>
-						</div>
+						<button
+							onClick={() => window.location.reload()}
+							className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300"
+						>
+							Recarregar Página
+						</button>
 					</div>
 				</div>
 			);
@@ -159,124 +216,62 @@ class QueryErrorBoundary extends React.Component {
 	}
 }
 
-// Background cache warmer
-const CacheWarmer = () => {
+// Bootstrap Cache Manager
+const BootstrapCacheManager = () => {
 	useEffect(() => {
-		const warmupCache = async () => {
-			try {
-				// Preload de dados críticos após 100ms
-				setTimeout(async () => {
-					const { PostService } = await import("../services/PostService");
+		// Popular cache imediatamente
+		bootstrapQueryCache();
 
-					// Prefetch silencioso em background
-					Promise.allSettled([
-						queryClient.prefetchQuery({
-							queryKey: ["public", "posts", "featured"],
-							queryFn: () => PostService.getFeaturedPosts(),
-							staleTime: 45 * 60 * 1000,
-						}),
-						queryClient.prefetchQuery({
-							queryKey: ["public", "posts"],
-							queryFn: () => PostService.getAllPosts(),
-							staleTime: 30 * 60 * 1000,
-						}),
-						queryClient.prefetchQuery({
-							queryKey: ["public", "categories"],
-							queryFn: () => PostService.getCategories(),
-							staleTime: 2 * 60 * 60 * 1000,
-						}),
-					])
-						.then(() => {
-							console.log("🚀 Cache warmed up successfully");
-						})
-						.catch((error) => {
-							console.warn("⚠️ Cache warmup failed:", error);
-						});
-				}, 100);
-			} catch (error) {
-				console.warn("⚠️ Cache warmer error:", error);
+		// Re-popular se bootstrap data for atualizada
+		const checkForUpdates = () => {
+			if (window.TORQUE_FORGED_BOOTSTRAP?.ready) {
+				bootstrapQueryCache();
 			}
 		};
 
-		warmupCache();
-	}, []);
-
-	return null;
-};
-
-// Cache persistence manager
-const CachePersistence = () => {
-	useEffect(() => {
-		// Carregar cache persistido na inicialização
-		const loadPersistedCache = () => {
-			try {
-				// Carregar dados críticos do localStorage
-				const featuredPosts = persistCache.load(
-					"featured-posts",
-					45 * 60 * 1000
-				);
-				const allPosts = persistCache.load("all-posts", 30 * 60 * 1000);
-				const categories = persistCache.load("categories", 2 * 60 * 60 * 1000);
-
-				if (featuredPosts) {
-					queryClient.setQueryData(
-						["public", "posts", "featured"],
-						featuredPosts
-					);
-				}
-
-				if (allPosts) {
-					queryClient.setQueryData(["public", "posts"], allPosts);
-				}
-
-				if (categories) {
-					queryClient.setQueryData(["public", "categories"], categories);
-				}
-
-				if (featuredPosts || allPosts || categories) {
-					console.log("💾 Loaded persisted cache");
-				}
-			} catch (error) {
-				console.warn("⚠️ Failed to load persisted cache:", error);
-			}
-		};
-
-		// Carregar cache após 50ms
-		setTimeout(loadPersistedCache, 50);
-
-		// Salvar cache periodicamente (a cada 5 minutos)
-		const saveInterval = setInterval(() => {
-			try {
-				const featuredPosts = queryClient.getQueryData([
-					"public",
-					"posts",
-					"featured",
-				]);
-				const allPosts = queryClient.getQueryData(["public", "posts"]);
-				const categories = queryClient.getQueryData(["public", "categories"]);
-
-				if (featuredPosts) persistCache.save("featured-posts", featuredPosts);
-				if (allPosts) persistCache.save("all-posts", allPosts);
-				if (categories) persistCache.save("categories", categories);
-			} catch (error) {
-				console.warn("⚠️ Failed to persist cache:", error);
-			}
-		}, 5 * 60 * 1000);
+		// Verificar atualizações a cada 30 segundos
+		const updateInterval = setInterval(checkForUpdates, 30000);
 
 		// Cleanup
 		return () => {
-			clearInterval(saveInterval);
+			clearInterval(updateInterval);
 		};
 	}, []);
 
 	return null;
 };
 
-// Provider principal ULTRA OTIMIZADO
+// Preload Critical Data (background)
+const CriticalDataPreloader = () => {
+	useEffect(() => {
+		// Preload adicional em background após 2 segundos
+		const timer = setTimeout(async () => {
+			try {
+				// Refresh bootstrap data se necessário
+				if (window.TORQUE_FORGED_BOOTSTRAP?.utils?.refresh) {
+					await window.TORQUE_FORGED_BOOTSTRAP.utils.refresh();
+				}
+			} catch (error) {
+				console.warn("⚠️ Background preload failed:", error);
+			}
+		}, 2000);
+
+		return () => clearTimeout(timer);
+	}, []);
+
+	return null;
+};
+
+// Provider principal INSTANTÂNEO
 export const ModernQueryProvider = ({ children }) => {
-	// Disponibilizar o queryClient globalmente
+	// Disponibilizar queryClient globalmente
 	useEffect(() => {
 		window.queryClient = queryClient;
+
+		// Popular cache inicial se ainda não foi feito
+		if (window.TORQUE_FORGED_BOOTSTRAP?.ready) {
+			bootstrapQueryCache();
+		}
 
 		// Cleanup na desmontagem
 		return () => {
@@ -285,38 +280,39 @@ export const ModernQueryProvider = ({ children }) => {
 	}, []);
 
 	return (
-		<QueryErrorBoundary>
+		<InstantQueryErrorBoundary>
 			<QueryClientProvider client={queryClient}>
 				{children}
 
-				{/* Cache optimization components */}
-				<CacheWarmer />
-				<CachePersistence />
+				{/* Managers de cache em background */}
+				<BootstrapCacheManager />
+				<CriticalDataPreloader />
 
 				{/* DevTools apenas em desenvolvimento */}
 				{process.env.NODE_ENV === "development" && <DevTools />}
 			</QueryClientProvider>
-		</QueryErrorBoundary>
+		</InstantQueryErrorBoundary>
 	);
 };
 
-// DevTools minimalistas para desenvolvimento
+// DevTools para desenvolvimento
 const DevTools = () => {
 	useEffect(() => {
-		// Log de cache stats apenas uma vez
-		const logStats = () => {
+		// Debug info após 5 segundos
+		const timer = setTimeout(() => {
 			const cache = queryClient.getQueryCache();
 			const queries = cache.getAll();
 
-			console.log("📊 Cache Stats:", {
+			console.log("📊 Instant Query Stats:", {
 				total: queries.length,
 				fresh: queries.filter((q) => !q.isStale()).length,
 				stale: queries.filter((q) => q.isStale()).length,
+				hasBootstrap: !!window.TORQUE_FORGED_BOOTSTRAP?.ready,
+				bootstrapKeys: Object.keys(window.TORQUE_FORGED_BOOTSTRAP?.data || {}),
 			});
-		};
+		}, 5000);
 
-		// Log inicial após 10 segundos
-		setTimeout(logStats, 10000);
+		return () => clearTimeout(timer);
 	}, []);
 
 	return null;
@@ -325,51 +321,60 @@ const DevTools = () => {
 // Hook para acessar o queryClient
 export const useQueryClient = () => queryClient;
 
-// Utilities para cache OTIMIZADAS
+// Utilities otimizadas para carregamento instantâneo
 export const cacheUtils = {
-	// Limpeza manual total
+	// Verificar se dados estão prontos (sempre true com bootstrap)
+	isReady: () => {
+		return window.TORQUE_FORGED_BOOTSTRAP?.ready || false;
+	},
+
+	// Obter dados do bootstrap diretamente
+	getBootstrapData: (key) => {
+		return getBootstrapData(key);
+	},
+
+	// Limpeza total
 	clear: () => {
-		console.log("🗑️ Manual cache clear");
 		queryClient.clear();
-		persistCache.clear();
-	},
-
-	// Invalidação manual
-	invalidateAll: () => {
-		console.log("🔄 Manual invalidate all");
-		queryClient.invalidateQueries();
-	},
-
-	// Preload de dados críticos
-	preloadCritical: async () => {
-		try {
-			const { PostService } = await import("../services/PostService");
-
-			await Promise.allSettled([
-				queryClient.prefetchQuery({
-					queryKey: ["public", "posts", "featured"],
-					queryFn: () => PostService.getFeaturedPosts(),
-					staleTime: 45 * 60 * 1000,
-				}),
-				queryClient.prefetchQuery({
-					queryKey: ["public", "posts"],
-					queryFn: () => PostService.getAllPosts(),
-					staleTime: 30 * 60 * 1000,
-				}),
-				queryClient.prefetchQuery({
-					queryKey: ["public", "categories"],
-					queryFn: () => PostService.getCategories(),
-					staleTime: 2 * 60 * 60 * 1000,
-				}),
-			]);
-
-			console.log("🚀 Critical data preloaded");
-		} catch (error) {
-			console.warn("⚠️ Preload failed:", error);
+		if (window.TORQUE_FORGED_BOOTSTRAP?.utils?.clearCache) {
+			window.TORQUE_FORGED_BOOTSTRAP.utils.clearCache();
 		}
 	},
 
-	// Estatísticas do cache
+	// Invalidação manual (raramente necessária)
+	invalidateAll: () => {
+		queryClient.invalidateQueries();
+	},
+
+	// Re-popular cache com bootstrap
+	repopulate: () => {
+		bootstrapQueryCache();
+	},
+
+	// Forçar refresh do bootstrap
+	refreshBootstrap: async () => {
+		if (window.TORQUE_FORGED_BOOTSTRAP?.utils?.refresh) {
+			await window.TORQUE_FORGED_BOOTSTRAP.utils.refresh();
+			bootstrapQueryCache();
+		}
+	},
+
+	// Preload crítico (compatibilidade)
+	preloadCritical: async () => {
+		bootstrapQueryCache();
+
+		// Refresh bootstrap se necessário
+		if (window.TORQUE_FORGED_BOOTSTRAP?.utils?.refresh) {
+			try {
+				await window.TORQUE_FORGED_BOOTSTRAP.utils.refresh();
+				bootstrapQueryCache();
+			} catch (error) {
+				console.warn("⚠️ Bootstrap refresh failed:", error);
+			}
+		}
+	},
+
+	// Estatísticas instantâneas
 	getStats: () => {
 		const cache = queryClient.getQueryCache();
 		const queries = cache.getAll();
@@ -381,36 +386,13 @@ export const cacheUtils = {
 			error: queries.filter((q) => q.state.status === "error").length,
 			loading: queries.filter((q) => q.state.status === "pending").length,
 			success: queries.filter((q) => q.state.status === "success").length,
+			hasBootstrap: !!window.TORQUE_FORGED_BOOTSTRAP?.ready,
+			bootstrapTimestamp: window.TORQUE_FORGED_BOOTSTRAP?.timestamp,
 		};
 	},
-
-	// Força refresh manual
-	forceRefresh: () => {
-		queryClient.invalidateQueries();
-		queryClient.refetchQueries();
-		console.log("🔄 Force refresh triggered");
-	},
-
-	// Salvar cache manualmente
-	persist: () => {
-		try {
-			const featuredPosts = queryClient.getQueryData([
-				"public",
-				"posts",
-				"featured",
-			]);
-			const allPosts = queryClient.getQueryData(["public", "posts"]);
-			const categories = queryClient.getQueryData(["public", "categories"]);
-
-			if (featuredPosts) persistCache.save("featured-posts", featuredPosts);
-			if (allPosts) persistCache.save("all-posts", allPosts);
-			if (categories) persistCache.save("categories", categories);
-
-			console.log("💾 Cache persisted manually");
-		} catch (error) {
-			console.warn("⚠️ Manual persist failed:", error);
-		}
-	},
 };
+
+// Override do placeholder data para hooks
+export const instantPlaceholderData = placeholderData;
 
 export default ModernQueryProvider;

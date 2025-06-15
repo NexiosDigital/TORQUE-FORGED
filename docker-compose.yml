@@ -11,6 +11,7 @@ services:
     # Variáveis de ambiente
     environment:
       - NODE_ENV=production
+      - REACT_APP_ENV=production
       # Variáveis que podem ser alteradas sem rebuild
       - REACT_APP_SUPABASE_URL=${REACT_APP_SUPABASE_URL}
       - REACT_APP_SUPABASE_ANON_KEY=${REACT_APP_SUPABASE_ANON_KEY}

@@ -18,45 +18,19 @@ import {
 	useAllPosts,
 	useCategories,
 	usePrefetch,
-	usePreloadCriticalData,
 } from "../hooks/usePostsQuery";
+import { cacheUtils } from "../providers/QueryProvider";
 import { ErrorBoundary } from "react-error-boundary";
 
 /**
- * OptimizedHome - CARREGAMENTO INSTANTÂNEO
- * - Preload automático de dados críticos
- * - Carregamento paralelo otimizado
- * - Cache ultra agressivo
- * - Zero dependência de auth para dados públicos
- * - Fallbacks inteligentes
+ * OptimizedHome INSTANTÂNEO - ZERO LOADING STATES
+ * - Usa dados do bootstrap para renderização instantânea
+ * - Nunca mostra "Carregando..."
+ * - Hooks sempre retornam dados
+ * - Fallbacks inteligentes invisíveis
  */
 
-// Loading skeletons MINIMALISTAS para velocidade
-const FastSkeleton = ({ count = 3, type = "card" }) => (
-	<div
-		className={`grid ${
-			type === "card"
-				? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-				: "grid-cols-1"
-		} gap-6 md:gap-8`}
-	>
-		{Array.from({ length: count }).map((_, i) => (
-			<div key={`skeleton-${i}`} className="animate-pulse">
-				<div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl overflow-hidden border border-gray-700/50">
-					<div className="h-56 bg-gradient-to-br from-gray-700 to-gray-800"></div>
-					<div className="p-6">
-						<div className="h-4 bg-gray-700 rounded-full mb-3 w-24"></div>
-						<div className="h-6 bg-gray-700 rounded-full mb-2"></div>
-						<div className="h-6 bg-gray-700 rounded-full w-3/4 mb-4"></div>
-						<div className="h-3 bg-gray-700 rounded-full w-1/2"></div>
-					</div>
-				</div>
-			</div>
-		))}
-	</div>
-);
-
-// Error fallback MINIMALISTA
+// Error fallback MINIMALISTA (raramente usado)
 const FastErrorFallback = ({ error, resetErrorBoundary, section }) => (
 	<div className="text-center py-16">
 		<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
@@ -249,11 +223,13 @@ const PostCard = React.memo(({ post, index }) => {
 	);
 });
 
-// Featured Posts Section ULTRA OTIMIZADO
+// Featured Posts Section INSTANTÂNEO - nunca loading
 const FeaturedPostsSection = () => {
-	const { data: featuredPosts = [], isLoading, error } = useFeaturedPosts();
+	// Hook SEMPRE retorna dados (nunca undefined/loading)
+	const { data: featuredPosts = [], error } = useFeaturedPosts();
 
-	if (error) {
+	// Error é raro com bootstrap - mostrar fallback se necessário
+	if (error && featuredPosts.length === 0) {
 		return (
 			<div className="py-24 bg-gradient-to-b from-black to-gray-900">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -284,16 +260,14 @@ const FeaturedPostsSection = () => {
 					</p>
 				</div>
 
-				{/* Content */}
-				{isLoading ? (
-					<FastSkeleton count={3} type="card" />
-				) : featuredPosts.length === 0 ? (
+				{/* Content - SEMPRE renderizado instantaneamente */}
+				{featuredPosts.length === 0 ? (
 					<div className="text-center py-16">
 						<div className="w-20 h-20 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
 							<TrendingUp className="w-10 h-10 text-gray-400" />
 						</div>
 						<h3 className="text-2xl font-bold text-white mb-4">
-							Nenhum post em destaque
+							Posts em destaque chegando em breve
 						</h3>
 						<p className="text-gray-400 mb-8">
 							Os posts em destaque aparecerão aqui assim que forem publicados.
@@ -318,9 +292,10 @@ const FeaturedPostsSection = () => {
 	);
 };
 
-// Posts List Section ULTRA OTIMIZADO
+// Posts List Section INSTANTÂNEO - nunca loading
 const PostListSection = () => {
-	const { data: allPosts = [], isLoading, error } = useAllPosts();
+	// Hook SEMPRE retorna dados
+	const { data: allPosts = [], error } = useAllPosts();
 	const { prefetchPost } = usePrefetch();
 
 	// Limitar para apenas 4 posts na home
@@ -328,20 +303,8 @@ const PostListSection = () => {
 		return allPosts.slice(0, 4);
 	}, [allPosts]);
 
-	if (isLoading) {
-		return (
-			<div className="lg:col-span-2">
-				<div className="flex items-center justify-between mb-12">
-					<h2 className="text-4xl font-black text-white bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-						Últimos Artigos
-					</h2>
-				</div>
-				<FastSkeleton count={4} type="list" />
-			</div>
-		);
-	}
-
-	if (error) {
+	// Error handling (raro com bootstrap)
+	if (error && allPosts.length === 0) {
 		return (
 			<div className="lg:col-span-2">
 				<FastErrorFallback
@@ -349,22 +312,6 @@ const PostListSection = () => {
 					resetErrorBoundary={() => window.location.reload()}
 					section="últimos artigos"
 				/>
-			</div>
-		);
-	}
-
-	if (allPosts.length === 0) {
-		return (
-			<div className="lg:col-span-2 text-center py-16">
-				<div className="w-20 h-20 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
-					<Zap className="w-10 h-10 text-gray-400" />
-				</div>
-				<h3 className="text-2xl font-bold text-white mb-4">
-					Nenhum post encontrado
-				</h3>
-				<p className="text-gray-400 mb-8">
-					Não há posts publicados no momento. Volte em breve!
-				</p>
 			</div>
 		);
 	}
@@ -384,97 +331,112 @@ const PostListSection = () => {
 				</Link>
 			</div>
 
-			<div className="space-y-8">
-				{limitedPosts.map((post, index) => {
-					const formatDate = (dateString) => {
-						try {
-							return new Date(dateString).toLocaleDateString("pt-BR");
-						} catch (error) {
-							return "Data inválida";
-						}
-					};
+			{/* SEMPRE renderizar conteúdo instantaneamente */}
+			{limitedPosts.length === 0 ? (
+				<div className="text-center py-16">
+					<div className="w-20 h-20 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+						<Zap className="w-10 h-10 text-gray-400" />
+					</div>
+					<h3 className="text-2xl font-bold text-white mb-4">
+						Artigos chegando em breve
+					</h3>
+					<p className="text-gray-400 mb-8">
+						Novos posts serão publicados em breve. Volte em breve!
+					</p>
+				</div>
+			) : (
+				<div className="space-y-8">
+					{limitedPosts.map((post, index) => {
+						const formatDate = (dateString) => {
+							try {
+								return new Date(dateString).toLocaleDateString("pt-BR");
+							} catch (error) {
+								return "Data inválida";
+							}
+						};
 
-					return (
-						<article
-							key={`post-${post.id}`}
-							className="group bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 border border-gray-700/50 hover:border-red-500/30 transition-all duration-500 hover:scale-[1.02]"
-						>
-							<div className="flex flex-col md:flex-row gap-8">
-								{/* Image */}
-								<div className="relative overflow-hidden rounded-2xl">
-									<img
-										src={post.image_url}
-										alt={post.title}
-										className="w-full md:w-64 h-48 object-cover transition-transform duration-700 group-hover:scale-110"
-										loading={index < 3 ? "eager" : "lazy"}
-										onError={(e) => {
-											e.target.src =
-												"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
-										}}
-									/>
-									<div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-								</div>
-
-								{/* Content */}
-								<div className="flex-1 space-y-4">
-									<div className="flex items-center gap-3">
-										<Link
-											to={`/${post.category}`}
-											className="text-red-400 text-sm font-bold hover:text-red-300 transition-colors duration-300"
-										>
-											{post.category_name}
-										</Link>
-										{post.trending && (
-											<>
-												<span className="text-gray-600">•</span>
-												<span className="text-orange-400 text-sm font-bold flex items-center space-x-1">
-													<TrendingUp className="w-3 h-3" />
-													<span>Trending</span>
-												</span>
-											</>
-										)}
+						return (
+							<article
+								key={`post-${post.id}`}
+								className="group bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl p-8 border border-gray-700/50 hover:border-red-500/30 transition-all duration-500 hover:scale-[1.02]"
+							>
+								<div className="flex flex-col md:flex-row gap-8">
+									{/* Image */}
+									<div className="relative overflow-hidden rounded-2xl">
+										<img
+											src={post.image_url}
+											alt={post.title}
+											className="w-full md:w-64 h-48 object-cover transition-transform duration-700 group-hover:scale-110"
+											loading={index < 3 ? "eager" : "lazy"}
+											onError={(e) => {
+												e.target.src =
+													"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
+											}}
+										/>
+										<div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
 									</div>
-									<Link
-										to={`/post/${post.id}`}
-										onMouseEnter={() => prefetchPost(post.id)}
-									>
-										<h3 className="text-2xl font-bold text-white group-hover:text-red-400 transition-colors duration-300 leading-tight">
-											{post.title}
-										</h3>
-									</Link>
-									<p className="text-gray-400 leading-relaxed">
-										{post.excerpt}
-									</p>
-									<div className="flex flex-col md:flex-row md:items-center md:justify-between pt-4 space-y-3 md:space-y-0">
-										<div className="flex items-center gap-6 text-sm text-gray-500">
-											<div className="flex items-center space-x-2">
-												<User className="w-4 h-4" />
-												<span>{post.author}</span>
-											</div>
-											<div className="flex items-center space-x-2">
-												<Clock className="w-4 h-4" />
-												<span>{post.read_time}</span>
-											</div>
-											<div className="flex items-center space-x-2">
-												<Calendar className="w-4 h-4" />
-												<span>{formatDate(post.created_at)}</span>
-											</div>
+
+									{/* Content */}
+									<div className="flex-1 space-y-4">
+										<div className="flex items-center gap-3">
+											<Link
+												to={`/${post.category}`}
+												className="text-red-400 text-sm font-bold hover:text-red-300 transition-colors duration-300"
+											>
+												{post.category_name}
+											</Link>
+											{post.trending && (
+												<>
+													<span className="text-gray-600">•</span>
+													<span className="text-orange-400 text-sm font-bold flex items-center space-x-1">
+														<TrendingUp className="w-3 h-3" />
+														<span>Trending</span>
+													</span>
+												</>
+											)}
 										</div>
 										<Link
 											to={`/post/${post.id}`}
 											onMouseEnter={() => prefetchPost(post.id)}
-											className="text-red-400 hover:text-red-300 font-bold text-sm flex items-center space-x-2 group-hover:space-x-3 transition-all duration-300"
 										>
-											<span>Leia mais</span>
-											<ArrowRight className="w-4 h-4" />
+											<h3 className="text-2xl font-bold text-white group-hover:text-red-400 transition-colors duration-300 leading-tight">
+												{post.title}
+											</h3>
 										</Link>
+										<p className="text-gray-400 leading-relaxed">
+											{post.excerpt}
+										</p>
+										<div className="flex flex-col md:flex-row md:items-center md:justify-between pt-4 space-y-3 md:space-y-0">
+											<div className="flex items-center gap-6 text-sm text-gray-500">
+												<div className="flex items-center space-x-2">
+													<User className="w-4 h-4" />
+													<span>{post.author}</span>
+												</div>
+												<div className="flex items-center space-x-2">
+													<Clock className="w-4 h-4" />
+													<span>{post.read_time}</span>
+												</div>
+												<div className="flex items-center space-x-2">
+													<Calendar className="w-4 h-4" />
+													<span>{formatDate(post.created_at)}</span>
+												</div>
+											</div>
+											<Link
+												to={`/post/${post.id}`}
+												onMouseEnter={() => prefetchPost(post.id)}
+												className="text-red-400 hover:text-red-300 font-bold text-sm flex items-center space-x-2 group-hover:space-x-3 transition-all duration-300"
+											>
+												<span>Leia mais</span>
+												<ArrowRight className="w-4 h-4" />
+											</Link>
+										</div>
 									</div>
 								</div>
-							</div>
-						</article>
-					);
-				})}
-			</div>
+							</article>
+						);
+					})}
+				</div>
+			)}
 
 			{/* Ver mais posts */}
 			{allPosts.length > 4 && (
@@ -492,10 +454,10 @@ const PostListSection = () => {
 	);
 };
 
-// Sidebar ULTRA OTIMIZADO
+// Sidebar INSTANTÂNEO - nunca loading
 const Sidebar = React.memo(() => {
-	const { data: categories = [], isLoading: loadingCategories } =
-		useCategories();
+	// Hook SEMPRE retorna dados
+	const { data: categories = [] } = useCategories();
 	const { prefetchCategory } = usePrefetch();
 
 	return (
@@ -508,65 +470,43 @@ const Sidebar = React.memo(() => {
 						<span>Categorias</span>
 					</h3>
 
-					{loadingCategories ? (
-						<div className="space-y-4">
-							{Array.from({ length: 6 }).map((_, i) => (
+					{/* SEMPRE renderizar categorias instantaneamente */}
+					<div className="space-y-4">
+						{categories.map((category) => (
+							<Link
+								key={category.id}
+								to={`/${category.id}`}
+								onMouseEnter={() => prefetchCategory(category.id)}
+								className="group relative p-4 rounded-2xl hover:bg-gray-800/50 cursor-pointer transition-all duration-300 overflow-hidden block"
+							>
 								<div
-									key={i}
-									className="animate-pulse p-4 rounded-2xl bg-gray-800/50"
-								>
+									className={`absolute inset-0 bg-gradient-to-r ${
+										category.color || "from-red-500 to-orange-500"
+									} opacity-0 group-hover:opacity-10 transition-opacity duration-300 rounded-2xl`}
+								></div>
+								<div className="relative flex items-center justify-between">
 									<div className="flex items-center space-x-4">
-										<div className="w-10 h-10 bg-gray-700 rounded-xl"></div>
-										<div className="flex-1">
-											<div className="h-4 bg-gray-700 rounded-full mb-2"></div>
-											<div className="h-3 bg-gray-700 rounded-full w-16"></div>
+										<div
+											className={`p-2 rounded-xl bg-gradient-to-r ${
+												category.color || "from-red-500 to-orange-500"
+											} shadow-lg`}
+										>
+											<Settings className="w-5 h-5 text-white" />
+										</div>
+										<div className="flex flex-col">
+											<span className="text-gray-300 font-medium group-hover:text-white transition-colors duration-300">
+												{category.name}
+											</span>
+											<span className="text-xs text-gray-500">
+												{category.description}
+											</span>
 										</div>
 									</div>
+									<ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-red-400 group-hover:translate-x-1 transition-all duration-300" />
 								</div>
-							))}
-						</div>
-					) : categories.length === 0 ? (
-						<div className="text-center py-8">
-							<p className="text-gray-400">Nenhuma categoria encontrada</p>
-						</div>
-					) : (
-						<div className="space-y-4">
-							{categories.map((category) => (
-								<Link
-									key={category.id}
-									to={`/${category.id}`}
-									onMouseEnter={() => prefetchCategory(category.id)}
-									className="group relative p-4 rounded-2xl hover:bg-gray-800/50 cursor-pointer transition-all duration-300 overflow-hidden block"
-								>
-									<div
-										className={`absolute inset-0 bg-gradient-to-r ${
-											category.color || "from-red-500 to-orange-500"
-										} opacity-0 group-hover:opacity-10 transition-opacity duration-300 rounded-2xl`}
-									></div>
-									<div className="relative flex items-center justify-between">
-										<div className="flex items-center space-x-4">
-											<div
-												className={`p-2 rounded-xl bg-gradient-to-r ${
-													category.color || "from-red-500 to-orange-500"
-												} shadow-lg`}
-											>
-												<Settings className="w-5 h-5 text-white" />
-											</div>
-											<div className="flex flex-col">
-												<span className="text-gray-300 font-medium group-hover:text-white transition-colors duration-300">
-													{category.name}
-												</span>
-												<span className="text-xs text-gray-500">
-													{category.description}
-												</span>
-											</div>
-										</div>
-										<ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-red-400 group-hover:translate-x-1 transition-all duration-300" />
-									</div>
-								</Link>
-							))}
-						</div>
-					)}
+							</Link>
+						))}
+					</div>
 				</div>
 
 				{/* Social Media */}
@@ -614,25 +554,23 @@ const Sidebar = React.memo(() => {
 	);
 });
 
-// Componente principal ULTRA OTIMIZADO
+// Componente principal INSTANTÂNEO
 const OptimizedHome = () => {
-	const { preloadAll } = usePreloadCriticalData();
-
-	// Preload automático de dados críticos no mount
+	// Background preload opcional após 2 segundos
 	useEffect(() => {
 		const timer = setTimeout(() => {
-			preloadAll();
-		}, 50); // Preload após 50ms
+			cacheUtils.preloadCritical();
+		}, 2000);
 
 		return () => clearTimeout(timer);
-	}, [preloadAll]);
+	}, []);
 
 	return (
 		<>
 			{/* Hero Section */}
 			<HeroSection />
 
-			{/* Posts em Destaque */}
+			{/* Posts em Destaque - SEMPRE instantâneo */}
 			<ErrorBoundary
 				FallbackComponent={(props) => (
 					<div className="py-24 bg-gradient-to-b from-black to-gray-900">
@@ -646,7 +584,7 @@ const OptimizedHome = () => {
 				<FeaturedPostsSection />
 			</ErrorBoundary>
 
-			{/* Últimos Artigos com Sidebar */}
+			{/* Últimos Artigos com Sidebar - SEMPRE instantâneo */}
 			<div className="py-24 bg-gradient-to-b from-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
