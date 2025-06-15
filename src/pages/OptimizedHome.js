@@ -21,6 +21,7 @@ import {
 } from "../hooks/usePostsQuery";
 import { cacheUtils } from "../providers/QueryProvider";
 import { ErrorBoundary } from "react-error-boundary";
+import NewsletterSection from "../components/NewsletterSection";
 
 /**
  * OptimizedHome INSTANTÂNEO - ZERO LOADING STATES
@@ -549,6 +550,9 @@ const Sidebar = React.memo(() => {
 						</a>
 					</div>
 				</div>
+
+				{/* Newsletter */}
+				<NewsletterSection />
 			</div>
 		</div>
 	);
