@@ -166,7 +166,6 @@ const CriticalDataPreloader = () => {
 						dataAPIService.getAllPosts(),
 						dataAPIService.getCategories(),
 					]);
-					console.log("🚀 Critical data preloaded in background");
 				}, 100);
 			} catch (error) {
 				console.warn("⚠️ Background preload failed:", error);
@@ -186,7 +185,7 @@ const ServiceWorkerLoader = () => {
 			setTimeout(() => {
 				navigator.serviceWorker
 					.register("/sw.js")
-					.then(() => console.log("🔧 ServiceWorker registered"))
+					.then()
 					.catch((error) => console.warn("⚠️ ServiceWorker failed:", error));
 			}, 2000);
 		}

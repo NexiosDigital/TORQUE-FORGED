@@ -782,7 +782,6 @@ export class PostService {
 				total: 3,
 			};
 		} catch (error) {
-			console.warn("⚠️ Critical data preload failed:", error);
 			return {
 				success: false,
 				error: error.message,

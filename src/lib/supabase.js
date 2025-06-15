@@ -53,10 +53,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 // Debug em desenvolvimento
 if (process.env.NODE_ENV === "development") {
-	console.log("🔧 Supabase Client inicializado:");
-	console.log("📍 URL:", supabaseUrl);
-	console.log("🔑 Anon Key:", supabaseAnonKey?.substring(0, 20) + "...");
-
 	// Teste de conectividade
 	supabase
 		.from("posts")
@@ -66,7 +62,6 @@ if (process.env.NODE_ENV === "development") {
 			if (error) {
 				console.error("❌ Teste de conectividade falhou:", error);
 			} else {
-				console.log("✅ Conectividade com Supabase: OK");
 			}
 		})
 		.catch((error) => {

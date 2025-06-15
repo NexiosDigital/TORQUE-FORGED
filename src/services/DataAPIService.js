@@ -267,7 +267,6 @@ class DataAPIService {
 			// Warmup silencioso em background
 			setTimeout(async () => {
 				await this.preloadCriticalData();
-				console.log("🚀 Cache warmed up successfully");
 			}, 100);
 		} catch (error) {
 			console.warn("⚠️ Cache warmup failed:", error);
@@ -280,7 +279,6 @@ class DataAPIService {
 	clearMemoryCache() {
 		this.memoryCache.clear();
 		this.cacheTimestamps.clear();
-		console.log("🗑️ Memory cache cleared");
 	}
 
 	getCacheStats() {
