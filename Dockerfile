@@ -4,9 +4,6 @@
 # Stage 1: Build da aplicação
 FROM node:18-alpine AS builder
 
-# CRÍTICO: Definir NODE_ENV para produção
-ENV NODE_ENV=production
-ENV REACT_APP_ENV=production
 
 # Definir diretório de trabalho
 WORKDIR /app
