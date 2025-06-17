@@ -1,21 +1,23 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { Mail, Send, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import {
+	Mail,
+	Send,
+	CheckCircle,
+	AlertCircle,
+	RefreshCw,
+	User,
+} from "lucide-react";
 import { NewsletterService } from "../services/NewsletterService";
 import toast from "react-hot-toast";
 
-/**
- * NewsletterSection - VERSÃO LIMPA (sem testes automáticos)
- * - Diagnóstico apenas manual
- * - Limpeza de emails de teste
- * - Estados visuais claros
- * - Zero inserções automáticas
- */
-
 const NewsletterSection = React.memo(() => {
-	const [email, setEmail] = useState("");
+	const [formData, setFormData] = useState({
+		name: "",
+		email: "",
+	});
 	const [isLoading, setIsLoading] = useState(false);
 	const [isSubscribed, setIsSubscribed] = useState(false);
-	const [error, setError] = useState("");
+	const [errors, setErrors] = useState({});
 	const [retryCount, setRetryCount] = useState(0);
 	const [lastMethod, setLastMethod] = useState("");
 
@@ -44,59 +46,88 @@ const NewsletterSection = React.memo(() => {
 		}
 	}, [isDebugMode]);
 
-	// Validação de email
+	// Validações
 	const isValidEmail = useCallback((email) => {
 		return NewsletterService.validateEmail(email);
 	}, []);
 
-	// Handler para mudança no input
-	const handleEmailChange = useCallback(
-		(e) => {
-			const value = e.target.value;
-			setEmail(value);
+	const isValidName = useCallback((name) => {
+		return NewsletterService.validateName(name);
+	}, []);
 
-			// Limpar estados de erro
-			if (error) {
-				setError("");
+	// Handler para mudança nos inputs
+	const handleInputChange = useCallback(
+		(field, value) => {
+			setFormData((prev) => ({
+				...prev,
+				[field]: value,
+			}));
+
+			// Limpar erro específico do campo
+			if (errors[field]) {
+				setErrors((prev) => ({
+					...prev,
+					[field]: "",
+				}));
 			}
+
+			// Reset retry count quando começar a digitar
 			if (retryCount > 0) {
 				setRetryCount(0);
 			}
 		},
-		[error, retryCount]
+		[errors, retryCount]
 	);
+
+	// Validação em tempo real
+	const validateForm = useCallback(() => {
+		const newErrors = {};
+
+		if (!formData.name.trim()) {
+			newErrors.name = "Nome é obrigatório";
+		} else if (!isValidName(formData.name)) {
+			newErrors.name = "Nome deve ter entre 2 e 100 caracteres";
+		}
+
+		if (!formData.email.trim()) {
+			newErrors.email = "Email é obrigatório";
+		} else if (!isValidEmail(formData.email)) {
+			newErrors.email = "Formato de email inválido";
+		}
+
+		return newErrors;
+	}, [formData, isValidName, isValidEmail]);
 
 	// Handler para submissão ROBUSTO
 	const handleSubmit = useCallback(
 		async (e) => {
 			e.preventDefault();
 
-			// Validações básicas
-			if (!email.trim()) {
-				setError("Email é obrigatório");
-				return;
-			}
-
-			if (!isValidEmail(email)) {
-				setError("Formato de email inválido");
+			// Validações client-side
+			const validationErrors = validateForm();
+			if (Object.keys(validationErrors).length > 0) {
+				setErrors(validationErrors);
 				return;
 			}
 
 			setIsLoading(true);
-			setError("");
+			setErrors({});
 
 			try {
 				if (isDebugMode) {
-					console.log("📧 Newsletter: Submitting email:", email.trim());
+					console.log("📧 Newsletter: Submitting form:", formData);
 				}
 
-				// O service já tem múltiplas estratégias de fallback
-				const result = await NewsletterService.subscribeEmail(email.trim());
+				// O service tem múltiplas estratégias + webhook N8N
+				const result = await NewsletterService.subscribeEmail(
+					formData.email.trim(),
+					formData.name.trim()
+				);
 
 				if (result.success) {
 					// SUCESSO - independente do método usado
 					setIsSubscribed(true);
-					setEmail("");
+					setFormData({ name: "", email: "" });
 					setRetryCount(0);
 					setLastMethod(result.method || "unknown");
 
@@ -128,6 +159,16 @@ const NewsletterSection = React.memo(() => {
 						},
 					});
 
+					// Toast adicional para webhook (se em debug)
+					if (isDebugMode) {
+						setTimeout(() => {
+							toast.success("Dados enviados para automação N8N! 🤖", {
+								duration: 2000,
+								icon: "🔗",
+							});
+						}, 1000);
+					}
+
 					// Reset após 6 segundos
 					setTimeout(() => {
 						setIsSubscribed(false);
@@ -139,7 +180,7 @@ const NewsletterSection = React.memo(() => {
 					}
 				} else {
 					// ERRO - mas ainda tenta ser útil
-					setError(result.error);
+					setErrors({ general: result.error });
 					setRetryCount((prev) => prev + 1);
 
 					toast.error(result.error, {
@@ -158,8 +199,8 @@ const NewsletterSection = React.memo(() => {
 			} catch (error) {
 				// Erro inesperado - ainda assim tenta ser gracioso
 				const errorMessage =
-					"Erro inesperado. Seu email foi salvo para processamento posterior.";
-				setError(errorMessage);
+					"Erro inesperado. Seus dados foram salvos para processamento posterior.";
+				setErrors({ general: errorMessage });
 				setRetryCount((prev) => prev + 1);
 
 				toast.error(errorMessage, {
@@ -173,12 +214,12 @@ const NewsletterSection = React.memo(() => {
 				setIsLoading(false);
 			}
 		},
-		[email, isValidEmail, isDebugMode]
+		[formData, validateForm, isDebugMode]
 	);
 
 	// Retry handler
 	const handleRetry = useCallback(() => {
-		setError("");
+		setErrors({});
 		const currentRetryCount = retryCount;
 		setRetryCount(0);
 
@@ -207,6 +248,17 @@ const NewsletterSection = React.memo(() => {
 						Obrigado por se inscrever na nossa newsletter. Você receberá as
 						últimas novidades do motorsport diretamente no seu email!
 					</p>
+
+					{/* Botão para inscrever outro email */}
+					<button
+						onClick={() => {
+							setIsSubscribed(false);
+							setLastMethod("");
+						}}
+						className="text-green-400 hover:text-green-300 text-sm font-medium transition-colors duration-300"
+					>
+						Inscrever outra pessoa
+					</button>
 				</div>
 			</div>
 		);
@@ -228,15 +280,48 @@ const NewsletterSection = React.memo(() => {
 			</p>
 
 			<form onSubmit={handleSubmit} className="space-y-4">
-				{/* Input de email */}
+				{/* Input de nome */}
 				<div className="relative">
+					<div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+						<User className="w-5 h-5 text-gray-400" />
+					</div>
+					<input
+						type="text"
+						value={formData.name}
+						onChange={(e) => handleInputChange("name", e.target.value)}
+						placeholder="Seu nome completo"
+						disabled={isLoading}
+						className={`
+							w-full pl-12 pr-4 py-3 
+							bg-gray-800/50 border rounded-2xl 
+							text-white placeholder-gray-500
+							focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50
+							disabled:opacity-50 disabled:cursor-not-allowed
+							transition-all duration-300
+							${
+								errors.name
+									? "border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50"
+									: "border-gray-600/50 hover:border-gray-500/50"
+							}
+						`}
+					/>
+					{errors.name && (
+						<div className="absolute -bottom-6 left-0 flex items-center space-x-1 text-red-400 text-xs">
+							<AlertCircle className="w-3 h-3" />
+							<span>{errors.name}</span>
+						</div>
+					)}
+				</div>
+
+				{/* Input de email */}
+				<div className="relative mt-6">
 					<div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
 						<Mail className="w-5 h-5 text-gray-400" />
 					</div>
 					<input
 						type="email"
-						value={email}
-						onChange={handleEmailChange}
+						value={formData.email}
+						onChange={(e) => handleInputChange("email", e.target.value)}
 						placeholder="seu.email@exemplo.com"
 						disabled={isLoading}
 						className={`
@@ -247,21 +332,27 @@ const NewsletterSection = React.memo(() => {
 							disabled:opacity-50 disabled:cursor-not-allowed
 							transition-all duration-300
 							${
-								error
+								errors.email
 									? "border-red-500/50 focus:ring-red-500/50 focus:border-red-500/50"
 									: "border-gray-600/50 hover:border-gray-500/50"
 							}
 						`}
 					/>
+					{errors.email && (
+						<div className="absolute -bottom-6 left-0 flex items-center space-x-1 text-red-400 text-xs">
+							<AlertCircle className="w-3 h-3" />
+							<span>{errors.email}</span>
+						</div>
+					)}
 				</div>
 
-				{/* Mensagem de erro com retry */}
-				{error && (
-					<div className="space-y-3">
+				{/* Mensagem de erro geral com retry */}
+				{errors.general && (
+					<div className="space-y-3 mt-6">
 						<div className="flex items-start space-x-2 text-red-400 text-sm">
 							<AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
 							<div className="flex-1">
-								<p>{error}</p>
+								<p>{errors.general}</p>
 								{retryCount > 0 && (
 									<p className="text-xs text-red-300 mt-1">
 										Tentativa #{retryCount}
@@ -293,10 +384,7 @@ const NewsletterSection = React.memo(() => {
 								</p>
 								<p className="text-yellow-300 text-xs">
 									Entre em contato conosco diretamente:
-									<span className="font-medium">
-										{" "}
-										contato@torqueforgedmotorsport.com
-									</span>
+									<span className="font-medium"> contato@torqueforged.com</span>
 								</p>
 							</div>
 						)}
@@ -306,7 +394,13 @@ const NewsletterSection = React.memo(() => {
 				{/* Botão de submissão */}
 				<button
 					type="submit"
-					disabled={isLoading || !email.trim() || !isValidEmail(email)}
+					disabled={
+						isLoading ||
+						!formData.name.trim() ||
+						!formData.email.trim() ||
+						!isValidName(formData.name) ||
+						!isValidEmail(formData.email)
+					}
 					className={`
 						w-full flex items-center justify-center space-x-2 
 						px-6 py-3 rounded-2xl font-bold text-white
@@ -318,6 +412,7 @@ const NewsletterSection = React.memo(() => {
 								? "bg-blue-600 cursor-wait"
 								: "bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 hover:scale-105 hover:shadow-blue-500/25"
 						}
+						mt-6
 					`}
 				>
 					{isLoading ? (

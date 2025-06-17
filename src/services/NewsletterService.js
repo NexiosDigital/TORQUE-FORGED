@@ -1,11 +1,11 @@
 import { supabase } from "../lib/supabase";
 
 /**
- * NewsletterService - VERSÃO LIMPA (sem inserções de teste)
+ * NewsletterService - VERSÃO COM INTEGRAÇÃO N8N
+ * - Campo nome obrigatório
+ * - Webhook N8N após sucesso no Supabase
  * - Múltiplas estratégias de fallback
- * - Diagnóstico sem inserções reais
- * - Graceful degradation
- * - Sempre funcionará mesmo com Supabase mal configurado
+ * - Graceful degradation se webhook falhar
  */
 
 export class NewsletterService {
@@ -19,10 +19,20 @@ export class NewsletterService {
 	}
 
 	/**
-	 * MÉTODO PRINCIPAL - À PROVA DE FALHAS
-	 * Tenta múltiplas estratégias até uma funcionar
+	 * Validar nome
+	 */
+	static validateName(name) {
+		if (!name || typeof name !== "string") return false;
+		const trimmedName = name.trim();
+		return trimmedName.length >= 2 && trimmedName.length <= 100;
+	}
+
+	/**
+	 * MÉTODO PRINCIPAL - COM WEBHOOK N8N
+	 * Salva no Supabase primeiro, depois chama webhook
 	 */
 	static async subscribeEmail(email, name = "") {
+		// Validações
 		if (!this.validateEmail(email)) {
 			return {
 				success: false,
@@ -30,19 +40,42 @@ export class NewsletterService {
 			};
 		}
 
+		if (!this.validateName(name)) {
+			return {
+				success: false,
+				error: "Nome deve ter entre 2 e 100 caracteres",
+			};
+		}
+
 		const emailLower = email.toLowerCase().trim();
+		const nameTrimmed = name.trim();
 
 		// Estratégia 1: Inserção direta (ideal)
-		const directResult = await this.tryDirectInsert(emailLower, name);
-		if (directResult.success) return directResult;
+		const directResult = await this.tryDirectInsert(emailLower, nameTrimmed);
+		if (directResult.success) {
+			// SUCESSO no Supabase - agora enviar para N8N
+			await this.sendToN8NWebhook(emailLower, nameTrimmed, directResult.data);
+			return directResult;
+		}
 
 		// Estratégia 2: RPC Function (se disponível)
-		const rpcResult = await this.tryRPCInsert(emailLower, name);
-		if (rpcResult.success) return rpcResult;
+		const rpcResult = await this.tryRPCInsert(emailLower, nameTrimmed);
+		if (rpcResult.success) {
+			// SUCESSO no Supabase - agora enviar para N8N
+			await this.sendToN8NWebhook(emailLower, nameTrimmed, rpcResult.data);
+			return rpcResult;
+		}
 
-		// Estratégia 3: Simulação local + API externa (futuro)
-		const simulateResult = await this.trySimulateSuccess(emailLower, name);
-		if (simulateResult.success) return simulateResult;
+		// Estratégia 3: Simulação local + webhook direto
+		const simulateResult = await this.trySimulateSuccess(
+			emailLower,
+			nameTrimmed
+		);
+		if (simulateResult.success) {
+			// Mesmo na simulação, tentar webhook
+			await this.sendToN8NWebhook(emailLower, nameTrimmed, simulateResult.data);
+			return simulateResult;
+		}
 
 		// Se todas falharam, retornar erro amigável
 		return {
@@ -59,7 +92,7 @@ export class NewsletterService {
 		try {
 			const subscriptionData = {
 				email: email,
-				name: name && typeof name === "string" ? name.trim() || null : null,
+				name: name,
 				active: true,
 				created_at: new Date().toISOString(),
 				updated_at: new Date().toISOString(),
@@ -79,7 +112,7 @@ export class NewsletterService {
 
 				// Se for duplicata, tentar reativação
 				if (error.code === "23505" || error.message?.includes("duplicate")) {
-					return this.tryReactivation(email);
+					return this.tryReactivation(email, name);
 				}
 
 				throw error;
@@ -111,7 +144,7 @@ export class NewsletterService {
 			// Tentar chamar uma function RPC que pode contornar RLS
 			const { data, error } = await supabase.rpc("newsletter_subscribe", {
 				p_email: email,
-				p_name: name || null,
+				p_name: name,
 			});
 
 			if (error) {
@@ -156,7 +189,7 @@ export class NewsletterService {
 	/**
 	 * Tentar reativação de email existente
 	 */
-	static async tryReactivation(email) {
+	static async tryReactivation(email, name) {
 		try {
 			// Tentar usando UPSERT que pode ser mais permissivo
 			const { data, error } = await supabase
@@ -165,6 +198,7 @@ export class NewsletterService {
 					[
 						{
 							email: email,
+							name: name, // Atualizar nome também
 							active: true,
 							updated_at: new Date().toISOString(),
 						},
@@ -251,6 +285,70 @@ export class NewsletterService {
 	}
 
 	/**
+	 * ENVIAR PARA WEBHOOK N8N
+	 * Executa após sucesso no Supabase - não bloqueia o fluxo principal
+	 */
+	static async sendToN8NWebhook(email, name, supabaseData) {
+		// Verificar se webhook está configurado
+		const webhookUrl = process.env.REACT_APP_N8N_WEBHOOK_NEWSLETTER;
+
+		if (!webhookUrl) {
+			if (process.env.NODE_ENV === "development") {
+				console.warn("📧 N8N Webhook URL not configured in .env");
+			}
+			return;
+		}
+
+		try {
+			const payload = {
+				email: email,
+				name: name,
+				timestamp: new Date().toISOString(),
+				source: "torque_forged_website",
+				supabase_id: supabaseData?.id || null,
+				metadata: {
+					user_agent: navigator.userAgent,
+					page_url: window.location.href,
+					referrer: document.referrer || null,
+				},
+			};
+
+			if (process.env.NODE_ENV === "development") {
+				console.log("📧 Sending to N8N webhook:", payload);
+			}
+
+			const response = await fetch(webhookUrl, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(payload),
+				// Timeout de 5 segundos para não atrasar a UI
+				signal: AbortSignal.timeout(5000),
+			});
+
+			if (response.ok) {
+				if (process.env.NODE_ENV === "development") {
+					console.log("📧 N8N webhook success:", response.status);
+				}
+			} else {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+		} catch (error) {
+			// IMPORTANTE: Erro no webhook NÃO afeta o sucesso da inscrição
+			if (process.env.NODE_ENV === "development") {
+				console.warn("📧 N8N webhook failed (non-critical):", error.message);
+			}
+
+			// Em produção, logar o erro sem quebrar a experiência
+			if (process.env.NODE_ENV === "production") {
+				// Aqui você poderia enviar para um serviço de logging como Sentry
+				console.warn("Newsletter webhook failed:", error.message);
+			}
+		}
+	}
+
+	/**
 	 * Cancelar inscrição (múltiplas estratégias)
 	 */
 	static async unsubscribeEmail(email) {
@@ -284,6 +382,9 @@ export class NewsletterService {
 					if (rpcError) throw rpcError;
 
 					if (rpcData && rpcData.success) {
+						// Também notificar N8N sobre cancelamento
+						await this.sendUnsubscribeToN8N(email.toLowerCase());
+
 						return {
 							success: true,
 							message: rpcData.message || "Inscrição cancelada com sucesso",
@@ -301,6 +402,9 @@ export class NewsletterService {
 						localStorage.setItem("newsletter_backup", JSON.stringify(filtered));
 					}
 				}
+			} else {
+				// Sucesso no update direto - notificar N8N
+				await this.sendUnsubscribeToN8N(email.toLowerCase());
 			}
 
 			return {
@@ -316,12 +420,45 @@ export class NewsletterService {
 	}
 
 	/**
+	 * Notificar N8N sobre cancelamento
+	 */
+	static async sendUnsubscribeToN8N(email) {
+		const webhookUrl = process.env.REACT_APP_N8N_WEBHOOK_NEWSLETTER;
+
+		if (!webhookUrl) return;
+
+		try {
+			const payload = {
+				email: email,
+				action: "unsubscribe",
+				timestamp: new Date().toISOString(),
+				source: "torque_forged_website",
+			};
+
+			await fetch(webhookUrl, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(payload),
+				signal: AbortSignal.timeout(5000),
+			});
+		} catch (error) {
+			// Não crítico se falhar
+			if (process.env.NODE_ENV === "development") {
+				console.warn("📧 N8N unsubscribe webhook failed:", error.message);
+			}
+		}
+	}
+
+	/**
 	 * Diagnóstico SEGURO - SEM INSERÇÕES REAIS
 	 */
 	static async runDiagnostic() {
 		const results = {
 			timestamp: new Date().toISOString(),
 			strategies: {},
+			webhook: {},
 		};
 
 		// Testar estratégia 1: Verificar acesso à tabela (SELECT apenas)
@@ -400,6 +537,52 @@ export class NewsletterService {
 			};
 		}
 
+		// Testar webhook N8N
+		const webhookUrl = process.env.REACT_APP_N8N_WEBHOOK_NEWSLETTER;
+
+		if (webhookUrl) {
+			try {
+				const testPayload = {
+					email: "diagnostic-test@webhook.check",
+					name: "Webhook Test",
+					action: "diagnostic_ping",
+					timestamp: new Date().toISOString(),
+					source: "torque_forged_diagnostic",
+				};
+
+				const response = await fetch(webhookUrl, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(testPayload),
+					signal: AbortSignal.timeout(5000),
+				});
+
+				results.webhook = {
+					configured: true,
+					working: response.ok,
+					status: response.status,
+					error: response.ok ? null : `HTTP ${response.status}`,
+					note: response.ok ? "Webhook responding" : "Webhook not responding",
+				};
+			} catch (error) {
+				results.webhook = {
+					configured: true,
+					working: false,
+					error: error.message,
+					note: "Webhook timeout or network error",
+				};
+			}
+		} else {
+			results.webhook = {
+				configured: false,
+				working: false,
+				error: "REACT_APP_N8N_WEBHOOK_NEWSLETTER not set",
+				note: "Webhook URL not configured",
+			};
+		}
+
 		// Log apenas em desenvolvimento
 		if (process.env.NODE_ENV === "development") {
 			console.log("📧 Newsletter Diagnostic Results:", results);
@@ -421,6 +604,7 @@ export class NewsletterService {
 				"diagnostic-check-only@invalid.test",
 				"test@example.com",
 				"test@test.com",
+				"diagnostic-test@webhook.check",
 			];
 
 			// Tentar remover via RPC se disponível
@@ -452,6 +636,8 @@ export class NewsletterService {
 							email.includes("diagnostic") ||
 							email.includes("@test.") ||
 							email.includes("@example.") ||
+							email.includes("@invalid.") ||
+							email.includes("@webhook.") ||
 							email.match(/test-\d+@/)
 					);
 

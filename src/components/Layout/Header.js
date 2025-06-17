@@ -296,6 +296,242 @@ const Header = () => {
 	const [isLoggingOut, setIsLoggingOut] = useState(false);
 	const location = useLocation();
 
+	// Estrutura do mega menu com categorias e subcategorias
+	const megaMenuData = {
+		corridas: {
+			name: "Corridas",
+			color: "from-red-500 to-orange-500",
+			icon: "🏁",
+			subcategories: {
+				"formula-1": {
+					name: "Fórmula 1",
+					href: "/f1",
+					items: [
+						{ name: "Equipes", href: "/f1/equipes" },
+						{ name: "Pilotos", href: "/f1/pilotos" },
+						{ name: "Calendário", href: "/f1/calendario" },
+						{ name: "Notícias", href: "/f1" },
+						{ name: "Análises Técnicas", href: "/f1/analises" },
+						{ name: "Regulamentos", href: "/f1/regulamentos" },
+					],
+				},
+				nascar: {
+					name: "NASCAR",
+					href: "/nascar",
+					items: [
+						{ name: "Cup Series", href: "/nascar/cup-series" },
+						{ name: "Pilotos", href: "/nascar/pilotos" },
+						{ name: "Corridas", href: "/nascar/corridas" },
+						{ name: "Notícias", href: "/nascar" },
+						{ name: "Histórico", href: "/nascar/historia" },
+					],
+				},
+				endurance: {
+					name: "Endurance",
+					href: "/endurance",
+					items: [
+						{ name: "Le Mans 24h", href: "/endurance/le-mans" },
+						{ name: "IMSA", href: "/endurance/imsa" },
+						{ name: "WEC", href: "/endurance/wec" },
+						{ name: "Equipas", href: "/endurance/equipas" },
+						{ name: "Notícias", href: "/endurance" },
+					],
+				},
+				drift: {
+					name: "Formula Drift",
+					href: "/drift",
+					items: [
+						{ name: "Pilotos", href: "/drift/pilotos" },
+						{ name: "Carros", href: "/drift/carros" },
+						{ name: "Eventos", href: "/drift/eventos" },
+						{ name: "Técnicas", href: "/drift/tecnicas" },
+						{ name: "Notícias", href: "/drift" },
+					],
+				},
+			},
+		},
+		marcas: {
+			name: "Marcas",
+			color: "from-blue-500 to-cyan-500",
+			icon: "🏎️",
+			subcategories: {
+				ferrari: {
+					name: "Ferrari",
+					href: "/marcas/ferrari",
+					items: [
+						{ name: "História", href: "/marcas/ferrari/historia" },
+						{ name: "Modelos", href: "/marcas/ferrari/modelos" },
+						{ name: "Scuderia F1", href: "/marcas/ferrari/f1" },
+						{ name: "Notícias", href: "/marcas/ferrari" },
+						{ name: "Tecnologia", href: "/marcas/ferrari/tecnologia" },
+					],
+				},
+				mclaren: {
+					name: "McLaren",
+					href: "/marcas/mclaren",
+					items: [
+						{ name: "História", href: "/marcas/mclaren/historia" },
+						{ name: "Modelos", href: "/marcas/mclaren/modelos" },
+						{ name: "F1 Team", href: "/marcas/mclaren/f1" },
+						{ name: "Tecnologia", href: "/marcas/mclaren/tecnologia" },
+						{ name: "Notícias", href: "/marcas/mclaren" },
+					],
+				},
+				"red-bull": {
+					name: "Red Bull",
+					href: "/marcas/red-bull",
+					items: [
+						{ name: "Red Bull Racing", href: "/marcas/red-bull/f1" },
+						{ name: "Extreme Sports", href: "/marcas/red-bull/extreme" },
+						{ name: "Atletas", href: "/marcas/red-bull/atletas" },
+						{ name: "Eventos", href: "/marcas/red-bull/eventos" },
+						{ name: "Notícias", href: "/marcas/red-bull" },
+					],
+				},
+				mercedes: {
+					name: "Mercedes",
+					href: "/marcas/mercedes",
+					items: [
+						{ name: "Mercedes F1", href: "/marcas/mercedes/f1" },
+						{ name: "Mercedes-AMG", href: "/marcas/mercedes/amg" },
+						{ name: "História", href: "/marcas/mercedes/historia" },
+						{ name: "Inovação", href: "/marcas/mercedes/inovacao" },
+						{ name: "Notícias", href: "/marcas/mercedes" },
+					],
+				},
+				lamborghini: {
+					name: "Lamborghini",
+					href: "/marcas/lamborghini",
+					items: [
+						{ name: "Supercarros", href: "/marcas/lamborghini/modelos" },
+						{ name: "História", href: "/marcas/lamborghini/historia" },
+						{ name: "Motorsport", href: "/marcas/lamborghini/motorsport" },
+						{ name: "Super Trofeo", href: "/marcas/lamborghini/trofeo" },
+						{ name: "Notícias", href: "/marcas/lamborghini" },
+					],
+				},
+				porsche: {
+					name: "Porsche",
+					href: "/marcas/porsche",
+					items: [
+						{ name: "911", href: "/marcas/porsche/911" },
+						{ name: "Motorsport", href: "/marcas/porsche/motorsport" },
+						{ name: "História", href: "/marcas/porsche/historia" },
+						{ name: "Tecnologia", href: "/marcas/porsche/tecnologia" },
+						{ name: "Notícias", href: "/marcas/porsche" },
+					],
+				},
+			},
+		},
+		preparacao: {
+			name: "Preparação",
+			color: "from-green-500 to-emerald-500",
+			icon: "🔧",
+			subcategories: {
+				tuning: {
+					name: "Tuning",
+					href: "/tuning",
+					items: [
+						{ name: "Preparação de Motor", href: "/tuning/motor" },
+						{ name: "Suspensão", href: "/tuning/suspensao" },
+						{ name: "Aerodinâmica", href: "/tuning/aero" },
+						{ name: "Visual", href: "/tuning/visual" },
+						{ name: "Notícias", href: "/tuning" },
+					],
+				},
+				motores: {
+					name: "Motores",
+					href: "/engines",
+					items: [
+						{ name: "Motores Aspirados", href: "/engines/aspirados" },
+						{ name: "Turbo", href: "/engines/turbo" },
+						{ name: "Híbridos", href: "/engines/hibridos" },
+						{ name: "Elétricos", href: "/engines/eletricos" },
+						{ name: "Notícias", href: "/engines" },
+					],
+				},
+				performance: {
+					name: "Performance",
+					href: "/performance",
+					items: [
+						{ name: "Sistema de Freios", href: "/performance/freios" },
+						{ name: "Pneus", href: "/performance/pneus" },
+						{ name: "Aerodinâmica", href: "/performance/aero" },
+						{ name: "Eletrônica", href: "/performance/eletronica" },
+						{ name: "Setup", href: "/performance/setup" },
+					],
+				},
+				custom: {
+					name: "Custom",
+					href: "/custom",
+					items: [
+						{ name: "Paint Jobs", href: "/custom/paint" },
+						{ name: "Interior", href: "/custom/interior" },
+						{ name: "Audio", href: "/custom/audio" },
+						{ name: "Rodas", href: "/custom/rodas" },
+						{ name: "Iluminação", href: "/custom/led" },
+					],
+				},
+			},
+		},
+		tecnologia: {
+			name: "Tecnologia",
+			color: "from-purple-500 to-pink-500",
+			icon: "⚙️",
+			subcategories: {
+				"motores-tech": {
+					name: "Motores",
+					href: "/tecnologia/motores",
+					items: [
+						{ name: "V8 & V10", href: "/tecnologia/motores/v8-v10" },
+						{ name: "V12", href: "/tecnologia/motores/v12" },
+						{ name: "Híbridos", href: "/tecnologia/motores/hibridos" },
+						{ name: "Elétricos", href: "/tecnologia/motores/eletricos" },
+						{ name: "Inovações", href: "/tecnologia/motores/inovacoes" },
+					],
+				},
+				aerodinamica: {
+					name: "Aerodinâmica",
+					href: "/tecnologia/aerodinamica",
+					items: [
+						{ name: "Fórmula 1", href: "/tecnologia/aero/f1" },
+						{ name: "GT & LMP", href: "/tecnologia/aero/gt" },
+						{ name: "Drift", href: "/tecnologia/aero/drift" },
+						{ name: "CFD", href: "/tecnologia/aero/cfd" },
+						{ name: "Túnel de Vento", href: "/tecnologia/aero/tunel" },
+					],
+				},
+				eletronica: {
+					name: "Eletrônica",
+					href: "/tecnologia/eletronica",
+					items: [
+						{ name: "ECU", href: "/tecnologia/eletronica/ecu" },
+						{ name: "Telemetria", href: "/tecnologia/eletronica/telemetria" },
+						{ name: "Simuladores", href: "/tecnologia/eletronica/sim" },
+						{ name: "Data Logger", href: "/tecnologia/eletronica/data" },
+						{ name: "Sensores", href: "/tecnologia/eletronica/sensores" },
+					],
+				},
+				materiais: {
+					name: "Materiais",
+					href: "/tecnologia/materiais",
+					items: [
+						{ name: "Fibra de Carbono", href: "/tecnologia/materiais/carbono" },
+						{ name: "Titânio", href: "/tecnologia/materiais/titanio" },
+						{ name: "Cerâmica", href: "/tecnologia/materiais/ceramica" },
+						{ name: "Kevlar", href: "/tecnologia/materiais/kevlar" },
+						{ name: "Composites", href: "/tecnologia/materiais/composites" },
+					],
+				},
+			},
+		},
+	};
+
+	// Estado para controlar o mega menu
+	const [activeMegaMenu, setActiveMegaMenu] = useState(null);
+	const [activeSubcategory, setActiveSubcategory] = useState(null);
+	const megaMenuTimeoutRef = useRef(null);
+
 	// USAR TODOS OS ESTADOS DO AUTH + DEBUG
 	const {
 		user,
@@ -341,15 +577,38 @@ const Header = () => {
 		return () => window.removeEventListener("scroll", handleScroll);
 	}, []);
 
+	// Limpar timeout quando componente desmonta
+	useEffect(() => {
+		return () => {
+			if (megaMenuTimeoutRef.current) {
+				clearTimeout(megaMenuTimeoutRef.current);
+			}
+		};
+	}, []);
+
 	useEffect(() => {
 		const handleClickOutside = (event) => {
 			if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
 				setIsUserMenuOpen(false);
 			}
 		};
+
+		const handleMegaMenuClickOutside = (event) => {
+			// Fechar mega menu se clicar fora dele
+			if (activeMegaMenu && !event.target.closest(".mega-menu-container")) {
+				setActiveMegaMenu(null);
+				setActiveSubcategory(null);
+			}
+		};
+
 		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
+		document.addEventListener("click", handleMegaMenuClickOutside);
+
+		return () => {
+			document.removeEventListener("mousedown", handleClickOutside);
+			document.removeEventListener("click", handleMegaMenuClickOutside);
+		};
+	}, [activeMegaMenu]);
 
 	useEffect(() => {
 		const handleKeyDown = (e) => {
@@ -363,14 +622,30 @@ const Header = () => {
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, []);
 
-	const navigation = [
-		{ name: "F1", href: "/f1" },
-		{ name: "NASCAR", href: "/nascar" },
-		{ name: "Endurance", href: "/endurance" },
-		{ name: "Drift", href: "/drift" },
-		{ name: "Tuning", href: "/tuning" },
-		{ name: "Motores", href: "/engines" },
-	];
+	// Funções para controlar o mega menu
+	const handleMegaMenuEnter = (menuKey) => {
+		if (megaMenuTimeoutRef.current) {
+			clearTimeout(megaMenuTimeoutRef.current);
+		}
+		setActiveMegaMenu(menuKey);
+
+		// Auto-selecionar a primeira subcategoria
+		const firstSubcategory = Object.keys(
+			megaMenuData[menuKey].subcategories
+		)[0];
+		setActiveSubcategory(firstSubcategory);
+	};
+
+	const handleMegaMenuLeave = () => {
+		megaMenuTimeoutRef.current = setTimeout(() => {
+			setActiveMegaMenu(null);
+			setActiveSubcategory(null);
+		}, 150);
+	};
+
+	const handleSubcategoryEnter = (subcategoryKey) => {
+		setActiveSubcategory(subcategoryKey);
+	};
 
 	const secondaryNav = [
 		{ name: "Sobre", href: "/about" },
@@ -578,34 +853,194 @@ const Header = () => {
 							</Link>
 						</div>
 
-						{/* Desktop Navigation - Responsivo */}
-						<div className="hidden lg:block flex-1 max-w-4xl mx-4">
-							<div
-								className="flex items-center justify-center 
-								lg:space-x-1 
-								medium-navbar:space-x-0.5
-								xl:space-x-1
-							"
-							>
-								{navigation.map((item) => (
-									<Link
-										key={item.name}
-										to={item.href}
-										className={`relative px-4 py-2 rounded-xl text-lg font-semibold transition-all duration-300 
-											medium-navbar:px-1.5 medium-navbar:text-base
-											xl:px-4
-											hover:text-xl
-											${
-												location.pathname === item.href
-													? "text-white"
-													: "text-gray-300 hover:text-white"
-											}`}
+						{/* Desktop Mega Menu Navigation */}
+						<div className="hidden lg:block flex-1 max-w-4xl mx-4 relative">
+							<div className="flex items-center justify-center lg:space-x-1 medium-navbar:space-x-0.5 xl:space-x-2">
+								{Object.entries(megaMenuData).map(([menuKey, menuData]) => (
+									<div
+										key={menuKey}
+										className="relative mega-menu-container"
+										onMouseEnter={() => handleMegaMenuEnter(menuKey)}
+										onMouseLeave={handleMegaMenuLeave}
 									>
-										{location.pathname === item.href && (
-											<div className="absolute inset-0 bg-gradient-to-r from-red-600 to-red-500 rounded-xl shadow-lg"></div>
+										<button
+											className={`relative px-4 py-3 rounded-xl text-lg font-semibold transition-all duration-300 
+												medium-navbar:px-2 medium-navbar:text-base
+												xl:px-4
+												flex items-center space-x-2
+												${
+													activeMegaMenu === menuKey
+														? "text-white bg-gradient-to-r from-red-600 to-red-500 shadow-lg"
+														: "text-gray-300 hover:text-white hover:bg-gray-800/50"
+												}`}
+										>
+											<span className="text-sm">{menuData.icon}</span>
+											<span>{menuData.name}</span>
+											<ChevronDown
+												className={`w-4 h-4 transition-transform duration-300 ${
+													activeMegaMenu === menuKey ? "rotate-180" : ""
+												}`}
+											/>
+										</button>
+
+										{/* Mega Menu Dropdown */}
+										{activeMegaMenu === menuKey && (
+											<div
+												className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-screen max-w-6xl bg-black/95 backdrop-blur-md border border-gray-700/50 rounded-3xl shadow-2xl z-50 overflow-hidden"
+												onMouseEnter={() => handleMegaMenuEnter(menuKey)}
+												onMouseLeave={handleMegaMenuLeave}
+											>
+												<div className="grid grid-cols-12 min-h-[400px]">
+													{/* Left Sidebar - Subcategorias */}
+													<div className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 border-r border-gray-700/50 p-6">
+														<div className="mb-6">
+															<div
+																className={`inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r ${menuData.color} text-white text-sm font-bold shadow-lg`}
+															>
+																<span className="mr-2">{menuData.icon}</span>
+																{menuData.name}
+															</div>
+														</div>
+														<div className="space-y-2">
+															{Object.entries(menuData.subcategories).map(
+																([subKey, subData]) => (
+																	<div
+																		key={subKey}
+																		onMouseEnter={() =>
+																			handleSubcategoryEnter(subKey)
+																		}
+																		className={`block w-full p-3 rounded-xl text-left transition-all duration-300 cursor-pointer
+																		${
+																			activeSubcategory === subKey
+																				? `bg-gradient-to-r ${menuData.color} text-white shadow-lg`
+																				: "text-gray-300 hover:text-white hover:bg-gray-800/50"
+																		}`}
+																	>
+																		<div className="font-semibold">
+																			{subData.name}
+																		</div>
+																		<div className="text-xs opacity-75 mt-1">
+																			{subData.items.length} itens
+																		</div>
+																	</div>
+																)
+															)}
+														</div>
+													</div>
+
+													{/* Right Content - Items da subcategoria ativa */}
+													<div className="col-span-9 p-8 bg-gradient-to-br from-gray-800 to-gray-900">
+														{activeSubcategory &&
+														megaMenuData[menuKey].subcategories[
+															activeSubcategory
+														] ? (
+															<div className="animate-in slide-in-from-right-5 duration-200">
+																<div className="mb-8">
+																	<h3 className="text-2xl font-black text-white mb-2">
+																		{
+																			megaMenuData[menuKey].subcategories[
+																				activeSubcategory
+																			].name
+																		}
+																	</h3>
+																	<p className="text-gray-400">
+																		Explore todo o conteúdo sobre{" "}
+																		{megaMenuData[menuKey].subcategories[
+																			activeSubcategory
+																		].name.toLowerCase()}
+																	</p>
+																</div>
+
+																<div className="grid grid-cols-2 gap-6">
+																	{megaMenuData[menuKey].subcategories[
+																		activeSubcategory
+																	].items.map((item, index) => (
+																		<Link
+																			key={`${activeSubcategory}-${index}`}
+																			to={item.href}
+																			onClick={() => {
+																				setActiveMegaMenu(null);
+																				setActiveSubcategory(null);
+																			}}
+																			className="group flex items-center space-x-4 p-4 rounded-xl hover:bg-gray-700/50 transition-all duration-300 border border-transparent hover:border-gray-600/50"
+																		>
+																			<div
+																				className={`w-3 h-3 rounded-full bg-gradient-to-r ${menuData.color} shadow-lg group-hover:scale-125 transition-transform duration-300`}
+																			></div>
+																			<div className="flex-1">
+																				<h4 className="text-white font-semibold group-hover:text-gray-100 transition-colors duration-300">
+																					{item.name}
+																				</h4>
+																			</div>
+																			<ArrowRight className="w-4 h-4 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all duration-300" />
+																		</Link>
+																	))}
+																</div>
+
+																{/* Ver todos link */}
+																<div className="mt-8 pt-6 border-t border-gray-700/50">
+																	<Link
+																		to={
+																			megaMenuData[menuKey].subcategories[
+																				activeSubcategory
+																			].href
+																		}
+																		onClick={() => {
+																			setActiveMegaMenu(null);
+																			setActiveSubcategory(null);
+																		}}
+																		className={`inline-flex items-center space-x-2 bg-gradient-to-r ${menuData.color} hover:shadow-lg hover:scale-105 text-white px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-md`}
+																	>
+																		<span>
+																			Ver tudo sobre{" "}
+																			{
+																				megaMenuData[menuKey].subcategories[
+																					activeSubcategory
+																				].name
+																			}
+																		</span>
+																		<ArrowRight className="w-4 h-4" />
+																	</Link>
+																</div>
+															</div>
+														) : (
+															<div className="text-center py-16 animate-in fade-in duration-200">
+																<div
+																	className={`w-20 h-20 bg-gradient-to-r ${menuData.color} rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl`}
+																>
+																	<span className="text-3xl">
+																		{menuData.icon}
+																	</span>
+																</div>
+																<h3 className="text-2xl font-bold text-white mb-4">
+																	{menuData.name}
+																</h3>
+																<p className="text-gray-400 mb-8 max-w-md mx-auto">
+																	Passe o mouse sobre uma categoria à esquerda
+																	para ver o conteúdo disponível
+																</p>
+																<div className="flex flex-wrap gap-3 justify-center max-w-lg mx-auto">
+																	{Object.entries(menuData.subcategories).map(
+																		([subKey, subData]) => (
+																			<button
+																				key={subKey}
+																				onMouseEnter={() =>
+																					handleSubcategoryEnter(subKey)
+																				}
+																				className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 bg-gradient-to-r ${menuData.color}/20 text-white hover:${menuData.color} hover:shadow-lg hover:scale-105`}
+																			>
+																				{subData.name}
+																			</button>
+																		)
+																	)}
+																</div>
+															</div>
+														)}
+													</div>
+												</div>
+											</div>
 										)}
-										<span className="relative z-10">{item.name}</span>
-									</Link>
+									</div>
 								))}
 							</div>
 						</div>
@@ -687,21 +1122,59 @@ const Header = () => {
 				{/* Mobile Menu */}
 				{isMenuOpen && (
 					<div className="lg:hidden bg-black/95 backdrop-blur-md border-t border-red-500/20">
-						<div className="px-4 pt-4 pb-6 space-y-2">
-							{/* Main Navigation */}
-							{navigation.map((item) => (
-								<Link
-									key={item.name}
-									to={item.href}
-									onClick={() => setIsMenuOpen(false)}
-									className={`block px-4 py-3 rounded-xl text-base font-medium transition-all duration-300 ${
-										location.pathname === item.href
-											? "bg-gradient-to-r from-red-600 to-red-500 text-white"
-											: "text-gray-300 hover:bg-gray-800/50 hover:text-white"
-									}`}
-								>
-									{item.name}
-								</Link>
+						<div className="px-4 pt-4 pb-6 space-y-3 max-h-[80vh] overflow-y-auto">
+							{/* Mega Menu categories for mobile */}
+							{Object.entries(megaMenuData).map(([menuKey, menuData]) => (
+								<div key={`mobile-${menuKey}`} className="space-y-2">
+									{/* Category Header */}
+									<div
+										className={`flex items-center px-4 py-3 rounded-xl bg-gradient-to-r ${menuData.color} shadow-lg`}
+									>
+										<span className="mr-3">{menuData.icon}</span>
+										<span className="text-white font-bold text-lg">
+											{menuData.name}
+										</span>
+									</div>
+
+									{/* Subcategories */}
+									<div className="ml-4 space-y-1">
+										{Object.entries(menuData.subcategories).map(
+											([subKey, subData]) => (
+												<div key={`mobile-sub-${subKey}`} className="space-y-1">
+													<Link
+														to={subData.href}
+														onClick={() => setIsMenuOpen(false)}
+														className="block px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-300 font-medium"
+													>
+														{subData.name}
+													</Link>
+													{/* Sub-items (optional, can be expandable) */}
+													<div className="ml-4 space-y-1">
+														{subData.items.slice(0, 3).map((item, index) => (
+															<Link
+																key={`mobile-item-${index}`}
+																to={item.href}
+																onClick={() => setIsMenuOpen(false)}
+																className="block px-3 py-1 text-sm text-gray-400 hover:text-gray-300 transition-colors duration-300"
+															>
+																• {item.name}
+															</Link>
+														))}
+														{subData.items.length > 3 && (
+															<Link
+																to={subData.href}
+																onClick={() => setIsMenuOpen(false)}
+																className="block px-3 py-1 text-sm text-red-400 hover:text-red-300 transition-colors duration-300"
+															>
+																+ Ver mais {subData.items.length - 3}
+															</Link>
+														)}
+													</div>
+												</div>
+											)
+										)}
+									</div>
+								</div>
 							))}
 
 							{/* Divider */}
