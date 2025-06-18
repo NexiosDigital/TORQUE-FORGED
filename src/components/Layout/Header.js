@@ -113,7 +113,7 @@ const SearchModal = ({ isOpen, onClose }) => {
 	if (!isOpen) return null;
 
 	return (
-		<div className="fixed inset-0 z-50 overflow-hidden">
+		<div className="fixed inset-0 z-[100] overflow-hidden">
 			<div
 				className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300"
 				onClick={onClose}
@@ -296,7 +296,7 @@ const Header = () => {
 	const [isLoggingOut, setIsLoggingOut] = useState(false);
 	const location = useLocation();
 
-	// Estrutura do mega menu com categorias e subcategorias
+	// Estrutura do mega menu com categorias e subcategorias CORRIGIDA
 	const megaMenuData = {
 		corridas: {
 			name: "Corridas",
@@ -532,7 +532,6 @@ const Header = () => {
 	const [activeSubcategory, setActiveSubcategory] = useState(null);
 	const megaMenuTimeoutRef = useRef(null);
 
-	// USAR TODOS OS ESTADOS DO AUTH + DEBUG
 	const {
 		user,
 		profile,
@@ -546,30 +545,6 @@ const Header = () => {
 	} = useAuth();
 
 	const userMenuRef = useRef(null);
-
-	// Debug melhorado
-	useEffect(() => {
-		if (process.env.NODE_ENV === "development") {
-			/*
-			console.log("🎛️ Header Auth State:", {
-				sessionChecked,
-				user: !!user,
-				profile: !!profile,
-				isAdmin,
-				authLoading,
-				profileLoading,
-				...(debugState || {}),
-			});*/
-		}
-	}, [
-		sessionChecked,
-		user,
-		profile,
-		isAdmin,
-		authLoading,
-		profileLoading,
-		debugState,
-	]);
 
 	useEffect(() => {
 		const handleScroll = () => setScrollY(window.scrollY);
@@ -652,7 +627,6 @@ const Header = () => {
 		{ name: "Contato", href: "/contact" },
 	];
 
-	// SIGNOUT SIMPLIFICADO - usa o do AuthContext
 	const handleSignOut = async () => {
 		if (isLoggingOut) return;
 
@@ -698,7 +672,6 @@ const Header = () => {
 
 	// UserMenu COM ESTADOS CORRIGIDOS
 	const UserMenu = () => {
-		// Estado 1: Sessão ainda não verificada
 		if (!sessionChecked) {
 			return (
 				<div className="flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50">
@@ -710,12 +683,10 @@ const Header = () => {
 			);
 		}
 
-		// Estado 2: Sessão verificada, mas não há usuário
 		if (sessionChecked && !user) {
-			return null; // Não mostrar menu
+			return null;
 		}
 
-		// Estado 3: Há usuário, mas ainda carregando auth ou profile
 		if (user && (authLoading || profileLoading)) {
 			return (
 				<div className="flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50">
@@ -727,7 +698,6 @@ const Header = () => {
 			);
 		}
 
-		// Estado 4: Tudo carregado - mostrar menu completo
 		if (!user) return null;
 
 		return (
@@ -835,11 +805,7 @@ const Header = () => {
 							<Link to="/" className="flex items-center space-x-4">
 								<div className="relative group">
 									<div className="w-12 h-12 bg-gradient-to-r from-red-600 to-red-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-red-500/25 transition-all duration-300">
-										<Settings
-											className="w-7 h-7 text-white group-hover:rotate-45 transition-transform duration-300 
-											lg:block xl:block 
-										"
-										/>
+										<Settings className="w-7 h-7 text-white group-hover:rotate-45 transition-transform duration-300" />
 									</div>
 								</div>
 								<div className="hidden sm:block">
@@ -853,9 +819,9 @@ const Header = () => {
 							</Link>
 						</div>
 
-						{/* Desktop Mega Menu Navigation */}
-						<div className="hidden lg:block flex-1 max-w-4xl mx-4 relative">
-							<div className="flex items-center justify-center lg:space-x-1 medium-navbar:space-x-0.5 xl:space-x-2">
+						{/* Desktop Mega Menu Navigation - CORRIGIDO */}
+						<div className="hidden lg:block flex-1 max-w-4xl mx-4">
+							<div className="flex items-center justify-center space-x-2">
 								{Object.entries(megaMenuData).map(([menuKey, menuData]) => (
 									<div
 										key={menuKey}
@@ -864,18 +830,14 @@ const Header = () => {
 										onMouseLeave={handleMegaMenuLeave}
 									>
 										<button
-											className={`relative px-4 py-3 rounded-xl text-lg font-semibold transition-all duration-300 
-												medium-navbar:px-2 medium-navbar:text-base
-												xl:px-4
-												flex items-center space-x-2
-												${
-													activeMegaMenu === menuKey
-														? "text-white bg-gradient-to-r from-red-600 to-red-500 shadow-lg"
-														: "text-gray-300 hover:text-white hover:bg-gray-800/50"
-												}`}
+											className={`relative px-4 py-3 rounded-xl text-lg font-semibold transition-all duration-300 flex items-center space-x-2 ${
+												activeMegaMenu === menuKey
+													? "text-white bg-gradient-to-r from-red-600 to-red-500 shadow-lg"
+													: "text-gray-300 hover:text-white hover:bg-gray-800/50"
+											}`}
 										>
 											<span className="text-sm">{menuData.icon}</span>
-											<span>{menuData.name}</span>
+											<span className="whitespace-nowrap">{menuData.name}</span>
 											<ChevronDown
 												className={`w-4 h-4 transition-transform duration-300 ${
 													activeMegaMenu === menuKey ? "rotate-180" : ""
@@ -883,10 +845,19 @@ const Header = () => {
 											/>
 										</button>
 
-										{/* Mega Menu Dropdown */}
+										{/* Mega Menu Dropdown - POSICIONAMENTO CORRIGIDO */}
 										{activeMegaMenu === menuKey && (
 											<div
-												className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-screen max-w-6xl bg-black/95 backdrop-blur-md border border-gray-700/50 rounded-3xl shadow-2xl z-50 overflow-hidden"
+												className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-screen max-w-6xl bg-black/95 backdrop-blur-md border border-gray-700/50 rounded-3xl shadow-2xl z-[60] overflow-hidden"
+												style={{
+													position: "absolute",
+													zIndex: 60,
+													left: "50%",
+													transform: "translateX(-50%)",
+													maxWidth: "min(90vw, 1200px)",
+													width: "max-content",
+													minWidth: "800px",
+												}}
 												onMouseEnter={() => handleMegaMenuEnter(menuKey)}
 												onMouseLeave={handleMegaMenuLeave}
 											>
@@ -898,7 +869,9 @@ const Header = () => {
 																className={`inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r ${menuData.color} text-white text-sm font-bold shadow-lg`}
 															>
 																<span className="mr-2">{menuData.icon}</span>
-																{menuData.name}
+																<span className="whitespace-nowrap">
+																	{menuData.name}
+																</span>
 															</div>
 														</div>
 														<div className="space-y-2">
@@ -909,14 +882,13 @@ const Header = () => {
 																		onMouseEnter={() =>
 																			handleSubcategoryEnter(subKey)
 																		}
-																		className={`block w-full p-3 rounded-xl text-left transition-all duration-300 cursor-pointer
-																		${
+																		className={`block w-full p-3 rounded-xl text-left transition-all duration-300 cursor-pointer ${
 																			activeSubcategory === subKey
 																				? `bg-gradient-to-r ${menuData.color} text-white shadow-lg`
 																				: "text-gray-300 hover:text-white hover:bg-gray-800/50"
 																		}`}
 																	>
-																		<div className="font-semibold">
+																		<div className="font-semibold whitespace-nowrap">
 																			{subData.name}
 																		</div>
 																		<div className="text-xs opacity-75 mt-1">
@@ -929,7 +901,7 @@ const Header = () => {
 													</div>
 
 													{/* Right Content - Items da subcategoria ativa */}
-													<div className="col-span-9 p-8 bg-gradient-to-br from-gray-800 to-gray-900">
+													<div className="col-span-9 p-8 bg-gradient-to-br from-gray-800 to-gray-900 overflow-y-auto max-h-[500px]">
 														{activeSubcategory &&
 														megaMenuData[menuKey].subcategories[
 															activeSubcategory
@@ -968,7 +940,7 @@ const Header = () => {
 																				className={`w-3 h-3 rounded-full bg-gradient-to-r ${menuData.color} shadow-lg group-hover:scale-125 transition-transform duration-300`}
 																			></div>
 																			<div className="flex-1">
-																				<h4 className="text-white font-semibold group-hover:text-gray-100 transition-colors duration-300">
+																				<h4 className="text-white font-semibold group-hover:text-gray-100 transition-colors duration-300 whitespace-nowrap">
 																					{item.name}
 																				</h4>
 																			</div>
@@ -991,7 +963,7 @@ const Header = () => {
 																		}}
 																		className={`inline-flex items-center space-x-2 bg-gradient-to-r ${menuData.color} hover:shadow-lg hover:scale-105 text-white px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-md`}
 																	>
-																		<span>
+																		<span className="whitespace-nowrap">
 																			Ver tudo sobre{" "}
 																			{
 																				megaMenuData[menuKey].subcategories[
@@ -1027,7 +999,7 @@ const Header = () => {
 																				onMouseEnter={() =>
 																					handleSubcategoryEnter(subKey)
 																				}
-																				className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 bg-gradient-to-r ${menuData.color}/20 text-white hover:${menuData.color} hover:shadow-lg hover:scale-105`}
+																				className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 bg-gradient-to-r ${menuData.color}/20 text-white hover:${menuData.color} hover:shadow-lg hover:scale-105 whitespace-nowrap`}
 																			>
 																				{subData.name}
 																			</button>
@@ -1046,18 +1018,9 @@ const Header = () => {
 						</div>
 
 						{/* Right Side Actions */}
-						<div
-							className="flex items-center space-x-3 
-							medium-navbar:space-x-2
-						"
-						>
-							{/* Social Media - Hidden on mobile and medium navbar */}
-							<div
-								className="hidden md:flex items-center space-x-3 
-								medium-navbar:hidden
-								xl:flex
-							"
-							>
+						<div className="flex items-center space-x-3">
+							{/* Social Media - Hidden on mobile */}
+							<div className="hidden xl:flex items-center space-x-3">
 								<a
 									href="https://www.youtube.com/channel/UCTk9ewLwz0tx80SeKxxPpVQ"
 									target="_blank"
@@ -1081,22 +1044,18 @@ const Header = () => {
 							{/* Search Button */}
 							<button
 								onClick={() => setIsSearchOpen(true)}
-								className="flex items-center space-x-2 bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-white px-3 py-2 rounded-xl text-sm transition-all duration-300 border border-gray-600/30 group
-									medium-navbar:px-2 medium-navbar:space-x-1"
+								className="flex items-center space-x-2 bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-white px-3 py-2 rounded-xl text-sm transition-all duration-300 border border-gray-600/30 group"
 								title="Buscar (Ctrl+K)"
 							>
 								<Search className="w-4 h-4" />
-								<span className="hidden sm:block medium-navbar:hidden xl:block">
-									Buscar
-								</span>
+								<span className="hidden sm:block xl:block">Buscar</span>
 							</button>
 
-							{/* User Menu or Login - SEMPRE mostrar algo */}
+							{/* User Menu or Login */}
 							{sessionChecked && !user ? (
 								<Link
 									to="/login"
-									className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105
-										medium-navbar:px-3 medium-navbar:py-2"
+									className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
 								>
 									Login
 								</Link>

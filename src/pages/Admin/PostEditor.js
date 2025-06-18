@@ -62,7 +62,7 @@ const PostEditor = () => {
 		// Configurações estáveis para categorias
 		refetchOnWindowFocus: false,
 		refetchOnMount: false,
-		staleTime: 60 * 60 * 1000, // 1 hora
+		staleTime: 10 * 60 * 1000, // 10 min
 	});
 
 	const {
