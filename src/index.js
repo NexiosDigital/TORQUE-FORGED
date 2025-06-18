@@ -89,7 +89,6 @@ const preloadCriticalChunks = () => {
 				import(
 					/* webpackChunkName: "post-detail" */ "./pages/OptimizedPostDetail"
 				),
-				import(/* webpackChunkName: "categories" */ "./pages/Formula1"),
 				import(/* webpackChunkName: "all-posts" */ "./pages/AllPosts"),
 			]).then(() => {});
 		}

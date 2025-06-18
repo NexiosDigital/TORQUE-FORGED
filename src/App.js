@@ -18,30 +18,85 @@ const AllPosts = lazy(() =>
 	import(/* webpackChunkName: "all-posts" */ "./pages/AllPosts")
 );
 
+// Racing Pages
 const Formula1 = lazy(() =>
-	import(/* webpackChunkName: "categories" */ "./pages/Formula1")
+	import(/* webpackChunkName: "racing" */ "./pages/racing/Formula1")
 );
 
 const NASCAR = lazy(() =>
-	import(/* webpackChunkName: "categories" */ "./pages/NASCAR")
+	import(/* webpackChunkName: "racing" */ "./pages/racing/NASCAR")
 );
 
 const Endurance = lazy(() =>
-	import(/* webpackChunkName: "categories" */ "./pages/Endurance")
+	import(/* webpackChunkName: "racing" */ "./pages/racing/Endurance")
 );
 
 const Drift = lazy(() =>
-	import(/* webpackChunkName: "categories" */ "./pages/Drift")
+	import(/* webpackChunkName: "racing" */ "./pages/racing/Drift")
 );
 
+// Preparation Pages
 const Tuning = lazy(() =>
-	import(/* webpackChunkName: "categories" */ "./pages/Tuning")
+	import(/* webpackChunkName: "preparation" */ "./pages/preparation/Tuning")
 );
 
 const Engines = lazy(() =>
-	import(/* webpackChunkName: "categories" */ "./pages/Engines")
+	import(/* webpackChunkName: "preparation" */ "./pages/preparation/Engines")
 );
 
+const Performance = lazy(() =>
+	import(
+		/* webpackChunkName: "preparation" */ "./pages/preparation/Performance"
+	)
+);
+
+const Custom = lazy(() =>
+	import(/* webpackChunkName: "preparation" */ "./pages/preparation/Custom")
+);
+
+// Brand Pages
+const Ferrari = lazy(() =>
+	import(/* webpackChunkName: "brands" */ "./pages/brands/Ferrari")
+);
+
+const McLaren = lazy(() =>
+	import(/* webpackChunkName: "brands" */ "./pages/brands/McLaren")
+);
+
+const RedBull = lazy(() =>
+	import(/* webpackChunkName: "brands" */ "./pages/brands/RedBull")
+);
+
+const Mercedes = lazy(() =>
+	import(/* webpackChunkName: "brands" */ "./pages/brands/Mercedes")
+);
+
+const Lamborghini = lazy(() =>
+	import(/* webpackChunkName: "brands" */ "./pages/brands/Lamborghini")
+);
+
+const Porsche = lazy(() =>
+	import(/* webpackChunkName: "brands" */ "./pages/brands/Porsche")
+);
+
+// Technology Pages
+const MotoresTech = lazy(() =>
+	import(/* webpackChunkName: "technology" */ "./pages/technology/MotoresTech")
+);
+
+const Aerodinamica = lazy(() =>
+	import(/* webpackChunkName: "technology" */ "./pages/technology/Aerodinamica")
+);
+
+const Eletronica = lazy(() =>
+	import(/* webpackChunkName: "technology" */ "./pages/technology/Eletronica")
+);
+
+const Materiais = lazy(() =>
+	import(/* webpackChunkName: "technology" */ "./pages/technology/Materiais")
+);
+
+// Static Pages
 const About = lazy(() =>
 	import(/* webpackChunkName: "static" */ "./pages/About")
 );
@@ -307,9 +362,20 @@ function App() {
 								}
 							/>
 
-							{/* Category routes - ALTA PRIORIDADE */}
+							{/* ===== RACING ROUTES ===== */}
 							<Route
 								path="/f1"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Fórmula 1" />}>
+											<Formula1 />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/f1/:section"
 								element={
 									<Layout>
 										<Suspense fallback={<UltraFastLoader page="Fórmula 1" />}>
@@ -331,7 +397,29 @@ function App() {
 							/>
 
 							<Route
+								path="/nascar/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="NASCAR" />}>
+											<NASCAR />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
 								path="/endurance"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Endurance" />}>
+											<Endurance />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/endurance/:section"
 								element={
 									<Layout>
 										<Suspense fallback={<UltraFastLoader page="Endurance" />}>
@@ -355,7 +443,32 @@ function App() {
 							/>
 
 							<Route
+								path="/drift/:section"
+								element={
+									<Layout>
+										<Suspense
+											fallback={<UltraFastLoader page="Formula Drift" />}
+										>
+											<Drift />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							{/* ===== PREPARATION ROUTES ===== */}
+							<Route
 								path="/tuning"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Tuning" />}>
+											<Tuning />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tuning/:section"
 								element={
 									<Layout>
 										<Suspense fallback={<UltraFastLoader page="Tuning" />}>
@@ -376,7 +489,292 @@ function App() {
 								}
 							/>
 
-							{/* Static pages */}
+							<Route
+								path="/engines/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Motores" />}>
+											<Engines />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/performance"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Performance" />}>
+											<Performance />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/performance/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Performance" />}>
+											<Performance />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/custom"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Custom" />}>
+											<Custom />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/custom/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Custom" />}>
+											<Custom />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							{/* ===== BRAND ROUTES ===== */}
+							<Route
+								path="/marcas/ferrari"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Ferrari" />}>
+											<Ferrari />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/ferrari/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Ferrari" />}>
+											<Ferrari />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/mclaren"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="McLaren" />}>
+											<McLaren />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/mclaren/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="McLaren" />}>
+											<McLaren />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/red-bull"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Red Bull" />}>
+											<RedBull />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/red-bull/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Red Bull" />}>
+											<RedBull />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/mercedes"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Mercedes" />}>
+											<Mercedes />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/mercedes/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Mercedes" />}>
+											<Mercedes />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/lamborghini"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Lamborghini" />}>
+											<Lamborghini />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/lamborghini/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Lamborghini" />}>
+											<Lamborghini />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/porsche"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Porsche" />}>
+											<Porsche />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/porsche/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Porsche" />}>
+											<Porsche />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							{/* ===== TECHNOLOGY ROUTES ===== */}
+							<Route
+								path="/tecnologia/motores"
+								element={
+									<Layout>
+										<Suspense
+											fallback={<UltraFastLoader page="Motores Tech" />}
+										>
+											<MotoresTech />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tecnologia/motores/:subsection"
+								element={
+									<Layout>
+										<Suspense
+											fallback={<UltraFastLoader page="Motores Tech" />}
+										>
+											<MotoresTech />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tecnologia/aerodinamica"
+								element={
+									<Layout>
+										<Suspense
+											fallback={<UltraFastLoader page="Aerodinâmica" />}
+										>
+											<Aerodinamica />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tecnologia/aerodinamica/:subsection"
+								element={
+									<Layout>
+										<Suspense
+											fallback={<UltraFastLoader page="Aerodinâmica" />}
+										>
+											<Aerodinamica />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tecnologia/eletronica"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Eletrônica" />}>
+											<Eletronica />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tecnologia/eletronica/:subsection"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Eletrônica" />}>
+											<Eletronica />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tecnologia/materiais"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Materiais" />}>
+											<Materiais />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tecnologia/materiais/:subsection"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Materiais" />}>
+											<Materiais />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							{/* ===== STATIC PAGES ===== */}
 							<Route
 								path="/about"
 								element={
@@ -399,7 +797,7 @@ function App() {
 								}
 							/>
 
-							{/* Post detail - ALTA PRIORIDADE */}
+							{/* ===== POST DETAIL ===== */}
 							<Route
 								path="/post/:id"
 								element={
@@ -422,7 +820,7 @@ function App() {
 								}
 							/>
 
-							{/* Protected User Routes */}
+							{/* ===== PROTECTED USER ROUTES ===== */}
 							<Route
 								path="/profile"
 								element={
@@ -436,7 +834,7 @@ function App() {
 								}
 							/>
 
-							{/* Admin Routes */}
+							{/* ===== ADMIN ROUTES ===== */}
 							<Route
 								path="/login"
 								element={
@@ -485,7 +883,52 @@ function App() {
 								}
 							/>
 
-							{/* 404 Route OTIMIZADA */}
+							{/* ===== GENERIC FALLBACK ROUTES ===== */}
+							<Route
+								path="/marcas/:brand"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="marca" />}>
+											<Category />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/marcas/:brand/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="marca" />}>
+											<Category />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tecnologia/:section"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Tecnologia" />}>
+											<Category />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							<Route
+								path="/tecnologia/:section/:subsection"
+								element={
+									<Layout>
+										<Suspense fallback={<UltraFastLoader page="Tecnologia" />}>
+											<Category />
+										</Suspense>
+									</Layout>
+								}
+							/>
+
+							{/* ===== 404 ROUTE OTIMIZADA ===== */}
 							<Route
 								path="*"
 								element={
