@@ -9,19 +9,22 @@ import {
 	ChevronRight,
 	Zap,
 	AlertCircle,
-	RefreshCw,
-	Database,
+	Grid,
+	Folder,
+	Eye,
 } from "lucide-react";
 import {
+	useCategoryBySlug,
+	useCategoryChildren,
 	usePostsByCategory,
 	usePrefetch,
-	useCategories,
-	useCacheUtils,
+	useCategoryBreadcrumb,
 } from "../hooks/usePostsQuery";
+import CategoryBreadcrumb from "./CategoryBreadcrumb";
 import { ErrorBoundary } from "react-error-boundary";
 
-// PostCard otimizado
-const PostCard = React.memo(({ post, index }) => {
+// PostCard otimizado para hierarquia
+const HierarchicalPostCard = React.memo(({ post, index, categoryColor }) => {
 	const { prefetchPost } = usePrefetch();
 
 	const formatDate = useMemo(() => {
@@ -53,7 +56,11 @@ const PostCard = React.memo(({ post, index }) => {
 
 				{/* Badge */}
 				<div className="absolute top-4 left-4 flex items-center space-x-2">
-					<span className="bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+					<span
+						className={`bg-gradient-to-r ${
+							categoryColor || "from-red-600 to-red-500"
+						} text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg`}
+					>
 						{post.category_name}
 					</span>
 					{post.trending && (
@@ -63,6 +70,16 @@ const PostCard = React.memo(({ post, index }) => {
 						</span>
 					)}
 				</div>
+
+				{/* View count se disponível */}
+				{post.view_count && (
+					<div className="absolute top-4 right-4">
+						<div className="bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded-full text-xs flex items-center space-x-1">
+							<Eye className="w-3 h-3" />
+							<span>{post.view_count}</span>
+						</div>
+					</div>
+				)}
 			</div>
 
 			{/* Content */}
@@ -97,6 +114,25 @@ const PostCard = React.memo(({ post, index }) => {
 					</div>
 				</div>
 
+				{/* Tags se disponível */}
+				{post.tags && post.tags.length > 0 && (
+					<div className="flex flex-wrap gap-1 mb-4">
+						{post.tags.slice(0, 3).map((tag, tagIndex) => (
+							<span
+								key={tagIndex}
+								className="bg-gray-700/50 text-gray-400 px-2 py-1 rounded-md text-xs"
+							>
+								#{tag}
+							</span>
+						))}
+						{post.tags.length > 3 && (
+							<span className="text-gray-500 text-xs">
+								+{post.tags.length - 3}
+							</span>
+						)}
+					</div>
+				)}
+
 				{/* Read more */}
 				<Link
 					to={`/post/${post.id}`}
@@ -111,54 +147,24 @@ const PostCard = React.memo(({ post, index }) => {
 	);
 });
 
-// Error fallback com opção de refresh de categorias
-const ErrorFallback = ({ error, resetErrorBoundary, section }) => {
-	const { refreshCategories } = useCacheUtils();
-
-	const handleRefreshCategories = async () => {
-		try {
-			await refreshCategories();
-			resetErrorBoundary();
-		} catch (error) {
-			console.error("Erro ao atualizar categorias:", error);
-		}
-	};
-
-	return (
-		<div className="text-center py-16">
-			<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
-				<AlertCircle className="w-10 h-10 text-white" />
-			</div>
-			<h3 className="text-2xl font-bold text-white mb-4">
-				Erro ao carregar {section}
-			</h3>
-			<p className="text-gray-400 mb-4">
-				{error?.message?.includes("categoria")
-					? "Esta categoria pode não existir no banco de dados."
-					: "Algo deu errado. Tente novamente."}
-			</p>
-			<div className="space-y-3">
-				<button
-					onClick={resetErrorBoundary}
-					className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105 flex items-center space-x-2 mx-auto"
-				>
-					<RefreshCw className="w-4 h-4" />
-					<span>Tentar Novamente</span>
-				</button>
-
-				{section?.includes("categoria") && (
-					<button
-						onClick={handleRefreshCategories}
-						className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-2 rounded-xl font-semibold transition-all duration-300 flex items-center space-x-2 mx-auto text-sm"
-					>
-						<Database className="w-4 h-4" />
-						<span>Atualizar Categorias</span>
-					</button>
-				)}
-			</div>
+// Error fallback
+const ErrorFallback = ({ error, resetErrorBoundary, section }) => (
+	<div className="text-center py-16">
+		<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
+			<AlertCircle className="w-10 h-10 text-white" />
 		</div>
-	);
-};
+		<h3 className="text-2xl font-bold text-white mb-4">
+			Erro ao carregar {section}
+		</h3>
+		<p className="text-gray-400 mb-8">Algo deu errado. Tente novamente.</p>
+		<button
+			onClick={resetErrorBoundary}
+			className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
+		>
+			Tentar Novamente
+		</button>
+	</div>
+);
 
 // Loading skeleton para categoria
 const CategorySkeleton = () => (
@@ -199,162 +205,154 @@ const CategorySkeleton = () => (
 	</div>
 );
 
-// Componente principal flexível - 100% dinâmico do banco
+// Componente de subcategorias
+const SubcategoriesGrid = ({
+	subcategories,
+	parentCategory,
+	onCategoryHover,
+}) => {
+	if (!subcategories || subcategories.length === 0) return null;
+
+	return (
+		<div className="mb-16">
+			<div className="flex items-center space-x-3 mb-8">
+				<Folder className="w-6 h-6 text-red-400" />
+				<h2 className="text-3xl font-black text-white">
+					Explore por Subcategoria
+				</h2>
+			</div>
+
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+				{subcategories.map((subcategory, index) => (
+					<Link
+						key={subcategory.id}
+						to={`/${subcategory.slug}`}
+						onMouseEnter={() =>
+							onCategoryHover && onCategoryHover(subcategory.id)
+						}
+						className="group"
+					>
+						<div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 border border-gray-700/50 hover:border-red-500/50 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-red-500/10">
+							<div className="flex items-center space-x-3 mb-4">
+								<div
+									className={`w-12 h-12 rounded-xl bg-gradient-to-r ${
+										subcategory.color ||
+										parentCategory?.color ||
+										"from-gray-600 to-gray-500"
+									} flex items-center justify-center shadow-lg`}
+								>
+									<span className="text-xl">{subcategory.icon || "📁"}</span>
+								</div>
+								<div className="flex-1">
+									<h3 className="text-lg font-bold text-white group-hover:text-red-400 transition-colors duration-300">
+										{subcategory.name}
+									</h3>
+									<p className="text-gray-400 text-sm">
+										{subcategory.post_count || 0} posts
+									</p>
+								</div>
+							</div>
+
+							{subcategory.description && (
+								<p className="text-gray-400 text-sm leading-relaxed line-clamp-2">
+									{subcategory.description}
+								</p>
+							)}
+						</div>
+					</Link>
+				))}
+			</div>
+		</div>
+	);
+};
+
+// Componente principal flexível - 100% dinâmico do banco com hierarquia
 const FlexiblePage = ({ pageKey, section }) => {
 	const params = useParams();
 
-	// Buscar TODAS as categorias do banco de dados - SEMPRE DINÂMICO
-	const {
-		data: categories = [],
-		isLoading: categoriesLoading,
-		error: categoriesError,
-		refetch: refetchCategories,
-	} = useCategories({
-		// Configurações específicas para garantir dados atualizados
-		staleTime: 30 * 60 * 1000, // 30 min
-		refetchOnWindowFocus: false,
-		refetchOnMount: false,
-		retry: (failureCount, error) => {
-			// Permitir retry para categorias (crítico)
-			return failureCount < 2;
-		},
-	});
-
-	// Determinar categoryId baseado nos parâmetros
-	const categoryId = useMemo(() => {
+	// Determinar categorySlug da URL
+	const categorySlug = useMemo(() => {
 		return (
 			pageKey ||
 			params.brand ||
 			params.section ||
 			params.category ||
-			params.pageKey
+			params.pageKey ||
+			section
 		);
-	}, [pageKey, params]);
+	}, [pageKey, params, section]);
 
-	// Buscar configuração da categoria no banco de dados DINAMICAMENTE
-	const categoryConfig = useMemo(() => {
-		if (!categories.length || !categoryId) return null;
+	// Buscar dados da categoria
+	const {
+		data: currentCategory,
+		isLoading: categoryLoading,
+		error: categoryError,
+	} = useCategoryBySlug(categorySlug, {
+		enabled: !!categorySlug,
+	});
 
-		// Buscar categoria pelo ID
-		const category = categories.find((cat) => cat.id === categoryId);
-		if (!category) {
-			console.warn(
-				`⚠️ Categoria "${categoryId}" não encontrada no banco de dados`
-			);
-			return null;
-		}
+	// Buscar subcategorias se existirem
+	const { data: subcategories = [], isLoading: subcategoriesLoading } =
+		useCategoryChildren(currentCategory?.id, {
+			enabled: !!currentCategory?.id,
+		});
 
-		// Converter dados do banco para formato esperado pelo componente
-		return {
-			id: category.id,
-			title: category.name,
-			description: category.description,
-			gradient: category.color || "from-red-500 to-orange-500",
-			icon: category.icon || "🏁", // Ícone do banco ou padrão
-			type: "category",
-			categoryId: category.id,
-			count: category.count || 0,
-		};
-	}, [categories, categoryId]);
-
-	// Hook de posts baseado no categoryId
+	// Buscar posts da categoria
 	const {
 		data: posts = [],
 		isLoading: postsLoading,
 		error: postsError,
-		refetch: refetchPosts,
-	} = usePostsByCategory(categoryId, {
-		enabled: !!categoryId,
+	} = usePostsByCategory(currentCategory?.id, {
+		enabled: !!currentCategory?.id,
 	});
 
-	// Debug em desenvolvimento
-	React.useEffect(() => {
-		if (process.env.NODE_ENV === "development") {
-			console.log("🔍 FlexiblePage Debug:", {
-				categoryId,
-				categoriesCount: categories.length,
-				categoryFound: !!categoryConfig,
-				postsCount: posts.length,
-				categoriesFromFallback:
-					categories.length === 1 && categories[0].id === "geral",
-			});
-		}
-	}, [categoryId, categories, categoryConfig, posts]);
+	// Buscar breadcrumb para navegação
+	const { data: breadcrumb = [] } = useCategoryBreadcrumb(currentCategory?.id, {
+		enabled: !!currentCategory?.id,
+	});
 
-	// Loading states
-	if (categoriesLoading) {
+	const { prefetchCategory } = usePrefetch();
+
+	// Estatísticas da categoria
+	const categoryStats = useMemo(() => {
+		if (!currentCategory) return null;
+
+		return {
+			level: currentCategory.level,
+			totalPosts: posts.length,
+			totalSubcategories: subcategories.length,
+			isActive: currentCategory.is_active,
+			hasContent: posts.length > 0 || subcategories.length > 0,
+		};
+	}, [currentCategory, posts.length, subcategories.length]);
+
+	// Loading state
+	if (categoryLoading) {
 		return <CategorySkeleton />;
 	}
 
-	// Error states para categorias
-	if (categoriesError) {
-		return (
-			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-					<ErrorFallback
-						error={categoriesError}
-						resetErrorBoundary={() => {
-							refetchCategories();
-							window.location.reload();
-						}}
-						section="categorias"
-					/>
-				</div>
-			</div>
-		);
-	}
-
-	// Categoria não encontrada no banco
-	if (!categoryConfig) {
+	// Error state - categoria não encontrada
+	if (categoryError || !currentCategory) {
 		return (
 			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 					<div className="text-center py-16">
-						<div className="w-20 h-20 bg-gradient-to-r from-yellow-600 to-orange-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
-							<AlertCircle className="w-10 h-10 text-white" />
+						<div className="w-20 h-20 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+							<AlertCircle className="w-10 h-10 text-gray-400" />
 						</div>
 						<h3 className="text-2xl font-bold text-white mb-4">
-							Categoria "{categoryId}" não encontrada
+							Categoria "{categorySlug}" não encontrada
 						</h3>
-						<p className="text-gray-400 mb-4">
-							Esta categoria não existe no banco de dados ou não está ativa.
+						<p className="text-gray-400 mb-8">
+							Esta categoria não existe no sistema ou não está ativa.
 						</p>
-
-						{/* Mostrar categorias disponíveis */}
-						{categories.length > 0 && (
-							<div className="mb-8">
-								<p className="text-gray-500 mb-4">Categorias disponíveis:</p>
-								<div className="flex flex-wrap gap-2 justify-center max-w-2xl mx-auto">
-									{categories.map((cat) => (
-										<Link
-											key={cat.id}
-											to={`/${cat.id}`}
-											className="bg-gray-800 hover:bg-red-600 text-gray-300 hover:text-white px-4 py-2 rounded-full text-sm transition-all duration-300"
-										>
-											{cat.name}
-										</Link>
-									))}
-								</div>
-							</div>
-						)}
-
-						<div className="space-y-4">
-							<button
-								onClick={() => refetchCategories()}
-								className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-blue-500/25 hover:scale-105"
-							>
-								<Database className="w-4 h-4" />
-								<span>Atualizar Categorias</span>
-							</button>
-
-							<Link
-								to="/"
-								className="inline-flex items-center space-x-2 border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300 ml-4"
-							>
-								<ArrowLeft className="w-4 h-4" />
-								<span>Voltar ao início</span>
-							</Link>
-						</div>
+						<Link
+							to="/"
+							className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
+						>
+							<ArrowLeft className="w-4 h-4" />
+							<span>Voltar ao início</span>
+						</Link>
 					</div>
 				</div>
 			</div>
@@ -365,7 +363,9 @@ const FlexiblePage = ({ pageKey, section }) => {
 		<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 			{/* Hero Section - Dados dinâmicos do banco */}
 			<div
-				className={`relative py-24 bg-gradient-to-r ${categoryConfig.gradient} overflow-hidden`}
+				className={`relative py-24 bg-gradient-to-r ${
+					currentCategory.color || "from-gray-600 to-gray-500"
+				} overflow-hidden`}
 			>
 				<div className="absolute inset-0 bg-black/40"></div>
 				<div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
@@ -378,105 +378,125 @@ const FlexiblePage = ({ pageKey, section }) => {
 
 				<div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					{/* Breadcrumb dinâmico */}
-					<nav className="mb-8">
-						<div className="flex items-center space-x-2 text-white/80">
-							<Link
-								to="/"
-								className="hover:text-white transition-colors duration-300"
-							>
-								Home
-							</Link>
-							<ChevronRight className="w-4 h-4" />
-							<span className="text-white">{categoryConfig.title}</span>
-						</div>
-					</nav>
+					<CategoryBreadcrumb
+						categoryId={currentCategory.id}
+						currentCategory={currentCategory}
+					/>
 
 					{/* Header Content - Dados do banco */}
 					<div className="text-center">
 						<div className="flex items-center justify-center mb-6">
-							<div className="text-6xl mr-4">{categoryConfig.icon}</div>
+							<div className="text-6xl mr-4">
+								{currentCategory.icon || "📁"}
+							</div>
 							<div>
 								<h1 className="text-5xl md:text-6xl font-black text-white mb-4 leading-tight">
-									{categoryConfig.title}
+									{currentCategory.name}
 								</h1>
 								<p className="text-xl md:text-2xl text-white/90 max-w-3xl mx-auto leading-relaxed">
-									{categoryConfig.description}
+									{currentCategory.description ||
+										`Explore todo o conteúdo sobre ${currentCategory.name.toLowerCase()}`}
 								</p>
 							</div>
 						</div>
 
 						{/* Stats dinâmicas */}
-						<div className="flex flex-wrap items-center justify-center gap-4 mt-8">
-							<div className="bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-white/20">
-								<span className="text-white font-bold">
-									{posts.length} {posts.length === 1 ? "Post" : "Posts"}
-								</span>
-							</div>
-							{categoryConfig.count > 0 && (
+						{categoryStats && (
+							<div className="flex flex-wrap items-center justify-center gap-4 mt-8">
 								<div className="bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-white/20">
 									<span className="text-white font-bold">
-										{categoryConfig.count} Total
+										Nível {categoryStats.level}
 									</span>
 								</div>
-							)}
-							<div className="bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-white/20">
-								<span className="text-white font-bold">
-									<Database className="w-4 h-4 inline mr-2" />
-									Dinâmico
-								</span>
+								<div className="bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-white/20">
+									<span className="text-white font-bold">
+										{categoryStats.totalPosts}{" "}
+										{categoryStats.totalPosts === 1 ? "Post" : "Posts"}
+									</span>
+								</div>
+								{categoryStats.totalSubcategories > 0 && (
+									<div className="bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-white/20">
+										<span className="text-white font-bold">
+											{categoryStats.totalSubcategories} Subcategorias
+										</span>
+									</div>
+								)}
+								<div className="bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-white/20">
+									<span className="text-white font-bold">
+										{categoryStats.isActive
+											? "Categoria Ativa"
+											: "Categoria Inativa"}
+									</span>
+								</div>
 							</div>
-						</div>
+						)}
 					</div>
 				</div>
 			</div>
 
-			{/* Posts Section */}
+			{/* Content Section */}
 			<div className="py-16">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+					{/* Subcategorias */}
+					<SubcategoriesGrid
+						subcategories={subcategories}
+						parentCategory={currentCategory}
+						onCategoryHover={prefetchCategory}
+					/>
+
+					{/* Posts Section */}
 					<ErrorBoundary
 						FallbackComponent={(props) => (
 							<ErrorFallback {...props} section="posts" />
 						)}
-						onReset={() => {
-							refetchPosts();
-							refetchCategories();
-						}}
+						onReset={() => window.location.reload()}
 					>
 						{postsLoading ? (
-							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-								{Array.from({ length: 6 }).map((_, i) => (
-									<div
-										key={`loading-${i}`}
-										className="bg-gray-800 rounded-3xl overflow-hidden animate-pulse"
-									>
-										<div className="h-56 bg-gray-700"></div>
-										<div className="p-6">
-											<div className="h-4 bg-gray-700 rounded-full mb-3"></div>
-											<div className="h-4 bg-gray-700 rounded-full w-3/4 mb-3"></div>
-											<div className="h-3 bg-gray-700 rounded-full w-1/2"></div>
+							<div>
+								<div className="flex items-center space-x-3 mb-8">
+									<Grid className="w-6 h-6 text-red-400" />
+									<div className="w-48 h-8 bg-gray-700 rounded-full animate-pulse"></div>
+								</div>
+								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+									{Array.from({ length: 6 }).map((_, i) => (
+										<div
+											key={`loading-${i}`}
+											className="bg-gray-800 rounded-3xl overflow-hidden animate-pulse"
+										>
+											<div className="h-56 bg-gray-700"></div>
+											<div className="p-6">
+												<div className="h-4 bg-gray-700 rounded-full mb-3"></div>
+												<div className="h-4 bg-gray-700 rounded-full w-3/4 mb-3"></div>
+												<div className="h-3 bg-gray-700 rounded-full w-1/2"></div>
+											</div>
 										</div>
-									</div>
-								))}
+									))}
+								</div>
 							</div>
 						) : postsError ? (
 							<ErrorFallback
 								error={postsError}
-								resetErrorBoundary={() => refetchPosts()}
+								resetErrorBoundary={() => window.location.reload()}
 								section="posts"
 							/>
 						) : posts.length === 0 ? (
 							<div className="text-center py-16">
 								<div
-									className={`w-20 h-20 bg-gradient-to-r ${categoryConfig.gradient} rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl`}
+									className={`w-20 h-20 bg-gradient-to-r ${
+										currentCategory.color || "from-gray-600 to-gray-500"
+									} rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl`}
 								>
 									<Zap className="w-10 h-10 text-white" />
 								</div>
 								<h3 className="text-2xl font-bold text-white mb-4">
-									Posts chegando em breve
+									{subcategories.length > 0
+										? "Explore as subcategorias"
+										: "Posts chegando em breve"}
 								</h3>
 								<p className="text-gray-400 mb-8 max-w-md mx-auto">
-									Novos posts sobre {categoryConfig.title.toLowerCase()} serão
-									publicados em breve. Volte em breve!
+									{subcategories.length > 0
+										? `Esta categoria possui ${subcategories.length} subcategorias com conteúdo específico. Explore acima!`
+										: `Novos posts sobre ${currentCategory.name.toLowerCase()} serão publicados em breve. Volte em breve!`}
 								</p>
 								<Link
 									to="/"
@@ -489,21 +509,25 @@ const FlexiblePage = ({ pageKey, section }) => {
 						) : (
 							<>
 								<div className="text-center mb-16">
-									<h2 className="text-4xl font-black text-white mb-6 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-										Últimas sobre {categoryConfig.title}
-									</h2>
+									<div className="flex items-center justify-center space-x-3 mb-6">
+										<Grid className="w-6 h-6 text-red-400" />
+										<h2 className="text-4xl font-black text-white bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+											Últimas sobre {currentCategory.name}
+										</h2>
+									</div>
 									<p className="text-xl text-gray-400 max-w-2xl mx-auto">
 										Fique por dentro de tudo que acontece no mundo{" "}
-										{categoryConfig.title.toLowerCase()}
+										{currentCategory.name.toLowerCase()}
 									</p>
 								</div>
 
 								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
 									{posts.map((post, index) => (
-										<PostCard
+										<HierarchicalPostCard
 											key={`post-${post.id}-${index}`}
 											post={post}
 											index={index}
+											categoryColor={currentCategory.color}
 										/>
 									))}
 								</div>

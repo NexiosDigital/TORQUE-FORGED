@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
 	Menu,
 	X,
@@ -12,281 +12,10 @@ import {
 	Youtube,
 	Instagram,
 	ArrowRight,
-	Calendar,
-	Clock,
-	TrendingUp,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { useSearchPosts, usePrefetch } from "../../hooks/usePostsQuery";
-
-// Componente do Modal de Busca (mantido igual)
-const SearchModal = ({ isOpen, onClose }) => {
-	const [searchTerm, setSearchTerm] = useState("");
-	const [selectedIndex, setSelectedIndex] = useState(-1);
-	const searchInputRef = useRef(null);
-	const resultsRef = useRef(null);
-	const navigate = useNavigate();
-	const { prefetchPost } = usePrefetch();
-
-	const { data: searchResults = [], isLoading } = useSearchPosts(searchTerm, {
-		enabled: searchTerm.length >= 2,
-	});
-
-	useEffect(() => {
-		if (isOpen && searchInputRef.current) {
-			setTimeout(() => {
-				searchInputRef.current.focus();
-			}, 100);
-		}
-	}, [isOpen]);
-
-	useEffect(() => {
-		if (!isOpen) {
-			setSearchTerm("");
-			setSelectedIndex(-1);
-		}
-	}, [isOpen]);
-
-	useEffect(() => {
-		const handleKeyDown = (e) => {
-			if (!isOpen) return;
-
-			switch (e.key) {
-				case "Escape":
-					onClose();
-					break;
-				case "ArrowDown":
-					e.preventDefault();
-					setSelectedIndex((prev) =>
-						prev < searchResults.length - 1 ? prev + 1 : prev
-					);
-					break;
-				case "ArrowUp":
-					e.preventDefault();
-					setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
-					break;
-				case "Enter":
-					e.preventDefault();
-					if (selectedIndex >= 0 && searchResults[selectedIndex]) {
-						handleSelectPost(searchResults[selectedIndex]);
-					} else if (searchTerm.length >= 2) {
-						handleViewAllResults();
-					}
-					break;
-			}
-		};
-
-		document.addEventListener("keydown", handleKeyDown);
-		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [isOpen, selectedIndex, searchResults, searchTerm]);
-
-	useEffect(() => {
-		if (selectedIndex >= 0 && resultsRef.current) {
-			const selectedElement = resultsRef.current.children[selectedIndex];
-			if (selectedElement) {
-				selectedElement.scrollIntoView({
-					behavior: "smooth",
-					block: "nearest",
-				});
-			}
-		}
-	}, [selectedIndex]);
-
-	const handleSelectPost = (post) => {
-		onClose();
-		navigate(`/post/${post.id}`);
-	};
-
-	const handleViewAllResults = () => {
-		onClose();
-		navigate(`/posts?search=${encodeURIComponent(searchTerm)}`);
-	};
-
-	const formatDate = (dateString) => {
-		try {
-			return new Date(dateString).toLocaleDateString("pt-BR");
-		} catch (error) {
-			return "Data inválida";
-		}
-	};
-
-	if (!isOpen) return null;
-
-	return (
-		<div className="fixed inset-0 z-[100] overflow-hidden">
-			<div
-				className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300"
-				onClick={onClose}
-			></div>
-
-			<div className="relative flex min-h-full items-start justify-center p-4 pt-16 sm:pt-24">
-				<div className="w-full max-w-2xl transform overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 border border-gray-700/50 shadow-2xl transition-all duration-300">
-					<div className="border-b border-gray-700/50 p-6">
-						<div className="flex items-center space-x-4">
-							<div className="relative flex-1">
-								<Search className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-								<input
-									ref={searchInputRef}
-									type="text"
-									placeholder="Buscar posts, categorias, conteúdo..."
-									value={searchTerm}
-									onChange={(e) => setSearchTerm(e.target.value)}
-									className="w-full pl-12 pr-4 py-4 bg-gray-800/50 border border-gray-600/50 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:bg-gray-800 transition-all duration-300 text-lg"
-								/>
-							</div>
-							<button
-								onClick={onClose}
-								className="p-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors duration-300"
-							>
-								<X className="w-5 h-5" />
-							</button>
-						</div>
-
-						{searchTerm.length === 0 && (
-							<div className="mt-4 flex flex-wrap gap-2">
-								<span className="text-gray-400 text-sm">Tente buscar:</span>
-								{["F1", "Verstappen", "NASCAR", "Tuning", "Motor"].map(
-									(suggestion) => (
-										<button
-											key={suggestion}
-											onClick={() => setSearchTerm(suggestion)}
-											className="px-3 py-1 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 hover:text-white rounded-full text-sm transition-colors duration-300"
-										>
-											{suggestion}
-										</button>
-									)
-								)}
-							</div>
-						)}
-
-						{searchTerm.length > 0 && searchTerm.length < 2 && (
-							<p className="mt-4 text-gray-400 text-sm">
-								Digite pelo menos 2 caracteres para buscar
-							</p>
-						)}
-					</div>
-
-					<div className="max-h-96 overflow-y-auto">
-						{isLoading && searchTerm.length >= 2 && (
-							<div className="p-8 text-center">
-								<div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-								<p className="text-gray-400">Buscando...</p>
-							</div>
-						)}
-
-						{!isLoading &&
-							searchTerm.length >= 2 &&
-							searchResults.length === 0 && (
-								<div className="p-8 text-center">
-									<Search className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-									<h3 className="text-xl font-bold text-white mb-2">
-										Nenhum resultado encontrado
-									</h3>
-									<p className="text-gray-400 mb-6">
-										Tente usar palavras-chave diferentes ou mais gerais
-									</p>
-								</div>
-							)}
-
-						{!isLoading && searchResults.length > 0 && (
-							<div ref={resultsRef} className="divide-y divide-gray-700/30">
-								{searchResults.slice(0, 8).map((post, index) => (
-									<div
-										key={post.id}
-										className={`p-4 hover:bg-gray-800/50 cursor-pointer transition-colors duration-300 ${
-											selectedIndex === index ? "bg-gray-800/50" : ""
-										}`}
-										onClick={() => handleSelectPost(post)}
-										onMouseEnter={() => {
-											setSelectedIndex(index);
-											prefetchPost(post.id);
-										}}
-									>
-										<div className="flex space-x-4">
-											<img
-												src={post.image_url}
-												alt={post.title}
-												className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
-												onError={(e) => {
-													e.target.src =
-														"https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&h=300&fit=crop";
-												}}
-											/>
-											<div className="flex-1 min-w-0">
-												<div className="flex items-center space-x-2 mb-1">
-													<span className="bg-gradient-to-r from-red-600 to-red-500 text-white px-2 py-1 rounded-md text-xs font-bold">
-														{post.category_name}
-													</span>
-													{post.trending && (
-														<span className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white px-2 py-1 rounded-md text-xs font-bold flex items-center space-x-1">
-															<TrendingUp className="w-3 h-3" />
-															<span>TREND</span>
-														</span>
-													)}
-												</div>
-												<h4 className="text-white font-semibold line-clamp-1 mb-1">
-													{post.title}
-												</h4>
-												<p className="text-gray-400 text-sm line-clamp-1 mb-2">
-													{post.excerpt}
-												</p>
-												<div className="flex items-center space-x-4 text-xs text-gray-500">
-													<div className="flex items-center space-x-1">
-														<User className="w-3 h-3" />
-														<span>{post.author}</span>
-													</div>
-													<div className="flex items-center space-x-1">
-														<Calendar className="w-3 h-3" />
-														<span>{formatDate(post.created_at)}</span>
-													</div>
-													<div className="flex items-center space-x-1">
-														<Clock className="w-3 h-3" />
-														<span>{post.read_time}</span>
-													</div>
-												</div>
-											</div>
-											<ArrowRight className="w-4 h-4 text-gray-400 flex-shrink-0 mt-2" />
-										</div>
-									</div>
-								))}
-
-								{searchResults.length > 8 && (
-									<div className="p-4">
-										<button
-											onClick={handleViewAllResults}
-											className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-red-500/25 hover:scale-105"
-										>
-											Ver todos os {searchResults.length} resultados
-										</button>
-									</div>
-								)}
-							</div>
-						)}
-					</div>
-
-					<div className="border-t border-gray-700/50 p-4 bg-gray-800/30">
-						<div className="flex flex-wrap gap-4 text-xs text-gray-500">
-							<div className="flex items-center space-x-2">
-								<kbd className="px-2 py-1 bg-gray-700 rounded text-xs">↑↓</kbd>
-								<span>Navegar</span>
-							</div>
-							<div className="flex items-center space-x-2">
-								<kbd className="px-2 py-1 bg-gray-700 rounded text-xs">
-									Enter
-								</kbd>
-								<span>Selecionar</span>
-							</div>
-							<div className="flex items-center space-x-2">
-								<kbd className="px-2 py-1 bg-gray-700 rounded text-xs">Esc</kbd>
-								<span>Fechar</span>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-	);
-};
+import { useMegaMenuStructure } from "../../hooks/usePostsQuery";
+import SearchModal from "./SearchModal"; // Componente existente mantido
 
 const Header = () => {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -294,241 +23,10 @@ const Header = () => {
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [scrollY, setScrollY] = useState(0);
 	const [isLoggingOut, setIsLoggingOut] = useState(false);
-	const location = useLocation();
 
-	// Estrutura do mega menu com categorias e subcategorias CORRIGIDA
-	const megaMenuData = {
-		corridas: {
-			name: "Corridas",
-			color: "from-red-500 to-orange-500",
-			icon: "🏁",
-			subcategories: {
-				"formula-1": {
-					name: "Fórmula 1",
-					href: "/f1",
-					items: [
-						{ name: "Equipes", href: "/f1/equipes" },
-						{ name: "Pilotos", href: "/f1/pilotos" },
-						{ name: "Calendário", href: "/f1/calendario" },
-						{ name: "Notícias", href: "/f1" },
-						{ name: "Análises Técnicas", href: "/f1/analises" },
-						{ name: "Regulamentos", href: "/f1/regulamentos" },
-					],
-				},
-				nascar: {
-					name: "NASCAR",
-					href: "/nascar",
-					items: [
-						{ name: "Equipes", href: "/nascar/equipes" },
-						{ name: "Pilotos", href: "/nascar/pilotos" },
-						{ name: "Calendário", href: "/nascar/calendario" },
-						{ name: "Notícias", href: "/nascar" },
-						{ name: "Análises Técnicas", href: "/nascar/analises" },
-						{ name: "Regulamentos", href: "/nascar/regulamentos" },
-					],
-				},
-				endurance: {
-					name: "Endurance",
-					href: "/endurance",
-					items: [
-						{ name: "Equipes", href: "/endurance/equipes" },
-						{ name: "Pilotos", href: "/endurance/pilotos" },
-						{ name: "Calendário", href: "/endurance/calendario" },
-						{ name: "Notícias", href: "/endurance" },
-						{ name: "Análises Técnicas", href: "/endurance/analises" },
-						{ name: "Regulamentos", href: "/endurance/regulamentos" },
-					],
-				},
-				drift: {
-					name: "Formula Drift",
-					href: "/drift",
-					items: [
-						{ name: "Equipes", href: "/drift/equipes" },
-						{ name: "Pilotos", href: "/drift/pilotos" },
-						{ name: "Calendário", href: "/drift/calendario" },
-						{ name: "Notícias", href: "/drift" },
-						{ name: "Análises Técnicas", href: "/drift/analises" },
-						{ name: "Regulamentos", href: "/drift/regulamentos" },
-					],
-				},
-			},
-		},
-		marcas: {
-			name: "Marcas",
-			color: "from-blue-500 to-cyan-500",
-			icon: "🏎️",
-			subcategories: {
-				ferrari: {
-					name: "Ferrari",
-					href: "/marcas/ferrari",
-					items: [
-						{ name: "História", href: "/marcas/ferrari/historia" },
-						{ name: "Modelos", href: "/marcas/ferrari/modelos" },
-						{ name: "Scuderia F1", href: "/marcas/ferrari/f1" },
-						{ name: "Notícias", href: "/marcas/ferrari" },
-						{ name: "Tecnologia", href: "/marcas/ferrari/tecnologia" },
-					],
-				},
-				mclaren: {
-					name: "McLaren",
-					href: "/marcas/mclaren",
-					items: [
-						{ name: "História", href: "/marcas/mclaren/historia" },
-						{ name: "Modelos", href: "/marcas/mclaren/modelos" },
-						{ name: "F1 Team", href: "/marcas/mclaren/f1" },
-						{ name: "Tecnologia", href: "/marcas/mclaren/tecnologia" },
-						{ name: "Notícias", href: "/marcas/mclaren" },
-					],
-				},
-				"red-bull": {
-					name: "Red Bull",
-					href: "/marcas/red-bull",
-					items: [
-						{ name: "Red Bull Racing", href: "/marcas/red-bull/f1" },
-						{ name: "Extreme Sports", href: "/marcas/red-bull/extreme" },
-						{ name: "Atletas", href: "/marcas/red-bull/atletas" },
-						{ name: "Eventos", href: "/marcas/red-bull/eventos" },
-						{ name: "Notícias", href: "/marcas/red-bull" },
-					],
-				},
-				mercedes: {
-					name: "Mercedes",
-					href: "/marcas/mercedes",
-					items: [
-						{ name: "Mercedes F1", href: "/marcas/mercedes/f1" },
-						{ name: "Mercedes-AMG", href: "/marcas/mercedes/amg" },
-						{ name: "História", href: "/marcas/mercedes/historia" },
-						{ name: "Inovação", href: "/marcas/mercedes/inovacao" },
-						{ name: "Notícias", href: "/marcas/mercedes" },
-					],
-				},
-				lamborghini: {
-					name: "Lamborghini",
-					href: "/marcas/lamborghini",
-					items: [
-						{ name: "Supercarros", href: "/marcas/lamborghini/modelos" },
-						{ name: "História", href: "/marcas/lamborghini/historia" },
-						{ name: "Motorsport", href: "/marcas/lamborghini/motorsport" },
-						{ name: "Super Trofeo", href: "/marcas/lamborghini/trofeo" },
-						{ name: "Notícias", href: "/marcas/lamborghini" },
-					],
-				},
-				porsche: {
-					name: "Porsche",
-					href: "/marcas/porsche",
-					items: [
-						{ name: "911", href: "/marcas/porsche/911" },
-						{ name: "Motorsport", href: "/marcas/porsche/motorsport" },
-						{ name: "História", href: "/marcas/porsche/historia" },
-						{ name: "Tecnologia", href: "/marcas/porsche/tecnologia" },
-						{ name: "Notícias", href: "/marcas/porsche" },
-					],
-				},
-			},
-		},
-		preparacao: {
-			name: "Preparação",
-			color: "from-green-500 to-emerald-500",
-			icon: "🔧",
-			subcategories: {
-				tuning: {
-					name: "Tuning",
-					href: "/tuning",
-					items: [
-						{ name: "Preparação de Motor", href: "/tuning/motor" },
-						{ name: "Suspensão", href: "/tuning/suspensao" },
-						{ name: "Aerodinâmica", href: "/tuning/aero" },
-						{ name: "Visual", href: "/tuning/visual" },
-						{ name: "Notícias", href: "/tuning" },
-					],
-				},
-				motores: {
-					name: "Motores",
-					href: "/engines",
-					items: [
-						{ name: "Motores Aspirados", href: "/engines/aspirados" },
-						{ name: "Turbo", href: "/engines/turbo" },
-						{ name: "Híbridos", href: "/engines/hibridos" },
-						{ name: "Elétricos", href: "/engines/eletricos" },
-						{ name: "Notícias", href: "/engines" },
-					],
-				},
-				performance: {
-					name: "Performance",
-					href: "/performance",
-					items: [
-						{ name: "Sistema de Freios", href: "/performance/freios" },
-						{ name: "Pneus", href: "/performance/pneus" },
-						{ name: "Aerodinâmica", href: "/performance/aero" },
-						{ name: "Eletrônica", href: "/performance/eletronica" },
-						{ name: "Setup", href: "/performance/setup" },
-					],
-				},
-				custom: {
-					name: "Custom",
-					href: "/custom",
-					items: [
-						{ name: "Paint Jobs", href: "/custom/paint" },
-						{ name: "Interior", href: "/custom/interior" },
-						{ name: "Audio", href: "/custom/audio" },
-						{ name: "Rodas", href: "/custom/rodas" },
-						{ name: "Iluminação", href: "/custom/led" },
-					],
-				},
-			},
-		},
-		tecnologia: {
-			name: "Tecnologia",
-			color: "from-purple-500 to-pink-500",
-			icon: "⚙️",
-			subcategories: {
-				"motores-tech": {
-					name: "Motores",
-					href: "/tecnologia/motores",
-					items: [
-						{ name: "V8 & V10", href: "/tecnologia/motores/v8-v10" },
-						{ name: "V12", href: "/tecnologia/motores/v12" },
-						{ name: "Híbridos", href: "/tecnologia/motores/hibridos" },
-						{ name: "Elétricos", href: "/tecnologia/motores/eletricos" },
-						{ name: "Inovações", href: "/tecnologia/motores/inovacoes" },
-					],
-				},
-				aerodinamica: {
-					name: "Aerodinâmica",
-					href: "/tecnologia/aerodinamica",
-					items: [
-						{ name: "Fórmula 1", href: "/tecnologia/aero/f1" },
-						{ name: "GT & LMP", href: "/tecnologia/aero/gt" },
-						{ name: "Drift", href: "/tecnologia/aero/drift" },
-						{ name: "CFD", href: "/tecnologia/aero/cfd" },
-						{ name: "Túnel de Vento", href: "/tecnologia/aero/tunel" },
-					],
-				},
-				eletronica: {
-					name: "Eletrônica",
-					href: "/tecnologia/eletronica",
-					items: [
-						{ name: "ECU", href: "/tecnologia/eletronica/ecu" },
-						{ name: "Telemetria", href: "/tecnologia/eletronica/telemetria" },
-						{ name: "Simuladores", href: "/tecnologia/eletronica/sim" },
-						{ name: "Data Logger", href: "/tecnologia/eletronica/data" },
-						{ name: "Sensores", href: "/tecnologia/eletronica/sensores" },
-					],
-				},
-				materiais: {
-					name: "Materiais",
-					href: "/tecnologia/materiais",
-					items: [
-						{ name: "Fibra de Carbono", href: "/tecnologia/materiais/carbono" },
-						{ name: "Titânio", href: "/tecnologia/materiais/titanio" },
-						{ name: "Cerâmica", href: "/tecnologia/materiais/ceramica" },
-						{ name: "Kevlar", href: "/tecnologia/materiais/kevlar" },
-						{ name: "Composites", href: "/tecnologia/materiais/composites" },
-					],
-				},
-			},
-		},
-	};
+	// Usar nova estrutura hierárquica do banco
+	const { data: megaMenuData = {}, isLoading: megaMenuLoading } =
+		useMegaMenuStructure();
 
 	// Estado para controlar o mega menu
 	const [activeMegaMenu, setActiveMegaMenu] = useState(null);
@@ -544,7 +42,6 @@ const Header = () => {
 		loading: authLoading,
 		profileLoading,
 		sessionChecked,
-		debugState,
 	} = useAuth();
 
 	const userMenuRef = useRef(null);
@@ -572,7 +69,6 @@ const Header = () => {
 		};
 
 		const handleMegaMenuClickOutside = (event) => {
-			// Fechar mega menu se clicar fora dele
 			if (activeMegaMenu && !event.target.closest(".mega-menu-container")) {
 				setActiveMegaMenu(null);
 				setActiveSubcategory(null);
@@ -600,7 +96,7 @@ const Header = () => {
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, []);
 
-	// Funções para controlar o mega menu
+	// Funções para controlar o mega menu hierárquico
 	const handleMegaMenuEnter = (menuKey) => {
 		if (megaMenuTimeoutRef.current) {
 			clearTimeout(megaMenuTimeoutRef.current);
@@ -608,10 +104,11 @@ const Header = () => {
 		setActiveMegaMenu(menuKey);
 
 		// Auto-selecionar a primeira subcategoria
-		const firstSubcategory = Object.keys(
-			megaMenuData[menuKey].subcategories
-		)[0];
-		setActiveSubcategory(firstSubcategory);
+		const menuData = megaMenuData[menuKey];
+		if (menuData && menuData.subcategories) {
+			const firstSubcategory = Object.keys(menuData.subcategories)[0];
+			setActiveSubcategory(firstSubcategory);
+		}
 	};
 
 	const handleMegaMenuLeave = () => {
@@ -643,7 +140,7 @@ const Header = () => {
 		}
 	};
 
-	// UserAvatar MELHORADO
+	// UserAvatar component (mantido igual)
 	const UserAvatar = React.memo(() => {
 		const [imageError, setImageError] = useState(false);
 		const avatarUrl = profile?.avatar_url;
@@ -673,7 +170,7 @@ const Header = () => {
 		);
 	});
 
-	// UserMenu COM ESTADOS CORRIGIDOS
+	// UserMenu component (mantido igual)
 	const UserMenu = () => {
 		if (!sessionChecked) {
 			return (
@@ -761,14 +258,25 @@ const Header = () => {
 							</Link>
 
 							{isAdmin && (
-								<Link
-									to="/admin/dashboard"
-									onClick={() => setIsUserMenuOpen(false)}
-									className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-800/50 transition-colors duration-300 w-full text-left"
-								>
-									<Shield className="w-5 h-5 text-red-400" />
-									<span className="text-gray-300">Dashboard Admin</span>
-								</Link>
+								<>
+									<Link
+										to="/admin/dashboard"
+										onClick={() => setIsUserMenuOpen(false)}
+										className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-800/50 transition-colors duration-300 w-full text-left"
+									>
+										<Shield className="w-5 h-5 text-red-400" />
+										<span className="text-gray-300">Dashboard Admin</span>
+									</Link>
+
+									<Link
+										to="/admin/categories"
+										onClick={() => setIsUserMenuOpen(false)}
+										className="flex items-center space-x-3 p-3 rounded-xl hover:bg-gray-800/50 transition-colors duration-300 w-full text-left"
+									>
+										<Settings className="w-5 h-5 text-blue-400" />
+										<span className="text-gray-300">Gerenciar Categorias</span>
+									</Link>
+								</>
 							)}
 
 							<button
@@ -822,64 +330,78 @@ const Header = () => {
 							</Link>
 						</div>
 
-						{/* Desktop Mega Menu Navigation - CORRIGIDO */}
+						{/* Desktop Mega Menu Navigation - NOVO SISTEMA HIERÁRQUICO */}
 						<div className="hidden lg:block flex-1 max-w-4xl mx-4">
-							<div className="flex items-center justify-center space-x-2">
-								{Object.entries(megaMenuData).map(([menuKey, menuData]) => (
-									<div
-										key={menuKey}
-										className="relative mega-menu-container"
-										onMouseEnter={() => handleMegaMenuEnter(menuKey)}
-										onMouseLeave={handleMegaMenuLeave}
-									>
-										<button
-											className={`relative px-4 py-3 rounded-xl text-lg font-semibold transition-all duration-300 flex items-center space-x-2 ${
-												activeMegaMenu === menuKey
-													? "text-white bg-gradient-to-r from-red-600 to-red-500 shadow-lg"
-													: "text-gray-300 hover:text-white hover:bg-gray-800/50"
-											}`}
+							{megaMenuLoading ? (
+								<div className="flex items-center justify-center space-x-4 animate-pulse">
+									{Array.from({ length: 4 }).map((_, i) => (
+										<div
+											key={i}
+											className="w-24 h-8 bg-gray-700 rounded-xl"
+										></div>
+									))}
+								</div>
+							) : (
+								<div className="flex items-center justify-center space-x-2">
+									{Object.entries(megaMenuData).map(([menuKey, menuData]) => (
+										<div
+											key={menuKey}
+											className="relative mega-menu-container"
+											onMouseEnter={() => handleMegaMenuEnter(menuKey)}
+											onMouseLeave={handleMegaMenuLeave}
 										>
-											<span className="text-sm">{menuData.icon}</span>
-											<span className="whitespace-nowrap">{menuData.name}</span>
-											<ChevronDown
-												className={`w-4 h-4 transition-transform duration-300 ${
-													activeMegaMenu === menuKey ? "rotate-180" : ""
+											<button
+												className={`relative px-4 py-3 rounded-xl text-lg font-semibold transition-all duration-300 flex items-center space-x-2 ${
+													activeMegaMenu === menuKey
+														? "text-white bg-gradient-to-r from-red-600 to-red-500 shadow-lg"
+														: "text-gray-300 hover:text-white hover:bg-gray-800/50"
 												}`}
-											/>
-										</button>
-
-										{/* Mega Menu Dropdown - POSICIONAMENTO CORRIGIDO */}
-										{activeMegaMenu === menuKey && (
-											<div
-												className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-screen max-w-6xl bg-black/95 backdrop-blur-md border border-gray-700/50 rounded-3xl shadow-2xl z-[60] overflow-hidden"
-												style={{
-													position: "absolute",
-													zIndex: 60,
-													left: "50%",
-													transform: "translateX(-50%)",
-													maxWidth: "min(90vw, 1200px)",
-													width: "max-content",
-													minWidth: "800px",
-												}}
-												onMouseEnter={() => handleMegaMenuEnter(menuKey)}
-												onMouseLeave={handleMegaMenuLeave}
 											>
-												<div className="grid grid-cols-12 min-h-[400px]">
-													{/* Left Sidebar - Subcategorias */}
-													<div className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 border-r border-gray-700/50 p-6">
-														<div className="mb-6">
-															<div
-																className={`inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r ${menuData.color} text-white text-sm font-bold shadow-lg`}
-															>
-																<span className="mr-2">{menuData.icon}</span>
-																<span className="whitespace-nowrap">
-																	{menuData.name}
-																</span>
+												<span className="text-sm">{menuData.icon}</span>
+												<span className="whitespace-nowrap">
+													{menuData.name}
+												</span>
+												<ChevronDown
+													className={`w-4 h-4 transition-transform duration-300 ${
+														activeMegaMenu === menuKey ? "rotate-180" : ""
+													}`}
+												/>
+											</button>
+
+											{/* Mega Menu Dropdown - ESTRUTURA HIERÁRQUICA */}
+											{activeMegaMenu === menuKey && (
+												<div
+													className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-screen max-w-6xl bg-black/95 backdrop-blur-md border border-gray-700/50 rounded-3xl shadow-2xl z-[60] overflow-hidden"
+													style={{
+														position: "absolute",
+														zIndex: 60,
+														left: "50%",
+														transform: "translateX(-50%)",
+														maxWidth: "min(90vw, 1200px)",
+														width: "max-content",
+														minWidth: "800px",
+													}}
+													onMouseEnter={() => handleMegaMenuEnter(menuKey)}
+													onMouseLeave={handleMegaMenuLeave}
+												>
+													<div className="grid grid-cols-12 min-h-[400px]">
+														{/* Left Sidebar - Subcategorias */}
+														<div className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 border-r border-gray-700/50 p-6">
+															<div className="mb-6">
+																<div
+																	className={`inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r ${menuData.color} text-white text-sm font-bold shadow-lg`}
+																>
+																	<span className="mr-2">{menuData.icon}</span>
+																	<span className="whitespace-nowrap">
+																		{menuData.name}
+																	</span>
+																</div>
 															</div>
-														</div>
-														<div className="space-y-2">
-															{Object.entries(menuData.subcategories).map(
-																([subKey, subData]) => (
+
+															<div className="space-y-2">
+																{Object.entries(
+																	menuData.subcategories || {}
+																).map(([subKey, subData]) => (
 																	<div
 																		key={subKey}
 																		onMouseEnter={() =>
@@ -895,134 +417,133 @@ const Header = () => {
 																			{subData.name}
 																		</div>
 																		<div className="text-xs opacity-75 mt-1">
-																			{subData.items.length} itens
+																			{subData.items?.length || 0} itens
 																		</div>
 																	</div>
-																)
-															)}
+																))}
+															</div>
 														</div>
-													</div>
 
-													{/* Right Content - Items da subcategoria ativa */}
-													<div className="col-span-9 p-8 bg-gradient-to-br from-gray-800 to-gray-900 overflow-y-auto max-h-[500px]">
-														{activeSubcategory &&
-														megaMenuData[menuKey].subcategories[
-															activeSubcategory
-														] ? (
-															<div className="animate-in slide-in-from-right-5 duration-200">
-																<div className="mb-8">
-																	<h3 className="text-2xl font-black text-white mb-2">
-																		{
-																			megaMenuData[menuKey].subcategories[
+														{/* Right Content - Items da subcategoria ativa */}
+														<div className="col-span-9 p-8 bg-gradient-to-br from-gray-800 to-gray-900 overflow-y-auto max-h-[500px]">
+															{activeSubcategory &&
+															menuData.subcategories?.[activeSubcategory] ? (
+																<div className="animate-in slide-in-from-right-5 duration-200">
+																	<div className="mb-8">
+																		<h3 className="text-2xl font-black text-white mb-2">
+																			{
+																				menuData.subcategories[
+																					activeSubcategory
+																				].name
+																			}
+																		</h3>
+																		<p className="text-gray-400">
+																			Explore todo o conteúdo sobre{" "}
+																			{menuData.subcategories[
 																				activeSubcategory
-																			].name
-																		}
-																	</h3>
-																	<p className="text-gray-400">
-																		Explore todo o conteúdo sobre{" "}
-																		{megaMenuData[menuKey].subcategories[
-																			activeSubcategory
-																		].name.toLowerCase()}
-																	</p>
-																</div>
+																			].name.toLowerCase()}
+																		</p>
+																	</div>
 
-																<div className="grid grid-cols-2 gap-6">
-																	{megaMenuData[menuKey].subcategories[
-																		activeSubcategory
-																	].items.map((item, index) => (
+																	<div className="grid grid-cols-2 gap-6">
+																		{(
+																			menuData.subcategories[activeSubcategory]
+																				.items || []
+																		).map((item, index) => (
+																			<Link
+																				key={`${activeSubcategory}-${index}`}
+																				to={item.href}
+																				onClick={() => {
+																					setActiveMegaMenu(null);
+																					setActiveSubcategory(null);
+																				}}
+																				className="group flex items-center space-x-4 p-4 rounded-xl hover:bg-gray-700/50 transition-all duration-300 border border-transparent hover:border-gray-600/50"
+																			>
+																				<div
+																					className={`w-3 h-3 rounded-full bg-gradient-to-r ${menuData.color} shadow-lg group-hover:scale-125 transition-transform duration-300`}
+																				></div>
+																				<div className="flex-1">
+																					<h4 className="text-white font-semibold group-hover:text-gray-100 transition-colors duration-300 whitespace-nowrap">
+																						{item.name}
+																					</h4>
+																				</div>
+																				<ArrowRight className="w-4 h-4 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all duration-300" />
+																			</Link>
+																		))}
+																	</div>
+
+																	{/* Ver todos link */}
+																	<div className="mt-8 pt-6 border-t border-gray-700/50">
 																		<Link
-																			key={`${activeSubcategory}-${index}`}
-																			to={item.href}
+																			to={
+																				menuData.subcategories[
+																					activeSubcategory
+																				].href
+																			}
 																			onClick={() => {
 																				setActiveMegaMenu(null);
 																				setActiveSubcategory(null);
 																			}}
-																			className="group flex items-center space-x-4 p-4 rounded-xl hover:bg-gray-700/50 transition-all duration-300 border border-transparent hover:border-gray-600/50"
+																			className={`inline-flex items-center space-x-2 bg-gradient-to-r ${menuData.color} hover:shadow-lg hover:scale-105 text-white px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-md`}
 																		>
-																			<div
-																				className={`w-3 h-3 rounded-full bg-gradient-to-r ${menuData.color} shadow-lg group-hover:scale-125 transition-transform duration-300`}
-																			></div>
-																			<div className="flex-1">
-																				<h4 className="text-white font-semibold group-hover:text-gray-100 transition-colors duration-300 whitespace-nowrap">
-																					{item.name}
-																				</h4>
-																			</div>
-																			<ArrowRight className="w-4 h-4 text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all duration-300" />
+																			<span className="whitespace-nowrap">
+																				Ver tudo sobre{" "}
+																				{
+																					menuData.subcategories[
+																						activeSubcategory
+																					].name
+																				}
+																			</span>
+																			<ArrowRight className="w-4 h-4" />
 																		</Link>
-																	))}
+																	</div>
 																</div>
-
-																{/* Ver todos link */}
-																<div className="mt-8 pt-6 border-t border-gray-700/50">
-																	<Link
-																		to={
-																			megaMenuData[menuKey].subcategories[
-																				activeSubcategory
-																			].href
-																		}
-																		onClick={() => {
-																			setActiveMegaMenu(null);
-																			setActiveSubcategory(null);
-																		}}
-																		className={`inline-flex items-center space-x-2 bg-gradient-to-r ${menuData.color} hover:shadow-lg hover:scale-105 text-white px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-md`}
+															) : (
+																<div className="text-center py-16 animate-in fade-in duration-200">
+																	<div
+																		className={`w-20 h-20 bg-gradient-to-r ${menuData.color} rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl`}
 																	>
-																		<span className="whitespace-nowrap">
-																			Ver tudo sobre{" "}
-																			{
-																				megaMenuData[menuKey].subcategories[
-																					activeSubcategory
-																				].name
-																			}
+																		<span className="text-3xl">
+																			{menuData.icon}
 																		</span>
-																		<ArrowRight className="w-4 h-4" />
-																	</Link>
-																</div>
-															</div>
-														) : (
-															<div className="text-center py-16 animate-in fade-in duration-200">
-																<div
-																	className={`w-20 h-20 bg-gradient-to-r ${menuData.color} rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl`}
-																>
-																	<span className="text-3xl">
-																		{menuData.icon}
-																	</span>
-																</div>
-																<h3 className="text-2xl font-bold text-white mb-4">
-																	{menuData.name}
-																</h3>
-																<p className="text-gray-400 mb-8 max-w-md mx-auto">
-																	Passe o mouse sobre uma categoria à esquerda
-																	para ver o conteúdo disponível
-																</p>
-																<div className="flex flex-wrap gap-3 justify-center max-w-lg mx-auto">
-																	{Object.entries(menuData.subcategories).map(
-																		([subKey, subData]) => (
+																	</div>
+																	<h3 className="text-2xl font-bold text-white mb-4">
+																		{menuData.name}
+																	</h3>
+																	<p className="text-gray-400 mb-8 max-w-md mx-auto">
+																		Passe o mouse sobre uma categoria à esquerda
+																		para ver o conteúdo disponível
+																	</p>
+																	<div className="flex flex-wrap gap-3 justify-center max-w-lg mx-auto">
+																		{Object.entries(
+																			menuData.subcategories || {}
+																		).map(([subKey, subData]) => (
 																			<button
 																				key={subKey}
 																				onMouseEnter={() =>
 																					handleSubcategoryEnter(subKey)
 																				}
-																				className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 bg-gradient-to-r ${menuData.color}/20 text-white hover:${menuData.color} hover:shadow-lg hover:scale-105 whitespace-nowrap`}
+																				className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 bg-gradient-to-r ${menuData.color}/20 text-white hover:shadow-lg hover:scale-105 whitespace-nowrap`}
 																			>
 																				{subData.name}
 																			</button>
-																		)
-																	)}
+																		))}
+																	</div>
 																</div>
-															</div>
-														)}
+															)}
+														</div>
 													</div>
 												</div>
-											</div>
-										)}
-									</div>
-								))}
-							</div>
+											)}
+										</div>
+									))}
+								</div>
+							)}
 						</div>
 
 						{/* Right Side Actions */}
 						<div className="flex items-center space-x-3">
-							{/* Social Media - Hidden on mobile */}
+							{/* Social Media */}
 							<div className="hidden xl:flex items-center space-x-3">
 								<a
 									href="https://www.youtube.com/channel/UCTk9ewLwz0tx80SeKxxPpVQ"
@@ -1081,62 +602,18 @@ const Header = () => {
 					</div>
 				</div>
 
-				{/* Mobile Menu */}
+				{/* Mobile Menu - ATUALIZADO PARA HIERARQUIA */}
 				{isMenuOpen && (
 					<div className="lg:hidden bg-black/95 backdrop-blur-md border-t border-red-500/20">
 						<div className="px-4 pt-4 pb-6 space-y-3 max-h-[80vh] overflow-y-auto">
 							{/* Mega Menu categories for mobile */}
 							{Object.entries(megaMenuData).map(([menuKey, menuData]) => (
-								<div key={`mobile-${menuKey}`} className="space-y-2">
-									{/* Category Header */}
-									<div
-										className={`flex items-center px-4 py-3 rounded-xl bg-gradient-to-r ${menuData.color} shadow-lg`}
-									>
-										<span className="mr-3">{menuData.icon}</span>
-										<span className="text-white font-bold text-lg">
-											{menuData.name}
-										</span>
-									</div>
-
-									{/* Subcategories */}
-									<div className="ml-4 space-y-1">
-										{Object.entries(menuData.subcategories).map(
-											([subKey, subData]) => (
-												<div key={`mobile-sub-${subKey}`} className="space-y-1">
-													<Link
-														to={subData.href}
-														onClick={() => setIsMenuOpen(false)}
-														className="block px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-300 font-medium"
-													>
-														{subData.name}
-													</Link>
-													{/* Sub-items (optional, can be expandable) */}
-													<div className="ml-4 space-y-1">
-														{subData.items.slice(0, 3).map((item, index) => (
-															<Link
-																key={`mobile-item-${index}`}
-																to={item.href}
-																onClick={() => setIsMenuOpen(false)}
-																className="block px-3 py-1 text-sm text-gray-400 hover:text-gray-300 transition-colors duration-300"
-															>
-																• {item.name}
-															</Link>
-														))}
-														{subData.items.length > 3 && (
-															<Link
-																to={subData.href}
-																onClick={() => setIsMenuOpen(false)}
-																className="block px-3 py-1 text-sm text-red-400 hover:text-red-300 transition-colors duration-300"
-															>
-																+ Ver mais {subData.items.length - 3}
-															</Link>
-														)}
-													</div>
-												</div>
-											)
-										)}
-									</div>
-								</div>
+								<MobileCategorySection
+									key={`mobile-${menuKey}`}
+									menuKey={menuKey}
+									menuData={menuData}
+									onLinkClick={() => setIsMenuOpen(false)}
+								/>
 							))}
 
 							{/* Divider */}
@@ -1194,6 +671,100 @@ const Header = () => {
 				onClose={() => setIsSearchOpen(false)}
 			/>
 		</>
+	);
+};
+
+// Componente para seção de categoria mobile
+const MobileCategorySection = ({ menuKey, menuData, onLinkClick }) => {
+	const [isExpanded, setIsExpanded] = useState(false);
+
+	return (
+		<div className="space-y-2">
+			{/* Category Header */}
+			<button
+				onClick={() => setIsExpanded(!isExpanded)}
+				className={`w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r ${menuData.color} shadow-lg`}
+			>
+				<div className="flex items-center space-x-3">
+					<span>{menuData.icon}</span>
+					<span className="text-white font-bold text-lg">{menuData.name}</span>
+				</div>
+				<ChevronDown
+					className={`w-5 h-5 text-white transition-transform duration-300 ${
+						isExpanded ? "rotate-180" : ""
+					}`}
+				/>
+			</button>
+
+			{/* Subcategories */}
+			{isExpanded && (
+				<div className="ml-4 space-y-1">
+					{Object.entries(menuData.subcategories || {}).map(
+						([subKey, subData]) => (
+							<MobileSubcategorySection
+								key={`mobile-sub-${subKey}`}
+								subKey={subKey}
+								subData={subData}
+								parentColor={menuData.color}
+								onLinkClick={onLinkClick}
+							/>
+						)
+					)}
+				</div>
+			)}
+		</div>
+	);
+};
+
+// Componente para subcategoria mobile
+const MobileSubcategorySection = ({
+	subKey,
+	subData,
+	parentColor,
+	onLinkClick,
+}) => {
+	const [isExpanded, setIsExpanded] = useState(false);
+
+	return (
+		<div className="space-y-1">
+			<div className="flex items-center">
+				<Link
+					to={subData.href}
+					onClick={onLinkClick}
+					className="flex-1 px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-300 font-medium"
+				>
+					{subData.name}
+				</Link>
+				{subData.items && subData.items.length > 0 && (
+					<button
+						onClick={() => setIsExpanded(!isExpanded)}
+						className="p-2 text-gray-400 hover:text-white"
+					>
+						<ChevronDown
+							className={`w-4 h-4 transition-transform duration-300 ${
+								isExpanded ? "rotate-180" : ""
+							}`}
+						/>
+					</button>
+				)}
+			</div>
+
+			{/* Sub-items */}
+			{isExpanded && subData.items && (
+				<div className="ml-4 space-y-1">
+					{subData.items.map((item, index) => (
+						<Link
+							key={`mobile-item-${index}`}
+							to={item.href}
+							onClick={onLinkClick}
+							className="block px-3 py-1 text-sm text-gray-400 hover:text-gray-300 transition-colors duration-300"
+						>
+							• {item.name}
+						</Link>
+					))}
+				</div>
+			)}
+		</div>
 	);
 };
 

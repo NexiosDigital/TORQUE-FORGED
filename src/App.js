@@ -1,644 +1,393 @@
+// =====================================================
+// CONFIGURAÇÃO DE ROTAS HIERÁRQUICAS - App.js
+// =====================================================
+// Substitui o sistema de rotas dinâmicas estático por um sistema 
+// 100% baseado no banco de dados hierárquico
+
 import React, { Suspense, lazy, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
-import { Toaster } from "react-hot-toast";
-import { AuthProvider } from "./contexts/AuthContext";
-import { ModernQueryProvider, cacheUtils } from "./providers/QueryProvider";
-import Layout from "./components/Layout/Layout";
-import ProtectedRoute from "./components/ProtectedRoute";
-import DynamicPage from "./components/DynamicPage";
-import { ErrorBoundary } from "react-error-boundary";
+import { useCategories } from "./hooks/usePostsQuery";
 
-// Lazy load páginas principais
-const Home = lazy(() =>
-	import(
-		/* webpackChunkName: "home", webpackPreload: true */ "./pages/OptimizedHome"
-	)
-);
-
-const AllPosts = lazy(() =>
-	import(/* webpackChunkName: "all-posts" */ "./pages/AllPosts")
-);
-
-const PostDetail = lazy(() =>
-	import(/* webpackChunkName: "post-detail" */ "./pages/OptimizedPostDetail")
-);
-
-const Category = lazy(() =>
-	import(/* webpackChunkName: "categories" */ "./pages/Category")
-);
-
-const Profile = lazy(() =>
-	import(/* webpackChunkName: "user" */ "./pages/Profile")
-);
-
-const AdminLogin = lazy(() =>
-	import(/* webpackChunkName: "admin" */ "./pages/Admin/Login")
-);
-
-const AdminDashboard = lazy(() =>
-	import(/* webpackChunkName: "admin" */ "./pages/Admin/Dashboard")
-);
-
-const PostEditor = lazy(() =>
-	import(/* webpackChunkName: "admin" */ "./pages/Admin/PostEditor")
-);
-
-// Static Pages
-const About = lazy(() =>
-	import(/* webpackChunkName: "static" */ "./pages/About")
-);
-
-const Contact = lazy(() =>
-	import(/* webpackChunkName: "static" */ "./pages/Contact")
-);
-
-// Configuração de rotas dinâmicas
-const DYNAMIC_ROUTES = {
-	// Corridas
-	racing: ["f1", "nascar", "endurance", "drift"],
-
-	// Marcas
-	brands: [
-		"ferrari",
-		"mclaren",
-		"red-bull",
-		"mercedes",
-		"lamborghini",
-		"porsche",
-	],
-
-	// Preparação
-	preparation: ["tuning", "engines", "performance", "custom"],
-
-	// Tecnologia
-	technology: ["motores", "aerodinamica", "eletronica", "materiais"],
+// Componente de rota dinâmica hierárquica
+const HierarchicalRoute = ({ categoryData }) => {
+  return (
+    <Route
+      key={categoryData.id}
+      path={`/${categoryData.slug}`}
+      element={
+        <Layout>
+          <Suspense fallback={<UltraFastLoader page={categoryData.name} />}>
+            <DynamicPage pageKey={categoryData.id} />
+          </Suspense>
+        </Layout>
+      }
+    />
+  );
 };
 
-// Componente de loading ULTRA RÁPIDO
-const UltraFastLoader = ({ page = "página" }) => (
-	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
-		<div className="text-center">
-			{/* Logo animado minimalista */}
-			<div className="relative mb-8">
-				<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl flex items-center justify-center mx-auto shadow-2xl">
-					<div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-				</div>
-				<div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl mx-auto animate-ping opacity-20"></div>
-			</div>
+// Gerador de rotas baseado na hierarquia do banco
+const HierarchicalRouteGenerator = () => {
+  const { data: categories = [], isLoading } = useCategories();
+  
+  if (isLoading) {
+    return null; // Rotas serão criadas quando dados carregarem
+  }
 
-			{/* Texto minimalista */}
-			<h2 className="text-2xl font-bold text-white mb-2">Carregando {page}</h2>
-			<p className="text-gray-400 mb-4">Sistema ultrarrápido carregando...</p>
-
-			{/* Barra de progresso animada */}
-			<div className="w-64 h-2 bg-gray-800 rounded-full mx-auto overflow-hidden">
-				<div className="h-full bg-gradient-to-r from-red-600 to-red-500 rounded-full animate-pulse"></div>
-			</div>
-		</div>
-	</div>
-);
-
-// Error boundary OTIMIZADO
-const AppErrorBoundary = ({ error, resetErrorBoundary }) => (
-	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
-		<div className="text-center p-8 max-w-lg mx-auto">
-			{/* Ícone de erro */}
-			<div className="w-24 h-24 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
-				<svg
-					className="w-12 h-12 text-white"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth={2}
-						d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-					/>
-				</svg>
-			</div>
-
-			{/* Título e descrição */}
-			<h1 className="text-4xl font-black text-white mb-4">
-				Ops! Algo deu errado
-			</h1>
-			<p className="text-gray-400 mb-8 leading-relaxed text-lg">
-				Ocorreu um erro inesperado na aplicação. Nossa equipe foi notificada e
-				está trabalhando para resolver.
-			</p>
-
-			{/* Ações */}
-			<div className="space-y-4">
-				<button
-					onClick={resetErrorBoundary}
-					className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
-				>
-					Tentar Novamente
-				</button>
-
-				<button
-					onClick={() => (window.location.href = "/")}
-					className="w-full border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300"
-				>
-					Voltar ao Início
-				</button>
-			</div>
-		</div>
-	</div>
-);
-
-// Preloader de dados críticos
-const CriticalDataPreloader = () => {
-	useEffect(() => {
-		// Preload IMEDIATO de dados críticos em background
-		const preloadCritical = async () => {
-			try {
-				// Importar serviços dinamicamente para não bloquear initial load
-				const [{ dataAPIService }] = await Promise.all([
-					import("./services/DataAPIService"),
-				]);
-
-				// Preload silencioso em background
-				setTimeout(async () => {
-					await Promise.allSettled([
-						dataAPIService.getFeaturedPosts(),
-						dataAPIService.getAllPosts(),
-						dataAPIService.getCategories(),
-					]);
-				}, 100);
-			} catch (error) {
-				console.warn("⚠️ Background preload failed:", error);
-			}
-		};
-
-		preloadCritical();
-	}, []);
-
-	return null;
+  // Gerar rotas para todas as categorias de todos os níveis
+  return categories.map(category => (
+    <HierarchicalRoute key={category.id} categoryData={category} />
+  ));
 };
 
-// Service Worker registration para cache persistente
-const ServiceWorkerLoader = () => {
-	useEffect(() => {
-		if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
-			setTimeout(() => {
-				navigator.serviceWorker
-					.register("/sw.js")
-					.then()
-					.catch((error) => console.warn("⚠️ ServiceWorker failed:", error));
-			}, 2000);
-		}
-	}, []);
-
-	return null;
-};
-
-// Função para gerar rotas dinâmicas
-const generateDynamicRoutes = () => {
-	const routes = [];
-
-	// Rotas de corridas - diretas (sem prefixo)
-	DYNAMIC_ROUTES.racing.forEach((category) => {
-		routes.push(
-			<Route
-				key={`racing-${category}`}
-				path={`/${category}`}
-				element={
-					<Layout>
-						<Suspense fallback={<UltraFastLoader page={category} />}>
-							<DynamicPage pageKey={category} />
-						</Suspense>
-					</Layout>
-				}
-			/>,
-			<Route
-				key={`racing-${category}-section`}
-				path={`/${category}/:section`}
-				element={
-					<Layout>
-						<Suspense fallback={<UltraFastLoader page={category} />}>
-							<DynamicPage pageKey={category} />
-						</Suspense>
-					</Layout>
-				}
-			/>
-		);
-	});
-
-	// Rotas de preparação - diretas (sem prefixo)
-	DYNAMIC_ROUTES.preparation.forEach((category) => {
-		routes.push(
-			<Route
-				key={`prep-${category}`}
-				path={`/${category}`}
-				element={
-					<Layout>
-						<Suspense fallback={<UltraFastLoader page={category} />}>
-							<DynamicPage pageKey={category} />
-						</Suspense>
-					</Layout>
-				}
-			/>,
-			<Route
-				key={`prep-${category}-section`}
-				path={`/${category}/:section`}
-				element={
-					<Layout>
-						<Suspense fallback={<UltraFastLoader page={category} />}>
-							<DynamicPage pageKey={category} />
-						</Suspense>
-					</Layout>
-				}
-			/>
-		);
-	});
-
-	// Rotas de marcas - com prefixo /marcas/
-	DYNAMIC_ROUTES.brands.forEach((brand) => {
-		routes.push(
-			<Route
-				key={`brand-${brand}`}
-				path={`/marcas/${brand}`}
-				element={
-					<Layout>
-						<Suspense fallback={<UltraFastLoader page={brand} />}>
-							<DynamicPage pageKey={brand} />
-						</Suspense>
-					</Layout>
-				}
-			/>,
-			<Route
-				key={`brand-${brand}-section`}
-				path={`/marcas/${brand}/:section`}
-				element={
-					<Layout>
-						<Suspense fallback={<UltraFastLoader page={brand} />}>
-							<DynamicPage pageKey={brand} />
-						</Suspense>
-					</Layout>
-				}
-			/>
-		);
-	});
-
-	// Rotas de tecnologia - com prefixo /tecnologia/
-	DYNAMIC_ROUTES.technology.forEach((tech) => {
-		routes.push(
-			<Route
-				key={`tech-${tech}`}
-				path={`/tecnologia/${tech}`}
-				element={
-					<Layout>
-						<Suspense fallback={<UltraFastLoader page={tech} />}>
-							<DynamicPage
-								pageKey={tech === "motores" ? "motores-tech" : tech}
-							/>
-						</Suspense>
-					</Layout>
-				}
-			/>,
-			<Route
-				key={`tech-${tech}-subsection`}
-				path={`/tecnologia/${tech}/:subsection`}
-				element={
-					<Layout>
-						<Suspense fallback={<UltraFastLoader page={tech} />}>
-							<DynamicPage
-								pageKey={tech === "motores" ? "motores-tech" : tech}
-							/>
-						</Suspense>
-					</Layout>
-				}
-			/>
-		);
-	});
-
-	return routes;
-};
-
-// Componente principal da aplicação ULTRA OTIMIZADO
+// Nova configuração do App.js
 function App() {
-	// Preload de cache crítico no app startup
-	useEffect(() => {
-		// Preload automático do cache após 50ms
-		const timer = setTimeout(() => {
-			cacheUtils.preloadCritical();
-		}, 50);
+  // Preload de cache crítico no app startup
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      cacheUtils.preloadCritical();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, []);
 
-		return () => clearTimeout(timer);
-	}, []);
+  return (
+    <ErrorBoundary
+      FallbackComponent={AppErrorBoundary}
+      onError={(error, errorInfo) => {
+        console.error("🔴 App Error Boundary:", error, errorInfo);
+      }}
+      onReset={() => {
+        cacheUtils.clear();
+        window.location.reload();
+      }}
+    >
+      <AuthProvider>
+        <ModernQueryProvider>
+          <div className="App">
+            {/* Preloaders em background */}
+            <CriticalDataPreloader />
+            <ServiceWorkerLoader />
 
-	return (
-		<ErrorBoundary
-			FallbackComponent={AppErrorBoundary}
-			onError={(error, errorInfo) => {
-				console.error("🔴 App Error Boundary:", error, errorInfo);
-			}}
-			onReset={() => {
-				// Limpar cache em caso de erro crítico
-				cacheUtils.clear();
-				window.location.reload();
-			}}
-		>
-			<AuthProvider>
-				<ModernQueryProvider>
-					<div className="App">
-						{/* Preloaders em background */}
-						<CriticalDataPreloader />
-						<ServiceWorkerLoader />
+            {/* Toast notifications */}
+            <Toaster {...toasterConfig} />
 
-						{/* Toast notifications OTIMIZADAS */}
-						<Toaster
-							position="top-right"
-							gutter={8}
-							toastOptions={{
-								duration: 3000,
-								style: {
-									background:
-										"linear-gradient(135deg, #1f2937 0%, #111827 100%)",
-									color: "#ffffff",
-									border: "1px solid #374151",
-									borderRadius: "16px",
-									fontSize: "14px",
-									fontWeight: "500",
-									boxShadow:
-										"0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)",
-									backdropFilter: "blur(8px)",
-								},
-								success: {
-									style: {
-										border: "1px solid #10b981",
-										background:
-											"linear-gradient(135deg, #064e3b 0%, #022c22 100%)",
-									},
-									iconTheme: {
-										primary: "#10b981",
-										secondary: "#ffffff",
-									},
-								},
-								error: {
-									style: {
-										border: "1px solid #ef4444",
-										background:
-											"linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)",
-									},
-									iconTheme: {
-										primary: "#ef4444",
-										secondary: "#ffffff",
-									},
-								},
-								loading: {
-									style: {
-										border: "1px solid #3b82f6",
-										background:
-											"linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)",
-									},
-									iconTheme: {
-										primary: "#3b82f6",
-										secondary: "#ffffff",
-									},
-								},
-							}}
-						/>
+            {/* Sistema de rotas HIERÁRQUICO */}
+            <Routes>
+              {/* ===== ROTAS PRINCIPAIS (inalteradas) ===== */}
+              <Route
+                path="/"
+                element={
+                  <Layout>
+                    <Suspense fallback={<UltraFastLoader page="homepage" />}>
+                      <Home />
+                    </Suspense>
+                  </Layout>
+                }
+              />
 
-						{/* Rotas da aplicação ULTRA OTIMIZADAS */}
-						<Routes>
-							{/* ===== ROTAS PRINCIPAIS ===== */}
-							<Route
-								path="/"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="homepage" />}>
-											<Home />
-										</Suspense>
-									</Layout>
-								}
-							/>
+              <Route
+                path="/posts"
+                element={
+                  <Layout>
+                    <Suspense fallback={<UltraFastLoader page="todos os posts" />}>
+                      <AllPosts />
+                    </Suspense>
+                  </Layout>
+                }
+              />
 
-							<Route
-								path="/posts"
-								element={
-									<Layout>
-										<Suspense
-											fallback={<UltraFastLoader page="todos os posts" />}
-										>
-											<AllPosts />
-										</Suspense>
-									</Layout>
-								}
-							/>
+              <Route
+                path="/post/:id"
+                element={
+                  <Layout>
+                    <Suspense fallback={<UltraFastLoader page="post" />}>
+                      <PostDetail />
+                    </Suspense>
+                  </Layout>
+                }
+              />
 
-							<Route
-								path="/post/:id"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="post" />}>
-											<PostDetail />
-										</Suspense>
-									</Layout>
-								}
-							/>
+              {/* ===== ROTA GENÉRICA PARA CATEGORIAS ===== */}
+              <Route
+                path="/category/:category"
+                element={
+                  <Layout>
+                    <Suspense fallback={<UltraFastLoader page="categoria" />}>
+                      <Category />
+                    </Suspense>
+                  </Layout>
+                }
+              />
 
-							<Route
-								path="/category/:category"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="categoria" />}>
-											<Category />
-										</Suspense>
-									</Layout>
-								}
-							/>
+              {/* ===== PÁGINAS ESTÁTICAS (inalteradas) ===== */}
+              <Route
+                path="/about"
+                element={
+                  <Layout>
+                    <Suspense fallback={<UltraFastLoader page="sobre nós" />}>
+                      <About />
+                    </Suspense>
+                  </Layout>
+                }
+              />
 
-							{/* ===== PÁGINAS ESTÁTICAS ===== */}
-							<Route
-								path="/about"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="sobre nós" />}>
-											<About />
-										</Suspense>
-									</Layout>
-								}
-							/>
+              <Route
+                path="/contact"
+                element={
+                  <Layout>
+                    <Suspense fallback={<UltraFastLoader page="contato" />}>
+                      <Contact />
+                    </Suspense>
+                  </Layout>
+                }
+              />
 
-							<Route
-								path="/contact"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="contato" />}>
-											<Contact />
-										</Suspense>
-									</Layout>
-								}
-							/>
+              {/* ===== ROTAS HIERÁRQUICAS DINÂMICAS ===== */}
+              {/* Estas rotas são geradas automaticamente do banco */}
+              <HierarchicalRouteGenerator />
 
-							{/* ===== ROTAS DINÂMICAS GERADAS ===== */}
-							{generateDynamicRoutes()}
+              {/* ===== ROTAS DE USUÁRIO (inalteradas) ===== */}
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Suspense fallback={<UltraFastLoader page="perfil" />}>
+                        <Profile />
+                      </Suspense>
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-							{/* ===== ROTAS DE USUÁRIO PROTEGIDAS ===== */}
-							<Route
-								path="/profile"
-								element={
-									<ProtectedRoute>
-										<Layout>
-											<Suspense fallback={<UltraFastLoader page="perfil" />}>
-												<Profile />
-											</Suspense>
-										</Layout>
-									</ProtectedRoute>
-								}
-							/>
+              {/* ===== ROTAS DE ADMIN (inalteradas) ===== */}
+              <Route
+                path="/login"
+                element={
+                  <Suspense fallback={<UltraFastLoader page="login admin" />}>
+                    <AdminLogin />
+                  </Suspense>
+                }
+              />
 
-							{/* ===== ROTAS DE ADMIN ===== */}
-							<Route
-								path="/login"
-								element={
-									<Suspense fallback={<UltraFastLoader page="login admin" />}>
-										<AdminLogin />
-									</Suspense>
-								}
-							/>
+              <Route
+                path="/admin/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<UltraFastLoader page="dashboard admin" />}>
+                      <AdminDashboard />
+                    </Suspense>
+                  </Layout>
+                }
+              />
 
-							<Route
-								path="/admin/dashboard"
-								element={
-									<ProtectedRoute>
-										<Suspense
-											fallback={<UltraFastLoader page="dashboard admin" />}
-										>
-											<AdminDashboard />
-										</Suspense>
-									</ProtectedRoute>
-								}
-							/>
+              <Route
+                path="/admin/posts/new"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<UltraFastLoader page="editor de post" />}>
+                      <PostEditor />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
 
-							<Route
-								path="/admin/posts/new"
-								element={
-									<ProtectedRoute>
-										<Suspense
-											fallback={<UltraFastLoader page="editor de post" />}
-										>
-											<PostEditor />
-										</Suspense>
-									</ProtectedRoute>
-								}
-							/>
+              <Route
+                path="/admin/posts/edit/:id"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<UltraFastLoader page="editor de post" />}>
+                      <PostEditor />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
 
-							<Route
-								path="/admin/posts/edit/:id"
-								element={
-									<ProtectedRoute>
-										<Suspense
-											fallback={<UltraFastLoader page="editor de post" />}
-										>
-											<PostEditor />
-										</Suspense>
-									</ProtectedRoute>
-								}
-							/>
+              {/* ===== ROTAS DE CATEGORIAS ADMIN ===== */}
+              <Route
+                path="/admin/categories"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<UltraFastLoader page="gerenciar categorias" />}>
+                      <CategoryManager />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
 
-							{/* ===== ROTAS FALLBACK GENÉRICAS ===== */}
-							<Route
-								path="/marcas/:brand"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="marca" />}>
-											<Category />
-										</Suspense>
-									</Layout>
-								}
-							/>
+              <Route
+                path="/admin/categories/new"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<UltraFastLoader page="nova categoria" />}>
+                      <CategoryEditor />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
 
-							<Route
-								path="/marcas/:brand/:section"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="marca" />}>
-											<Category />
-										</Suspense>
-									</Layout>
-								}
-							/>
+              <Route
+                path="/admin/categories/edit/:id"
+                element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<UltraFastLoader page="editar categoria" />}>
+                      <CategoryEditor />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
 
-							<Route
-								path="/tecnologia/:section"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="Tecnologia" />}>
-											<Category />
-										</Suspense>
-									</Layout>
-								}
-							/>
-
-							<Route
-								path="/tecnologia/:section/:subsection"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="Tecnologia" />}>
-											<Category />
-										</Suspense>
-									</Layout>
-								}
-							/>
-
-							{/* ===== 404 ROUTE OTIMIZADA ===== */}
-							<Route
-								path="*"
-								element={
-									<Layout>
-										<div className="min-h-screen pt-20 flex items-center justify-center">
-											<div className="text-center p-8 max-w-md mx-auto">
-												<div className="w-24 h-24 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
-													<svg
-														className="w-12 h-12 text-white"
-														fill="none"
-														stroke="currentColor"
-														viewBox="0 0 24 24"
-													>
-														<path
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															strokeWidth={2}
-															d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-														/>
-													</svg>
-												</div>
-												<h1 className="text-4xl font-black text-white mb-4">
-													Página não encontrada
-												</h1>
-												<p className="text-gray-400 mb-8 leading-relaxed">
-													A página que você está procurando não existe ou foi
-													removida.
-												</p>
-												<div className="space-y-4">
-													<button
-														onClick={() => window.history.back()}
-														className="w-full border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300"
-													>
-														Voltar
-													</button>
-													<button
-														onClick={() => (window.location.href = "/")}
-														className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
-													>
-														Ir para Home
-													</button>
-												</div>
-											</div>
-										</div>
-									</Layout>
-								}
-							/>
-						</Routes>
-					</div>
-				</ModernQueryProvider>
-			</AuthProvider>
-		</ErrorBoundary>
-	);
+              {/* ===== 404 ROUTE (inalterada) ===== */}
+              <Route
+                path="*"
+                element={
+                  <Layout>
+                    <div className="min-h-screen pt-20 flex items-center justify-center">
+                      <div className="text-center p-8 max-w-md mx-auto">
+                        <div className="w-24 h-24 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
+                          <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <h1 className="text-4xl font-black text-white mb-4">
+                          Página não encontrada
+                        </h1>
+                        <p className="text-gray-400 mb-8 leading-relaxed">
+                          A página que você está procurando não existe ou foi removida.
+                        </p>
+                        <div className="space-y-4">
+                          <button
+                            onClick={() => window.history.back()}
+                            className="w-full border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300"
+                          >
+                            Voltar
+                          </button>
+                          <button
+                            onClick={() => (window.location.href = "/")}
+                            className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
+                          >
+                            Ir para Home
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </Layout>
+                }
+              />
+            </Routes>
+          </div>
+        </ModernQueryProvider>
+      </AuthProvider>
+    </ErrorBoundary>
+  );
 }
+
+// =====================================================
+// COMPONENTE PARA GERIR CATEGORIAS NO ADMIN
+// =====================================================
+
+// Lazy load do gerenciador de categorias
+const CategoryManager = lazy(() => 
+  import(/* webpackChunkName: "admin-categories" */ "./pages/Admin/CategoryManager")
+);
+
+const CategoryEditor = lazy(() => 
+  import(/* webpackChunkName: "admin-categories" */ "./pages/Admin/CategoryEditor")
+);
+
+// =====================================================
+// HELPERS PARA MIGRAÇÃO GRADUAL
+// =====================================================
+
+// Hook para verificar se uma rota existe na hierarquia
+export const useRouteExists = (slug) => {
+  const { data: categories = [] } = useCategories();
+  
+  return useMemo(() => {
+    return categories.some(cat => cat.slug === slug);
+  }, [categories, slug]);
+};
+
+// Componente para redirects de URLs antigas
+const LegacyRouteRedirect = ({ from, to }) => {
+  useEffect(() => {
+    const currentPath = window.location.pathname;
+    if (currentPath === from) {
+      window.history.replaceState(null, null, to);
+    }
+  }, [from, to]);
+
+  return null;
+};
+
+// =====================================================
+// CONFIGURAÇÃO DE REDIRECTS PARA MANTER COMPATIBILIDADE
+// =====================================================
+
+// Adicionar no App.js se necessário manter URLs antigas
+const LegacyRedirects = () => (
+  <>
+    {/* Exemplos de redirects se URLs mudarem */}
+    <LegacyRouteRedirect from="/formula-1" to="/f1" />
+    <LegacyRouteRedirect from="/motores" to="/engines" />
+    <LegacyRouteRedirect from="/tecnologia/motors" to="/tecnologia/motores" />
+    {/* Adicionar mais redirects conforme necessário */}
+  </>
+);
+
+// =====================================================
+// METADATA MANAGER PARA SEO HIERÁRQUICO
+// =====================================================
+
+const CategoryMetadataManager = () => {
+  const { data: categories = [] } = useCategories();
+  
+  useEffect(() => {
+    // Preload metadata para categorias principais
+    categories
+      .filter(cat => cat.level === 1)
+      .forEach(category => {
+        // Preload crítico de SEO data
+        if (category.meta_title) {
+          const link = document.createElement('link');
+          link.rel = 'prefetch';
+          link.href = `/${category.slug}`;
+          document.head.appendChild(link);
+        }
+      });
+  }, [categories]);
+
+  return null;
+};
+
+// =====================================================
+// SITEMAP GENERATOR AUTOMÁTICO
+// =====================================================
+
+const SitemapManager = () => {
+  const { data: categories = [] } = useCategories();
+  
+  useEffect(() => {
+    // Gerar sitemap dinâmico para todas as categorias
+    const generateSitemap = () => {
+      const urls = categories.map(cat => ({
+        url: `/${cat.slug}`,
+        lastmod: cat.updated_at,
+        priority: cat.level === 1 ? '0.9' : cat.level === 2 ? '0.7' : '0.5',
+        changefreq: cat.level === 1 ? 'weekly' : 'monthly'
+      }));
+      
+      // Enviar para API de sitemap se necessário
+      if (process.env.NODE_ENV === 'production') {
+        console.log('📄 Sitemap gerado com', urls.length, 'URLs');
+      }
+    };
+
+    if (categories.length > 0) {
+      generateSitemap();
+    }
+  }, [categories]);
+
+  return null;
+};
 
 export default App;

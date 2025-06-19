@@ -135,6 +135,422 @@ export class PostService {
 		}
 	}
 
+	// Buscar categorias por slug (para roteamento)
+	static async getCategoryBySlug(slug) {
+		if (!slug) {
+			throw new Error("Slug é obrigatório");
+		}
+
+		try {
+			const { data, error } = await supabase
+				.from("categories")
+				.select("*")
+				.eq("slug", slug)
+				.eq("is_active", true)
+				.single();
+
+			if (error) {
+				if (error.code === "PGRST116") {
+					throw new Error("Categoria não encontrada");
+				}
+				throw error;
+			}
+
+			return data;
+		} catch (error) {
+			console.warn(
+				`⚠️ Categoria com slug "${slug}" não encontrada:`,
+				error.message
+			);
+			throw error;
+		}
+	}
+
+	// Buscar hierarquia completa das categorias
+	static async getCategoriesHierarchy() {
+		try {
+			const data = await dataAPIService.getCategoriesHierarchy();
+			return data || [];
+		} catch (error) {
+			console.warn(
+				"⚠️ Erro ao carregar hierarquia, usando fallback:",
+				error.message
+			);
+
+			// Fallback para query direta
+			const { data, error: dbError } = await supabase
+				.from("categories_hierarchy")
+				.select("*")
+				.eq("is_active", true);
+
+			if (dbError) {
+				console.error("❌ Fallback também falhou:", dbError);
+				return this.getFallbackCategoriesHierarchy();
+			}
+
+			return data || [];
+		}
+	}
+
+	// Buscar categorias por nível
+	static async getCategoriesByLevel(level, parentId = null) {
+		try {
+			let query = supabase
+				.from("categories")
+				.select("*")
+				.eq("level", level)
+				.eq("is_active", true);
+
+			if (parentId) {
+				query = query.eq("parent_id", parentId);
+			} else {
+				query = query.is("parent_id", null);
+			}
+
+			const { data, error } = await query.order("sort_order");
+
+			if (error) throw error;
+			return data || [];
+		} catch (error) {
+			console.warn(
+				`⚠️ Erro ao carregar categorias nível ${level}:`,
+				error.message
+			);
+			return [];
+		}
+	}
+
+	// Buscar filhos de uma categoria
+	static async getCategoryChildren(categoryId) {
+		if (!categoryId) return [];
+
+		try {
+			const { data, error } = await supabase.rpc("get_category_children", {
+				category_id: categoryId,
+			});
+
+			if (error) throw error;
+			return data || [];
+		} catch (error) {
+			console.warn(
+				`⚠️ Erro ao carregar filhos de ${categoryId}:`,
+				error.message
+			);
+			return [];
+		}
+	}
+
+	// Buscar breadcrumb de uma categoria
+	static async getCategoryBreadcrumb(categoryId) {
+		if (!categoryId) return [];
+
+		try {
+			const breadcrumb = [];
+			let currentId = categoryId;
+
+			while (currentId) {
+				const { data, error } = await supabase
+					.from("categories")
+					.select("id, name, slug, parent_id")
+					.eq("id", currentId)
+					.single();
+
+				if (error || !data) break;
+
+				breadcrumb.unshift(data);
+				currentId = data.parent_id;
+			}
+
+			return breadcrumb;
+		} catch (error) {
+			console.warn(
+				`⚠️ Erro ao gerar breadcrumb para ${categoryId}:`,
+				error.message
+			);
+			return [];
+		}
+	}
+
+	// Buscar estrutura do mega menu otimizada
+	static async getMegaMenuStructure() {
+		try {
+			const { data, error } = await supabase
+				.from("mega_menu_structure")
+				.select("*");
+
+			if (error) throw error;
+
+			// Transformar em estrutura hierárquica
+			const result = {};
+
+			data.forEach((row) => {
+				// Nível 1 - Categoria principal
+				if (!result[row.category_id]) {
+					result[row.category_id] = {
+						id: row.category_id,
+						name: row.category_name,
+						color: row.category_color,
+						icon: row.category_icon,
+						subcategories: {},
+					};
+				}
+
+				// Nível 2 - Subcategoria
+				if (
+					row.subcategory_id &&
+					!result[row.category_id].subcategories[row.subcategory_id]
+				) {
+					result[row.category_id].subcategories[row.subcategory_id] = {
+						id: row.subcategory_id,
+						name: row.subcategory_name,
+						slug: row.subcategory_slug,
+						href: `/${row.subcategory_slug}`,
+						items: [],
+					};
+				}
+
+				// Nível 3 - Sub-subcategoria
+				if (row.subsubcategory_id) {
+					result[row.category_id].subcategories[row.subcategory_id].items.push({
+						id: row.subsubcategory_id,
+						name: row.subsubcategory_name,
+						slug: row.subsubcategory_slug,
+						href: `/${row.subsubcategory_slug}`,
+					});
+				}
+			});
+
+			return result;
+		} catch (error) {
+			console.warn("⚠️ Erro ao carregar mega menu:", error.message);
+			return this.getFallbackMegaMenu();
+		}
+	}
+
+	/**
+	 * ======================================
+	 * FALLBACKS HIERÁRQUICOS
+	 * ======================================
+	 */
+
+	static getFallbackCategoriesHierarchy() {
+		return [
+			{
+				id: "corridas",
+				name: "Corridas",
+				slug: "corridas",
+				level: 1,
+				color: "from-red-500 to-orange-500",
+				icon: "🏁",
+				parent_id: null,
+			},
+			{
+				id: "f1",
+				name: "Fórmula 1",
+				slug: "f1",
+				level: 2,
+				color: "from-red-600 to-red-500",
+				icon: "🏎️",
+				parent_id: "corridas",
+			},
+			// ... mais categorias fallback conforme necessário
+		];
+	}
+
+	static getFallbackMegaMenu() {
+		return {
+			corridas: {
+				id: "corridas",
+				name: "Corridas",
+				color: "from-red-500 to-orange-500",
+				icon: "🏁",
+				subcategories: {
+					f1: {
+						id: "f1",
+						name: "Fórmula 1",
+						slug: "f1",
+						href: "/f1",
+						items: [
+							{
+								id: "f1-equipes",
+								name: "Equipes",
+								slug: "f1-equipes",
+								href: "/f1-equipes",
+							},
+							{
+								id: "f1-pilotos",
+								name: "Pilotos",
+								slug: "f1-pilotos",
+								href: "/f1-pilotos",
+							},
+						],
+					},
+				},
+			},
+		};
+	}
+
+	/**
+	 * ======================================
+	 * MÉTODOS ADMIN PARA CATEGORIAS
+	 * ======================================
+	 */
+
+	// Criar nova categoria
+	static async createCategory(categoryData) {
+		try {
+			await this.verifyAuthenticatedAdmin();
+
+			const dataToInsert = {
+				id: categoryData.id || this.generateCategoryId(categoryData.name),
+				name: categoryData.name.trim(),
+				description: categoryData.description?.trim() || "",
+				slug: categoryData.slug || this.generateSlug(categoryData.name),
+				color: categoryData.color || "from-gray-500 to-gray-400",
+				icon: categoryData.icon || "📁",
+				parent_id: categoryData.parent_id || null,
+				level: categoryData.level || 1,
+				sort_order: categoryData.sort_order || 0,
+				is_active: categoryData.is_active !== false,
+				meta_title: categoryData.meta_title || categoryData.name,
+				meta_description:
+					categoryData.meta_description || categoryData.description,
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString(),
+			};
+
+			const { data, error } = await supabase
+				.from("categories")
+				.insert([dataToInsert])
+				.select()
+				.single();
+
+			if (error) {
+				console.error("❌ Erro ao criar categoria:", error);
+				throw this.handleRLSError(error);
+			}
+
+			// Invalidar cache
+			await this.invalidatePublicCache();
+			return data;
+		} catch (error) {
+			console.error("❌ PostService.createCategory error:", error);
+			throw error;
+		}
+	}
+
+	// Atualizar categoria
+	static async updateCategory(id, categoryData) {
+		try {
+			await this.verifyAuthenticatedAdmin();
+
+			const dataToUpdate = {
+				name: categoryData.name,
+				description: categoryData.description,
+				slug: categoryData.slug,
+				color: categoryData.color,
+				icon: categoryData.icon,
+				parent_id: categoryData.parent_id,
+				level: categoryData.level,
+				sort_order: categoryData.sort_order,
+				is_active: categoryData.is_active,
+				meta_title: categoryData.meta_title,
+				meta_description: categoryData.meta_description,
+				updated_at: new Date().toISOString(),
+			};
+
+			const { data, error } = await supabase
+				.from("categories")
+				.update(dataToUpdate)
+				.eq("id", id)
+				.select()
+				.single();
+
+			if (error) {
+				console.error("❌ Erro ao atualizar categoria:", error);
+				throw this.handleRLSError(error);
+			}
+
+			await this.invalidatePublicCache();
+			return data;
+		} catch (error) {
+			console.error("❌ PostService.updateCategory error:", error);
+			throw error;
+		}
+	}
+
+	// Deletar categoria
+	static async deleteCategory(id) {
+		try {
+			await this.verifyAuthenticatedAdmin();
+
+			// Verificar se tem filhos
+			const children = await this.getCategoryChildren(id);
+			if (children.length > 0) {
+				throw new Error(
+					"Não é possível deletar categoria que possui subcategorias"
+				);
+			}
+
+			// Verificar se tem posts
+			const { count } = await supabase
+				.from("posts")
+				.select("*", { count: "exact", head: true })
+				.eq("category", id);
+
+			if (count > 0) {
+				throw new Error(
+					`Não é possível deletar categoria que possui ${count} posts`
+				);
+			}
+
+			const { error } = await supabase.from("categories").delete().eq("id", id);
+
+			if (error) {
+				console.error("❌ Erro ao deletar categoria:", error);
+				throw this.handleRLSError(error);
+			}
+
+			await this.invalidatePublicCache();
+		} catch (error) {
+			console.error("❌ PostService.deleteCategory error:", error);
+			throw error;
+		}
+	}
+
+	// Reordenar categorias
+	static async reorderCategories(updates) {
+		try {
+			await this.verifyAuthenticatedAdmin();
+
+			const promises = updates.map(({ id, sort_order }) =>
+				supabase
+					.from("categories")
+					.update({ sort_order, updated_at: new Date().toISOString() })
+					.eq("id", id)
+			);
+
+			await Promise.all(promises);
+			await this.invalidatePublicCache();
+		} catch (error) {
+			console.error("❌ PostService.reorderCategories error:", error);
+			throw error;
+		}
+	}
+
+	// Helper para gerar ID de categoria
+	static generateCategoryId(name) {
+		return name
+			.toLowerCase()
+			.normalize("NFD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/[^a-z0-9\s-]/g, "")
+			.replace(/\s+/g, "-")
+			.replace(/-+/g, "-")
+			.trim()
+			.slice(0, 50);
+	}
+
 	// ======================================
 	// CATEGORIAS DINÂMICAS - SEMPRE DO BANCO
 	// ======================================

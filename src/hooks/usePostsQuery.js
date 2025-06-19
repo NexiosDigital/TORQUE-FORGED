@@ -24,10 +24,34 @@ export const QUERY_KEYS = {
 		byId: (id) => ["public", "posts", "detail", id],
 		search: (query) => ["public", "posts", "search", query],
 		categories: ["public", "categories"],
+		categoriesHierarchy: ["public", "categories", "hierarchy"],
+		categoriesByLevel: (level, parentId) => [
+			"public",
+			"categories",
+			"level",
+			level,
+			parentId,
+		],
+		categoryBySlug: (slug) => ["public", "categories", "slug", slug],
+		categoryChildren: (categoryId) => [
+			"public",
+			"categories",
+			"children",
+			categoryId,
+		],
+		categoryBreadcrumb: (categoryId) => [
+			"public",
+			"categories",
+			"breadcrumb",
+			categoryId,
+		],
+		megaMenu: ["public", "categories", "megamenu"],
 	},
 	admin: {
 		posts: ["admin", "posts"],
 		byId: (id) => ["admin", "posts", "detail", id],
+		categories: ["admin", "categories"],
+		categoryById: (id) => ["admin", "categories", "detail", id],
 	},
 };
 
@@ -92,6 +116,60 @@ const INSTANT_PLACEHOLDERS = {
 		const allPosts = getBootstrapData("allPosts", []);
 		const postId = typeof id === "string" ? parseInt(id, 10) : id;
 		return allPosts.find((post) => post.id === postId) || null;
+	},
+	categoriesHierarchy: () =>
+		getBootstrapData("categoriesHierarchy") || [
+			{
+				id: "corridas",
+				name: "Corridas",
+				slug: "corridas",
+				level: 1,
+				color: "from-red-500 to-orange-500",
+				icon: "🏁",
+				parent_id: null,
+				root_category: "corridas",
+			},
+			{
+				id: "f1",
+				name: "Fórmula 1",
+				slug: "f1",
+				level: 2,
+				color: "from-red-600 to-red-500",
+				icon: "🏎️",
+				parent_id: "corridas",
+				root_category: "corridas",
+			},
+		],
+
+	megaMenu: () =>
+		getBootstrapData("megaMenu") || {
+			corridas: {
+				id: "corridas",
+				name: "Corridas",
+				color: "from-red-500 to-orange-500",
+				icon: "🏁",
+				subcategories: {
+					f1: {
+						id: "f1",
+						name: "Fórmula 1",
+						slug: "f1",
+						href: "/f1",
+						items: [],
+					},
+				},
+			},
+		},
+
+	categoryBySlug: (slug) => {
+		const hierarchy = INSTANT_PLACEHOLDERS.categoriesHierarchy();
+		return hierarchy.find((cat) => cat.slug === slug) || null;
+	},
+
+	categoriesByLevel: (level, parentId) => {
+		const hierarchy = INSTANT_PLACEHOLDERS.categoriesHierarchy();
+		return hierarchy.filter(
+			(cat) => cat.level === level && cat.parent_id === parentId
+		);
 	},
 };
 
@@ -697,6 +775,162 @@ export const usePreloadCriticalData = () => {
 	return { preloadAll };
 };
 
+export const useCategoriesHierarchy = (options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoriesHierarchy,
+		queryFn: () => PostService.getCategoriesHierarchy(),
+		...INSTANT_CONFIG,
+		placeholderData: () => INSTANT_PLACEHOLDERS.categoriesHierarchy(),
+		initialData: () => {
+			const bootstrapData = INSTANT_PLACEHOLDERS.categoriesHierarchy();
+			return bootstrapData.length > 0 ? bootstrapData : undefined;
+		},
+		select: (data) => {
+			if (!data || data.length === 0) {
+				return INSTANT_PLACEHOLDERS.categoriesHierarchy();
+			}
+			return data;
+		},
+		meta: {
+			errorMessage: "Erro ao carregar hierarquia de categorias",
+		},
+		...options,
+	});
+};
+
+export const useCategoriesByLevel = (level, parentId = null, options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoriesByLevel(level, parentId),
+		queryFn: () => PostService.getCategoriesByLevel(level, parentId),
+		enabled: typeof level === "number" && level >= 1 && level <= 3,
+		...INSTANT_CONFIG,
+		placeholderData: () => [],
+		select: (data) => data || [],
+		meta: {
+			errorMessage: `Erro ao carregar categorias nível ${level}`,
+		},
+		...options,
+	});
+};
+
+export const useCategoryBySlug = (slug, options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoryBySlug(slug),
+		queryFn: () => PostService.getCategoryBySlug(slug),
+		enabled: !!slug && typeof slug === "string",
+		...INSTANT_CONFIG,
+		placeholderData: () => null,
+		select: (data) => data || null,
+		meta: {
+			errorMessage: `Categoria "${slug}" não encontrada`,
+		},
+		...options,
+	});
+};
+
+export const useCategoryChildren = (categoryId, options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoryChildren(categoryId),
+		queryFn: () => PostService.getCategoryChildren(categoryId),
+		enabled: !!categoryId,
+		...INSTANT_CONFIG,
+		placeholderData: () => [],
+		select: (data) => data || [],
+		meta: {
+			errorMessage: `Erro ao carregar subcategorias de ${categoryId}`,
+		},
+		...options,
+	});
+};
+
+export const useCategoryBreadcrumb = (categoryId, options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoryBreadcrumb(categoryId),
+		queryFn: () => PostService.getCategoryBreadcrumb(categoryId),
+		enabled: !!categoryId,
+		...INSTANT_CONFIG,
+		placeholderData: () => [],
+		select: (data) => data || [],
+		meta: {
+			errorMessage: `Erro ao gerar breadcrumb para ${categoryId}`,
+		},
+		...options,
+	});
+};
+
+export const useMegaMenuStructure = (options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.megaMenu,
+		queryFn: () => PostService.getMegaMenuStructure(),
+		...INSTANT_CONFIG,
+		placeholderData: () => INSTANT_PLACEHOLDERS.megaMenu(),
+		initialData: () => {
+			const bootstrapData = INSTANT_PLACEHOLDERS.megaMenu();
+			return Object.keys(bootstrapData).length > 0 ? bootstrapData : undefined;
+		},
+		select: (data) => {
+			if (!data || Object.keys(data).length === 0) {
+				return INSTANT_PLACEHOLDERS.megaMenu();
+			}
+			return data;
+		},
+		meta: {
+			errorMessage: "Erro ao carregar estrutura do mega menu",
+		},
+		...options,
+	});
+};
+
+// Hooks admin para categorias
+export const useCreateCategory = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (categoryData) => PostService.createCategory(categoryData),
+		onSuccess: () => {
+			toast.success("Categoria criada com sucesso!");
+			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
+			queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+		},
+		onError: (error) => {
+			toast.error(`Erro ao criar categoria: ${error.message}`);
+		},
+	});
+};
+
+export const useUpdateCategory = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({ id, ...categoryData }) =>
+			PostService.updateCategory(id, categoryData),
+		onSuccess: () => {
+			toast.success("Categoria atualizada com sucesso!");
+			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
+			queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+		},
+		onError: (error) => {
+			toast.error(`Erro ao atualizar categoria: ${error.message}`);
+		},
+	});
+};
+
+export const useDeleteCategory = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (id) => PostService.deleteCategory(id),
+		onSuccess: () => {
+			toast.success("Categoria deletada com sucesso!");
+			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
+			queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+		},
+		onError: (error) => {
+			toast.error(`Erro ao deletar categoria: ${error.message}`);
+		},
+	});
+};
+
 export default {
 	useFeaturedPosts,
 	useAllPosts,
@@ -714,6 +948,14 @@ export default {
 	useCacheUtils,
 	usePreloadCriticalData,
 	QUERY_KEYS,
-	// Expor placeholders para debug
 	INSTANT_PLACEHOLDERS,
+	useCategoriesHierarchy,
+	useCategoriesByLevel,
+	useCategoryBySlug,
+	useCategoryChildren,
+	useCategoryBreadcrumb,
+	useMegaMenuStructure,
+	useCreateCategory,
+	useUpdateCategory,
+	useDeleteCategory,
 };

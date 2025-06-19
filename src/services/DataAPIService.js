@@ -183,6 +183,80 @@ class DataAPIService {
 		return data[0];
 	}
 
+	// Hierarquia completa
+	async getCategoriesHierarchy(bypassCache = false) {
+		const endpoint = "/categories_hierarchy?select=*&is_active=eq.true";
+
+		return this.fetch(endpoint, {
+			cache: bypassCache ? "no-cache" : "force-cache",
+			headers: {
+				"Cache-Control": bypassCache
+					? "no-cache"
+					: "public, max-age=3600, s-maxage=7200, immutable", // 1h cliente, 2h CDN
+			},
+			memoryCacheTTL: 60 * 60 * 1000, // 1h memory cache
+		});
+	}
+
+	// Mega menu estruturado
+	async getMegaMenuStructure(bypassCache = false) {
+		const endpoint = "/mega_menu_structure?select=*";
+
+		return this.fetch(endpoint, {
+			cache: bypassCache ? "no-cache" : "force-cache",
+			headers: {
+				"Cache-Control": bypassCache
+					? "no-cache"
+					: "public, max-age=1800, s-maxage=3600", // 30min cliente, 1h CDN
+			},
+			memoryCacheTTL: 30 * 60 * 1000, // 30min memory cache
+		});
+	}
+
+	// Categoria por slug
+	async getCategoryBySlug(slug, bypassCache = false) {
+		const endpoint = `/categories?select=*&slug=eq.${slug}&is_active=eq.true&limit=1`;
+
+		const data = await this.fetch(endpoint, {
+			cache: bypassCache ? "no-cache" : "force-cache",
+			headers: {
+				"Cache-Control": bypassCache
+					? "no-cache"
+					: "public, max-age=1800, s-maxage=3600",
+			},
+			memoryCacheTTL: 30 * 60 * 1000,
+		});
+
+		if (!data || data.length === 0) {
+			throw new Error("Categoria não encontrada");
+		}
+
+		return data[0];
+	}
+
+	// Categorias por nível
+	async getCategoriesByLevel(level, parentId = null, bypassCache = false) {
+		let endpoint = `/categories?select=*&level=eq.${level}&is_active=eq.true`;
+
+		if (parentId) {
+			endpoint += `&parent_id=eq.${parentId}`;
+		} else {
+			endpoint += `&parent_id=is.null`;
+		}
+
+		endpoint += "&order=sort_order";
+
+		return this.fetch(endpoint, {
+			cache: bypassCache ? "no-cache" : "force-cache",
+			headers: {
+				"Cache-Control": bypassCache
+					? "no-cache"
+					: "public, max-age=1200, s-maxage=1800", // 20min cliente, 30min CDN
+			},
+			memoryCacheTTL: 20 * 60 * 1000,
+		});
+	}
+
 	/**
 	 * ======================================
 	 * CATEGORIAS DINÂMICAS - SEMPRE DO BANCO
