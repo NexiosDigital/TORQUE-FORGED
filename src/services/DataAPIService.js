@@ -1,11 +1,3 @@
-/**
- * DataAPIService - CACHE ULTRA AGRESSIVO para carregamento instantâneo
- * - Cache HTTP de 30+ minutos para dados públicos
- * - Browser cache persistence
- * - Headers otimizados para performance máxima
- * - Preload de dados críticos
- */
-
 class DataAPIService {
 	constructor() {
 		this.baseURL = `${process.env.REACT_APP_SUPABASE_URL}/rest/v1`;
@@ -82,7 +74,14 @@ class DataAPIService {
 	isMemoryCacheValid(key) {
 		if (!this.memoryCache.has(key)) return false;
 		const timestamp = this.cacheTimestamps.get(key);
-		return timestamp && Date.now() - timestamp < 30 * 60 * 1000; // 30 min
+
+		// TTL diferenciado por tipo de dados
+		let maxAge = 30 * 60 * 1000; // 30 min default
+		if (key.includes("categories")) {
+			maxAge = 60 * 60 * 1000; // 1 hora para categorias
+		}
+
+		return timestamp && Date.now() - timestamp < maxAge;
 	}
 
 	setMemoryCache(key, data, ttl) {
@@ -185,24 +184,93 @@ class DataAPIService {
 	}
 
 	/**
-	 * Categorias - Cache ULTRA AGRESSIVO (2 horas)
+	 * ======================================
+	 * CATEGORIAS DINÂMICAS - SEMPRE DO BANCO
+	 * ======================================
 	 */
 	async getCategories(bypassCache = false) {
 		const endpoint = "/categories?select=*&order=name";
 
-		return this.fetch(endpoint, {
-			cache: bypassCache ? "no-cache" : "force-cache",
-			headers: {
-				"Cache-Control": bypassCache
-					? "no-cache"
-					: "public, max-age=7200, s-maxage=10800, immutable", // 2h cliente, 3h CDN
-				Pragma: bypassCache ? "no-cache" : "cache",
-				Expires: bypassCache
-					? "0"
-					: new Date(Date.now() + 2 * 60 * 60 * 1000).toUTCString(),
-			},
-			memoryCacheTTL: 2 * 60 * 60 * 1000, // 2h memory cache
-		});
+		try {
+			const data = await this.fetch(endpoint, {
+				cache: bypassCache ? "no-cache" : "force-cache",
+				headers: {
+					"Cache-Control": bypassCache
+						? "no-cache"
+						: "public, max-age=3600, s-maxage=7200", // 1h cliente, 2h CDN (menos agressivo para categorias)
+					Pragma: bypassCache ? "no-cache" : "cache",
+					Expires: bypassCache
+						? "0"
+						: new Date(Date.now() + 60 * 60 * 1000).toUTCString(),
+				},
+				memoryCacheTTL: 60 * 60 * 1000, // 1h memory cache para categorias
+			});
+
+			// Validar dados de categorias
+			if (!Array.isArray(data)) {
+				console.warn("⚠️ Categorias retornadas não são array:", data);
+				return [];
+			}
+
+			// Filtrar categorias válidas
+			const validCategories = data.filter(
+				(cat) =>
+					cat &&
+					cat.id &&
+					cat.name &&
+					typeof cat.id === "string" &&
+					typeof cat.name === "string"
+			);
+
+			if (validCategories.length !== data.length) {
+				console.warn(
+					`⚠️ ${
+						data.length - validCategories.length
+					} categorias inválidas filtradas`
+				);
+			}
+
+			// Cache local adicional para categorias (backup)
+			if (validCategories.length > 0) {
+				try {
+					localStorage.setItem(
+						"tf-cache-categories-db",
+						JSON.stringify({
+							data: validCategories,
+							timestamp: Date.now(),
+						})
+					);
+				} catch (error) {
+					// Ignorar erro de localStorage
+				}
+			}
+
+			return validCategories;
+		} catch (error) {
+			console.error("❌ Erro ao buscar categorias do Data API:", error);
+
+			// Tentar cache local como fallback
+			try {
+				const cached = localStorage.getItem("tf-cache-categories-db");
+				if (cached) {
+					const { data, timestamp } = JSON.parse(cached);
+					const age = Date.now() - timestamp;
+
+					// Aceitar cache de até 4 horas em caso de erro
+					if (age < 4 * 60 * 60 * 1000) {
+						console.warn(
+							"⚠️ Usando categorias do cache local devido a erro da API"
+						);
+						return data;
+					}
+				}
+			} catch (cacheError) {
+				// Ignorar erro de cache
+			}
+
+			// Re-throw error se não conseguiu nem cache
+			throw error;
+		}
 	}
 
 	/**
@@ -233,7 +301,7 @@ class DataAPIService {
 	}
 
 	/**
-	 * PRELOAD de dados críticos para carregamento instantâneo
+	 * PRELOAD de dados críticos DINÂMICOS
 	 */
 	async preloadCriticalData() {
 		try {
@@ -244,13 +312,24 @@ class DataAPIService {
 				this.getCategories(),
 			]);
 
-			return {
+			const result = {
 				featuredPosts:
 					featuredPosts.status === "fulfilled" ? featuredPosts.value : [],
 				allPosts: allPosts.status === "fulfilled" ? allPosts.value : [],
 				categories: categories.status === "fulfilled" ? categories.value : [],
 				preloadTimestamp: Date.now(),
 			};
+
+			// Log de resultados
+			console.log("🚀 Critical data preloaded:", {
+				featuredPosts: result.featuredPosts.length,
+				allPosts: result.allPosts.length,
+				categories: result.categories.length,
+				categoriesFromDB:
+					result.categories.length > 0 && result.categories[0].id !== "geral",
+			});
+
+			return result;
 		} catch (error) {
 			console.warn("⚠️ Preload failed, will load on demand:", error);
 			return null;
@@ -266,7 +345,13 @@ class DataAPIService {
 		try {
 			// Warmup silencioso em background
 			setTimeout(async () => {
-				await this.preloadCriticalData();
+				const result = await this.preloadCriticalData();
+
+				if (result && result.categories.length === 0) {
+					console.warn(
+						"⚠️ Nenhuma categoria encontrada durante warmup - verifique banco de dados"
+					);
+				}
 			}, 100);
 		} catch (error) {
 			console.warn("⚠️ Cache warmup failed:", error);
@@ -286,19 +371,29 @@ class DataAPIService {
 			memoryEntries: this.memoryCache.size,
 			oldestEntry: Math.min(...Array.from(this.cacheTimestamps.values())),
 			newestEntry: Math.max(...Array.from(this.cacheTimestamps.values())),
+			categoriesInMemory: this.memoryCache.has(
+				"/categories?select=*&order=name-" + JSON.stringify({})
+			),
+			localCategoriesCache: !!localStorage.getItem("tf-cache-categories-db"),
 		};
 	}
 
 	/**
-	 * Health check otimizado
+	 * Health check otimizado com teste de categorias
 	 */
 	async healthCheck() {
 		try {
 			const start = Date.now();
+
+			// Testar posts primeiro
 			await this.fetch("/posts?select=count&limit=1", {
 				cache: "no-cache",
 				headers: { "Cache-Control": "no-cache" },
 			});
+
+			// Testar categorias (mais crítico agora)
+			const categories = await this.getCategories(true);
+
 			const duration = Date.now() - start;
 
 			return {
@@ -306,12 +401,21 @@ class DataAPIService {
 				responseTime: duration,
 				timestamp: new Date().toISOString(),
 				cacheStats: this.getCacheStats(),
+				categories: {
+					count: categories.length,
+					dynamic: categories.length > 0 && categories[0].id !== "geral",
+					hasLocalCache: !!localStorage.getItem("tf-cache-categories-db"),
+				},
 			};
 		} catch (error) {
 			return {
 				status: "unhealthy",
 				error: error.message,
 				timestamp: new Date().toISOString(),
+				categories: {
+					available: false,
+					error: error.message.includes("categories"),
+				},
 			};
 		}
 	}
@@ -330,6 +434,12 @@ class DataAPIService {
 			this.cacheTimestamps.delete(key);
 		});
 
+		// Invalidação especial para categorias
+		if (endpoint.includes("categories")) {
+			localStorage.removeItem("tf-cache-categories-db");
+			console.log("🗑️ Cache local de categorias invalidado");
+		}
+
 		// Força nova requisição para invalidar HTTP cache
 		try {
 			const url = `${this.baseURL}${endpoint}`;
@@ -345,6 +455,112 @@ class DataAPIService {
 		} catch (error) {
 			console.warn("Cache invalidation failed:", error);
 		}
+	}
+
+	/**
+	 * ======================================
+	 * MÉTODOS ESPECÍFICOS PARA CATEGORIAS DINÂMICAS
+	 * ======================================
+	 */
+
+	// Forçar refresh de categorias (útil para admin)
+	async refreshCategories() {
+		try {
+			console.log("🔄 Forçando refresh de categorias...");
+
+			// Limpar todos os caches de categorias
+			await this.invalidateCache("/categories");
+
+			// Buscar categorias frescas do banco
+			const freshCategories = await this.getCategories(true);
+
+			console.log(
+				`✅ Categorias atualizadas: ${freshCategories.length} encontradas`
+			);
+
+			return freshCategories;
+		} catch (error) {
+			console.error("❌ Erro ao atualizar categorias:", error);
+			throw error;
+		}
+	}
+
+	// Verificar se categorias estão atualizadas
+	async validateCategories() {
+		try {
+			const categories = await this.getCategories();
+
+			return {
+				valid: Array.isArray(categories) && categories.length > 0,
+				count: categories.length,
+				dynamic: categories.length > 0 && categories[0].id !== "geral",
+				categories: categories.map((cat) => ({ id: cat.id, name: cat.name })),
+				lastUpdate: this.cacheTimestamps.get(
+					"/categories?select=*&order=name-" + JSON.stringify({})
+				),
+			};
+		} catch (error) {
+			return {
+				valid: false,
+				error: error.message,
+				count: 0,
+				dynamic: false,
+			};
+		}
+	}
+
+	// Debug de categorias
+	async debugCategories() {
+		const result = {
+			timestamp: new Date().toISOString(),
+			memoryCache: null,
+			localStorage: null,
+			freshFetch: null,
+		};
+
+		// Verificar memory cache
+		const memoryCacheKey =
+			"/categories?select=*&order=name-" + JSON.stringify({});
+		result.memoryCache = {
+			exists: this.memoryCache.has(memoryCacheKey),
+			valid: this.isMemoryCacheValid(memoryCacheKey),
+			data: this.memoryCache.get(memoryCacheKey) || null,
+		};
+
+		// Verificar localStorage
+		try {
+			const cached = localStorage.getItem("tf-cache-categories-db");
+			if (cached) {
+				const { data, timestamp } = JSON.parse(cached);
+				result.localStorage = {
+					exists: true,
+					age: Date.now() - timestamp,
+					count: data.length,
+					data: data,
+				};
+			} else {
+				result.localStorage = { exists: false };
+			}
+		} catch (error) {
+			result.localStorage = { exists: false, error: error.message };
+		}
+
+		// Tentar fetch fresco
+		try {
+			const freshData = await this.getCategories(true);
+			result.freshFetch = {
+				success: true,
+				count: freshData.length,
+				data: freshData,
+			};
+		} catch (error) {
+			result.freshFetch = {
+				success: false,
+				error: error.message,
+			};
+		}
+
+		return result;
 	}
 }
 

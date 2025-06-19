@@ -9,11 +9,14 @@ import {
 	ChevronRight,
 	Zap,
 	AlertCircle,
+	RefreshCw,
+	Database,
 } from "lucide-react";
 import {
 	usePostsByCategory,
 	usePrefetch,
 	useCategories,
+	useCacheUtils,
 } from "../hooks/usePostsQuery";
 import { ErrorBoundary } from "react-error-boundary";
 
@@ -108,24 +111,54 @@ const PostCard = React.memo(({ post, index }) => {
 	);
 });
 
-// Error fallback
-const ErrorFallback = ({ error, resetErrorBoundary, section }) => (
-	<div className="text-center py-16">
-		<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
-			<AlertCircle className="w-10 h-10 text-white" />
+// Error fallback com opção de refresh de categorias
+const ErrorFallback = ({ error, resetErrorBoundary, section }) => {
+	const { refreshCategories } = useCacheUtils();
+
+	const handleRefreshCategories = async () => {
+		try {
+			await refreshCategories();
+			resetErrorBoundary();
+		} catch (error) {
+			console.error("Erro ao atualizar categorias:", error);
+		}
+	};
+
+	return (
+		<div className="text-center py-16">
+			<div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
+				<AlertCircle className="w-10 h-10 text-white" />
+			</div>
+			<h3 className="text-2xl font-bold text-white mb-4">
+				Erro ao carregar {section}
+			</h3>
+			<p className="text-gray-400 mb-4">
+				{error?.message?.includes("categoria")
+					? "Esta categoria pode não existir no banco de dados."
+					: "Algo deu errado. Tente novamente."}
+			</p>
+			<div className="space-y-3">
+				<button
+					onClick={resetErrorBoundary}
+					className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105 flex items-center space-x-2 mx-auto"
+				>
+					<RefreshCw className="w-4 h-4" />
+					<span>Tentar Novamente</span>
+				</button>
+
+				{section?.includes("categoria") && (
+					<button
+						onClick={handleRefreshCategories}
+						className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-2 rounded-xl font-semibold transition-all duration-300 flex items-center space-x-2 mx-auto text-sm"
+					>
+						<Database className="w-4 h-4" />
+						<span>Atualizar Categorias</span>
+					</button>
+				)}
+			</div>
 		</div>
-		<h3 className="text-2xl font-bold text-white mb-4">
-			Erro ao carregar {section}
-		</h3>
-		<p className="text-gray-400 mb-8">Algo deu errado. Tente novamente.</p>
-		<button
-			onClick={resetErrorBoundary}
-			className="bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
-		>
-			Tentar Novamente
-		</button>
-	</div>
-);
+	);
+};
 
 // Loading skeleton para categoria
 const CategorySkeleton = () => (
@@ -170,12 +203,22 @@ const CategorySkeleton = () => (
 const FlexiblePage = ({ pageKey, section }) => {
 	const params = useParams();
 
-	// Buscar TODAS as categorias do banco de dados
+	// Buscar TODAS as categorias do banco de dados - SEMPRE DINÂMICO
 	const {
 		data: categories = [],
 		isLoading: categoriesLoading,
 		error: categoriesError,
-	} = useCategories();
+		refetch: refetchCategories,
+	} = useCategories({
+		// Configurações específicas para garantir dados atualizados
+		staleTime: 30 * 60 * 1000, // 30 min
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		retry: (failureCount, error) => {
+			// Permitir retry para categorias (crítico)
+			return failureCount < 2;
+		},
+	});
 
 	// Determinar categoryId baseado nos parâmetros
 	const categoryId = useMemo(() => {
@@ -188,13 +231,18 @@ const FlexiblePage = ({ pageKey, section }) => {
 		);
 	}, [pageKey, params]);
 
-	// Buscar configuração da categoria no banco de dados
+	// Buscar configuração da categoria no banco de dados DINAMICAMENTE
 	const categoryConfig = useMemo(() => {
 		if (!categories.length || !categoryId) return null;
 
 		// Buscar categoria pelo ID
 		const category = categories.find((cat) => cat.id === categoryId);
-		if (!category) return null;
+		if (!category) {
+			console.warn(
+				`⚠️ Categoria "${categoryId}" não encontrada no banco de dados`
+			);
+			return null;
+		}
 
 		// Converter dados do banco para formato esperado pelo componente
 		return {
@@ -202,7 +250,7 @@ const FlexiblePage = ({ pageKey, section }) => {
 			title: category.name,
 			description: category.description,
 			gradient: category.color || "from-red-500 to-orange-500",
-			icon: "🏁", // Pode ser adicionado como campo no banco futuramente
+			icon: category.icon || "🏁", // Ícone do banco ou padrão
 			type: "category",
 			categoryId: category.id,
 			count: category.count || 0,
@@ -214,23 +262,41 @@ const FlexiblePage = ({ pageKey, section }) => {
 		data: posts = [],
 		isLoading: postsLoading,
 		error: postsError,
+		refetch: refetchPosts,
 	} = usePostsByCategory(categoryId, {
 		enabled: !!categoryId,
 	});
+
+	// Debug em desenvolvimento
+	React.useEffect(() => {
+		if (process.env.NODE_ENV === "development") {
+			console.log("🔍 FlexiblePage Debug:", {
+				categoryId,
+				categoriesCount: categories.length,
+				categoryFound: !!categoryConfig,
+				postsCount: posts.length,
+				categoriesFromFallback:
+					categories.length === 1 && categories[0].id === "geral",
+			});
+		}
+	}, [categoryId, categories, categoryConfig, posts]);
 
 	// Loading states
 	if (categoriesLoading) {
 		return <CategorySkeleton />;
 	}
 
-	// Error states
+	// Error states para categorias
 	if (categoriesError) {
 		return (
 			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 					<ErrorFallback
 						error={categoriesError}
-						resetErrorBoundary={() => window.location.reload()}
+						resetErrorBoundary={() => {
+							refetchCategories();
+							window.location.reload();
+						}}
 						section="categorias"
 					/>
 				</div>
@@ -244,22 +310,51 @@ const FlexiblePage = ({ pageKey, section }) => {
 			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 					<div className="text-center py-16">
-						<div className="w-20 h-20 bg-gradient-to-r from-gray-600 to-gray-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
-							<AlertCircle className="w-10 h-10 text-gray-400" />
+						<div className="w-20 h-20 bg-gradient-to-r from-yellow-600 to-orange-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+							<AlertCircle className="w-10 h-10 text-white" />
 						</div>
 						<h3 className="text-2xl font-bold text-white mb-4">
 							Categoria "{categoryId}" não encontrada
 						</h3>
-						<p className="text-gray-400 mb-8">
-							Esta categoria não existe no sistema ou não está ativa.
+						<p className="text-gray-400 mb-4">
+							Esta categoria não existe no banco de dados ou não está ativa.
 						</p>
-						<Link
-							to="/"
-							className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
-						>
-							<ArrowLeft className="w-4 h-4" />
-							<span>Voltar ao início</span>
-						</Link>
+
+						{/* Mostrar categorias disponíveis */}
+						{categories.length > 0 && (
+							<div className="mb-8">
+								<p className="text-gray-500 mb-4">Categorias disponíveis:</p>
+								<div className="flex flex-wrap gap-2 justify-center max-w-2xl mx-auto">
+									{categories.map((cat) => (
+										<Link
+											key={cat.id}
+											to={`/${cat.id}`}
+											className="bg-gray-800 hover:bg-red-600 text-gray-300 hover:text-white px-4 py-2 rounded-full text-sm transition-all duration-300"
+										>
+											{cat.name}
+										</Link>
+									))}
+								</div>
+							</div>
+						)}
+
+						<div className="space-y-4">
+							<button
+								onClick={() => refetchCategories()}
+								className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-blue-500/25 hover:scale-105"
+							>
+								<Database className="w-4 h-4" />
+								<span>Atualizar Categorias</span>
+							</button>
+
+							<Link
+								to="/"
+								className="inline-flex items-center space-x-2 border-2 border-gray-600 hover:border-red-500 text-gray-300 hover:text-white px-6 py-3 rounded-2xl font-bold transition-all duration-300 ml-4"
+							>
+								<ArrowLeft className="w-4 h-4" />
+								<span>Voltar ao início</span>
+							</Link>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -325,7 +420,10 @@ const FlexiblePage = ({ pageKey, section }) => {
 								</div>
 							)}
 							<div className="bg-white/10 backdrop-blur-sm px-6 py-3 rounded-full border border-white/20">
-								<span className="text-white font-bold">Categoria Ativa</span>
+								<span className="text-white font-bold">
+									<Database className="w-4 h-4 inline mr-2" />
+									Dinâmico
+								</span>
 							</div>
 						</div>
 					</div>
@@ -339,7 +437,10 @@ const FlexiblePage = ({ pageKey, section }) => {
 						FallbackComponent={(props) => (
 							<ErrorFallback {...props} section="posts" />
 						)}
-						onReset={() => window.location.reload()}
+						onReset={() => {
+							refetchPosts();
+							refetchCategories();
+						}}
 					>
 						{postsLoading ? (
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -360,7 +461,7 @@ const FlexiblePage = ({ pageKey, section }) => {
 						) : postsError ? (
 							<ErrorFallback
 								error={postsError}
-								resetErrorBoundary={() => window.location.reload()}
+								resetErrorBoundary={() => refetchPosts()}
 								section="posts"
 							/>
 						) : posts.length === 0 ? (

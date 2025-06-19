@@ -8,6 +8,13 @@ import { PostService } from "../services/PostService";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 
+// Importar debug utils em desenvolvimento
+if (process.env.NODE_ENV === "development") {
+	import("../utils/categoriesDebugUtils").catch(() => {
+		// Ignorar se arquivo não existir
+	});
+}
+
 // Query keys INALTERADOS (compatibilidade)
 export const QUERY_KEYS = {
 	public: {
@@ -24,7 +31,7 @@ export const QUERY_KEYS = {
 	},
 };
 
-// Funções de placeholder data INTELIGENTES
+// Funções de placeholder data INTELIGENTES e DINÂMICAS
 const getBootstrapData = (key, fallback = []) => {
 	if (
 		window.TORQUE_FORGED_BOOTSTRAP?.ready &&
@@ -38,49 +45,49 @@ const getBootstrapData = (key, fallback = []) => {
 const INSTANT_PLACEHOLDERS = {
 	featuredPosts: () => getBootstrapData("featuredPosts", []),
 	allPosts: () => getBootstrapData("allPosts", []),
-	categories: () =>
-		getBootstrapData("categories", [
+
+	// Categorias DINÂMICAS - busca do bootstrap OU usa fallback mínimo
+	categories: () => {
+		const bootstrapCategories = getBootstrapData("categories", []);
+
+		// Se tem categorias do bootstrap, usar essas
+		if (bootstrapCategories.length > 0) {
+			return bootstrapCategories;
+		}
+
+		// Se não tem bootstrap, usar categorias mínimas do cache local
+		try {
+			const cached = localStorage.getItem("tf-cache-categories-db");
+			if (cached) {
+				const { data, timestamp } = JSON.parse(cached);
+				const age = Date.now() - timestamp;
+
+				// Cache válido por 1 hora
+				if (age < 60 * 60 * 1000) {
+					return data;
+				}
+			}
+		} catch (error) {
+			// Ignorar erros de cache
+		}
+
+		// Fallback mínimo apenas se necessário
+		return [
 			{
-				id: "f1",
-				name: "Fórmula 1",
-				description: "A elite do automobilismo mundial",
-				color: "from-red-500 to-orange-500",
+				id: "geral",
+				name: "Geral",
+				description: "Conteúdo geral sobre automobilismo",
+				color: "from-gray-500 to-gray-600",
+				count: 0,
 			},
-			{
-				id: "nascar",
-				name: "NASCAR",
-				description: "A categoria mais popular dos EUA",
-				color: "from-blue-500 to-cyan-500",
-			},
-			{
-				id: "endurance",
-				name: "Endurance",
-				description: "Corridas de resistência épicas",
-				color: "from-green-500 to-emerald-500",
-			},
-			{
-				id: "drift",
-				name: "Formula Drift",
-				description: "A arte de deslizar com estilo",
-				color: "from-purple-500 to-pink-500",
-			},
-			{
-				id: "tuning",
-				name: "Tuning & Custom",
-				description: "Personalização e modificações",
-				color: "from-yellow-500 to-orange-500",
-			},
-			{
-				id: "engines",
-				name: "Motores",
-				description: "Tecnologia e performance",
-				color: "from-indigo-500 to-purple-500",
-			},
-		]),
+		];
+	},
+
 	postsByCategory: (categoryId) => {
 		const allPosts = getBootstrapData("allPosts", []);
 		return allPosts.filter((post) => post.category === categoryId);
 	},
+
 	postById: (id) => {
 		const allPosts = getBootstrapData("allPosts", []);
 		const postId = typeof id === "string" ? parseInt(id, 10) : id;
@@ -90,7 +97,7 @@ const INSTANT_PLACEHOLDERS = {
 
 // Configurações INSTANTÂNEAS - nunca loading
 const INSTANT_CONFIG = {
-	staleTime: 5 * 60 * 1000, // 10 min
+	staleTime: 5 * 60 * 1000, // 5 min
 	gcTime: 4 * 60 * 60 * 1000, // 4 horas
 	refetchOnWindowFocus: false,
 	refetchOnMount: false,
@@ -221,27 +228,49 @@ export const usePostById = (id, options = {}) => {
 	});
 };
 
-// Categorias - SEMPRE instantâneo
+// ======================================
+// CATEGORIAS DINÂMICAS - SEMPRE BUSCA DO BANCO
+// ======================================
 export const useCategories = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.categories,
 		queryFn: () => PostService.getCategories(),
 		...INSTANT_CONFIG,
 		enabled: true,
+		// Cache mais longo para categorias (1 hora)
+		staleTime: 60 * 60 * 1000,
+		gcTime: 4 * 60 * 60 * 1000,
+
+		// Placeholder dinâmico baseado em cache ou bootstrap
 		placeholderData: () => INSTANT_PLACEHOLDERS.categories(),
+
+		// Dados iniciais do cache ou bootstrap
 		initialData: () => {
 			const bootstrapData = INSTANT_PLACEHOLDERS.categories();
 			return bootstrapData.length > 0 ? bootstrapData : undefined;
 		},
+
+		// Sempre retornar alguma categoria (nunca array vazio)
 		select: (data) => {
 			if (!data || data.length === 0) {
+				console.warn("⚠️ Nenhuma categoria encontrada, usando fallback");
 				return INSTANT_PLACEHOLDERS.categories();
 			}
 			return data;
 		},
+
 		meta: {
 			errorMessage: "Erro ao carregar categorias",
 		},
+
+		// Configurações específicas para categorias
+		refetchOnWindowFocus: false,
+		refetchOnMount: false,
+		retry: (failureCount, error) => {
+			// Permitir retry para categorias (mais crítico)
+			return failureCount < 2;
+		},
+
 		...options,
 	});
 };
@@ -312,7 +341,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 
 /**
  * ======================================
- * MUTATIONS - sem alterações
+ * MUTATIONS - com invalidação de categorias
  * ======================================
  */
 export const useCreatePost = () => {
@@ -362,6 +391,9 @@ export const useCreatePost = () => {
 					});
 				}
 			}
+
+			// Invalidar categorias se necessário
+			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.categories });
 		},
 	});
 };
@@ -419,6 +451,9 @@ export const useUpdatePost = () => {
 					});
 				}
 			}
+
+			// Invalidar categorias se necessário
+			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.categories });
 		},
 	});
 };
@@ -467,6 +502,9 @@ export const useDeletePost = () => {
 			queryClient.removeQueries({
 				queryKey: QUERY_KEYS.admin.byId(variables),
 			});
+
+			// Invalidar categorias se necessário
+			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.categories });
 		},
 	});
 };
@@ -575,6 +613,13 @@ export const useCacheUtils = () => {
 		toast.success("Posts atualizados!");
 	};
 
+	// Método específico para refresh de categorias
+	const refreshCategories = () => {
+		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.categories });
+		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.categories });
+		toast.success("Categorias atualizadas!");
+	};
+
 	const getCacheStats = () => {
 		const cache = queryClient.getQueryCache();
 		const queries = cache.getAll();
@@ -588,6 +633,9 @@ export const useCacheUtils = () => {
 			success: queries.filter((q) => q.state.status === "success").length,
 			stale: queries.filter((q) => q.isStale()).length,
 			hasBootstrap: !!window.TORQUE_FORGED_BOOTSTRAP?.ready,
+			categoriesInCache: !!queryClient.getQueryData(
+				QUERY_KEYS.public.categories
+			),
 		};
 	};
 
@@ -597,6 +645,7 @@ export const useCacheUtils = () => {
 		getCacheStats,
 		forceRefreshAll,
 		refreshPosts,
+		refreshCategories,
 	};
 };
 
@@ -611,7 +660,7 @@ export const usePostByIdSuspense = (id) => {
 	});
 };
 
-// Hook de preload crítico (agora via cacheUtils)
+// Hook de preload crítico (agora com categorias dinâmicas)
 export const usePreloadCriticalData = () => {
 	const queryClient = useQueryClient();
 
@@ -631,13 +680,15 @@ export const usePreloadCriticalData = () => {
 			queryClient.prefetchQuery({
 				queryKey: QUERY_KEYS.public.categories,
 				queryFn: () => PostService.getCategories(),
-				staleTime: 2 * 60 * 60 * 1000,
+				staleTime: 2 * 60 * 60 * 1000, // 2 horas para categorias
 			}),
 		];
 
 		try {
 			await Promise.allSettled(promises);
-			//console.log("🚀 Critical data preloaded successfully");
+			console.log(
+				"🚀 Critical data preloaded successfully (including dynamic categories)"
+			);
 		} catch (error) {
 			console.warn("⚠️ Preload failed:", error);
 		}

@@ -1,14 +1,6 @@
 import React, { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-/**
- * QueryProvider INSTANTÂNEO - ZERO LOADING STATES
- * - Usa dados do bootstrap para carregamento instantâneo
- * - Placeholder data inteligente evita loading
- * - Cache ultra agressivo com dados pré-populados
- * - Nunca mostra "Carregando..."
- */
-
 // Função para obter dados do bootstrap
 const getBootstrapData = (key) => {
 	if (
@@ -20,53 +12,52 @@ const getBootstrapData = (key) => {
 	return null;
 };
 
-// Placeholder data functions - NUNCA retornam undefined
+// Placeholder data functions DINÂMICAS - NUNCA retornam undefined
 const placeholderData = {
 	featuredPosts: () => getBootstrapData("featuredPosts") || [],
 	allPosts: () => getBootstrapData("allPosts") || [],
-	categories: () =>
-		getBootstrapData("categories") || [
+
+	// Categorias DINÂMICAS - busca cache local ou usa fallback mínimo
+	categories: () => {
+		// 1. Tentar bootstrap primeiro
+		const bootstrapCategories = getBootstrapData("categories");
+		if (bootstrapCategories && bootstrapCategories.length > 0) {
+			return bootstrapCategories;
+		}
+
+		// 2. Tentar cache local do banco
+		try {
+			const cached = localStorage.getItem("tf-cache-categories-db");
+			if (cached) {
+				const { data, timestamp } = JSON.parse(cached);
+				const age = Date.now() - timestamp;
+
+				// Cache válido por 1 hora
+				if (age < 60 * 60 * 1000 && data && data.length > 0) {
+					return data;
+				}
+			}
+		} catch (error) {
+			// Ignorar erros de cache
+		}
+
+		// 3. Fallback mínimo APENAS se necessário
+		return [
 			{
-				id: "f1",
-				name: "Fórmula 1",
-				description: "A elite do automobilismo mundial",
-				color: "from-red-500 to-orange-500",
+				id: "geral",
+				name: "Geral",
+				description: "Conteúdo geral sobre automobilismo",
+				color: "from-gray-500 to-gray-600",
+				count: 0,
 			},
-			{
-				id: "nascar",
-				name: "NASCAR",
-				description: "A categoria mais popular dos EUA",
-				color: "from-blue-500 to-cyan-500",
-			},
-			{
-				id: "endurance",
-				name: "Endurance",
-				description: "Corridas de resistência épicas",
-				color: "from-green-500 to-emerald-500",
-			},
-			{
-				id: "drift",
-				name: "Formula Drift",
-				description: "A arte de deslizar com estilo",
-				color: "from-purple-500 to-pink-500",
-			},
-			{
-				id: "tuning",
-				name: "Tuning & Custom",
-				description: "Personalização e modificações",
-				color: "from-yellow-500 to-orange-500",
-			},
-			{
-				id: "engines",
-				name: "Motores",
-				description: "Tecnologia e performance",
-				color: "from-indigo-500 to-purple-500",
-			},
-		],
+		];
+	},
+
 	byCategory: (categoryId) => {
 		const allPosts = getBootstrapData("allPosts") || [];
 		return allPosts.filter((post) => post.category === categoryId);
 	},
+
 	postById: (id) => {
 		const allPosts = getBootstrapData("allPosts") || [];
 		return allPosts.find((post) => post.id === parseInt(id)) || null;
@@ -116,7 +107,7 @@ const queryClient = new QueryClient({
 	},
 });
 
-// Bootstrap Query Cache com dados pré-carregados
+// Bootstrap Query Cache com dados pré-carregados DINÂMICOS
 const bootstrapQueryCache = () => {
 	try {
 		// Popular cache com dados do bootstrap
@@ -137,10 +128,11 @@ const bootstrapQueryCache = () => {
 			});
 		}
 
-		if (categories) {
+		// Categorias DINÂMICAS
+		if (categories && categories.length > 0) {
 			queryClient.setQueryData(["public", "categories"], categories);
 
-			// Popular cache por categoria
+			// Popular cache por categoria apenas se há posts para elas
 			categories.forEach((category) => {
 				const categoryPosts = placeholderData.byCategory(category.id);
 				if (categoryPosts.length > 0) {
@@ -150,6 +142,12 @@ const bootstrapQueryCache = () => {
 					);
 				}
 			});
+		} else {
+			// Se não há categorias no bootstrap, tentar cache local
+			const localCategories = placeholderData.categories();
+			if (localCategories.length > 0) {
+				queryClient.setQueryData(["public", "categories"], localCategories);
+			}
 		}
 	} catch (error) {
 		console.warn("⚠️ Bootstrap: Query Cache population failed", error);
@@ -216,7 +214,7 @@ class InstantQueryErrorBoundary extends React.Component {
 	}
 }
 
-// Bootstrap Cache Manager
+// Bootstrap Cache Manager DINÂMICO
 const BootstrapCacheManager = () => {
 	useEffect(() => {
 		// Popular cache imediatamente
@@ -232,16 +230,47 @@ const BootstrapCacheManager = () => {
 		// Verificar atualizações a cada 30 segundos
 		const updateInterval = setInterval(checkForUpdates, 30000);
 
+		// Verificar se categorias mudaram no localStorage
+		const checkCategoriesUpdate = () => {
+			try {
+				const cached = localStorage.getItem("tf-cache-categories-db");
+				if (cached) {
+					const { data, timestamp } = JSON.parse(cached);
+					const currentCategories = queryClient.getQueryData([
+						"public",
+						"categories",
+					]);
+
+					// Se cache tem categorias diferentes, atualizar
+					if (
+						data &&
+						data.length > 0 &&
+						(!currentCategories ||
+							JSON.stringify(data) !== JSON.stringify(currentCategories))
+					) {
+						console.log("🔄 Atualizando categorias do cache local");
+						queryClient.setQueryData(["public", "categories"], data);
+					}
+				}
+			} catch (error) {
+				// Ignorar erros
+			}
+		};
+
+		// Verificar categorias a cada 10 segundos
+		const categoriesInterval = setInterval(checkCategoriesUpdate, 10000);
+
 		// Cleanup
 		return () => {
 			clearInterval(updateInterval);
+			clearInterval(categoriesInterval);
 		};
 	}, []);
 
 	return null;
 };
 
-// Preload Critical Data (background)
+// Preload Critical Data DINÂMICO (background)
 const CriticalDataPreloader = () => {
 	useEffect(() => {
 		// Preload adicional em background após 2 segundos
@@ -251,6 +280,9 @@ const CriticalDataPreloader = () => {
 				if (window.TORQUE_FORGED_BOOTSTRAP?.utils?.refresh) {
 					await window.TORQUE_FORGED_BOOTSTRAP.utils.refresh();
 				}
+
+				// Re-popular cache após refresh
+				bootstrapQueryCache();
 			} catch (error) {
 				console.warn("⚠️ Background preload failed:", error);
 			}
@@ -302,13 +334,24 @@ const DevTools = () => {
 		const timer = setTimeout(() => {
 			const cache = queryClient.getQueryCache();
 			const queries = cache.getAll();
+			const categories = queryClient.getQueryData(["public", "categories"]);
 
-			console.log("📊 Instant Query Stats:", {
+			console.log("📊 Instant Query Stats (Dynamic Categories):", {
 				total: queries.length,
 				fresh: queries.filter((q) => !q.isStale()).length,
 				stale: queries.filter((q) => q.isStale()).length,
 				hasBootstrap: !!window.TORQUE_FORGED_BOOTSTRAP?.ready,
 				bootstrapKeys: Object.keys(window.TORQUE_FORGED_BOOTSTRAP?.data || {}),
+				categoriesCount: categories ? categories.length : 0,
+				categoriesSource:
+					categories && categories.length > 0
+						? categories[0].id === "geral"
+							? "fallback"
+							: "database"
+						: "none",
+				hasLocalCategoriesCache: !!localStorage.getItem(
+					"tf-cache-categories-db"
+				),
 			});
 		}, 5000);
 
@@ -321,7 +364,7 @@ const DevTools = () => {
 // Hook para acessar o queryClient
 export const useQueryClient = () => queryClient;
 
-// Utilities otimizadas para carregamento instantâneo
+// Utilities otimizadas para carregamento instantâneo DINÂMICO
 export const cacheUtils = {
 	// Verificar se dados estão prontos (sempre true com bootstrap)
 	isReady: () => {
@@ -346,7 +389,7 @@ export const cacheUtils = {
 		queryClient.invalidateQueries();
 	},
 
-	// Re-popular cache com bootstrap
+	// Re-popular cache com bootstrap DINÂMICO
 	repopulate: () => {
 		bootstrapQueryCache();
 	},
@@ -359,7 +402,7 @@ export const cacheUtils = {
 		}
 	},
 
-	// Preload crítico (compatibilidade)
+	// Preload crítico (compatibilidade) DINÂMICO
 	preloadCritical: async () => {
 		bootstrapQueryCache();
 
@@ -374,10 +417,29 @@ export const cacheUtils = {
 		}
 	},
 
-	// Estatísticas instantâneas
+	// Forçar refresh de categorias do banco
+	refreshCategories: async () => {
+		try {
+			// Invalidar cache de categorias
+			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
+
+			// Limpar cache local
+			localStorage.removeItem("tf-cache-categories-db");
+
+			// Recarregar
+			await queryClient.refetchQueries({ queryKey: ["public", "categories"] });
+
+			console.log("🔄 Categorias atualizadas do banco de dados");
+		} catch (error) {
+			console.warn("⚠️ Erro ao atualizar categorias:", error);
+		}
+	},
+
+	// Estatísticas instantâneas DINÂMICAS
 	getStats: () => {
 		const cache = queryClient.getQueryCache();
 		const queries = cache.getAll();
+		const categories = queryClient.getQueryData(["public", "categories"]);
 
 		return {
 			total: queries.length,
@@ -388,11 +450,22 @@ export const cacheUtils = {
 			success: queries.filter((q) => q.state.status === "success").length,
 			hasBootstrap: !!window.TORQUE_FORGED_BOOTSTRAP?.ready,
 			bootstrapTimestamp: window.TORQUE_FORGED_BOOTSTRAP?.timestamp,
+			categories: {
+				count: categories ? categories.length : 0,
+				source:
+					categories && categories.length > 0
+						? categories[0].id === "geral"
+							? "fallback"
+							: "database"
+						: "none",
+				hasLocalCache: !!localStorage.getItem("tf-cache-categories-db"),
+				inQueryCache: !!categories,
+			},
 		};
 	},
 };
 
-// Override do placeholder data para hooks
+// Override do placeholder data para hooks DINÂMICO
 export const instantPlaceholderData = placeholderData;
 
 export default ModernQueryProvider;

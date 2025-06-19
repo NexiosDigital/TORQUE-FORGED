@@ -3,12 +3,10 @@ import { dataAPIService } from "./DataAPIService";
 import { ImageUploadService } from "./ImageUploadService";
 
 /**
- * PostService - VERSÃO ULTRA OTIMIZADA para carregamento instantâneo
- * - Data API como fonte principal para dados públicos
- * - Cache agressivo em múltiplas camadas
- * - Fallbacks inteligentes sem delay
- * - Otimização de imagens automática
- * - Zero dependência de auth para dados públicos
+ * PostService - VERSÃO ULTRA OTIMIZADA com CATEGORIAS DINÂMICAS
+ * - Busca SEMPRE do banco de dados para categorias
+ * - Cache inteligente mas sempre atualizado
+ * - Fallbacks mínimos e realistas
  */
 
 export class PostService {
@@ -40,7 +38,7 @@ export class PostService {
 					"⚠️ Fallback failed, returning empty:",
 					fallbackError.message
 				);
-				return this.getEmptyFeaturedPosts();
+				return [];
 			}
 		}
 	}
@@ -137,19 +135,89 @@ export class PostService {
 		}
 	}
 
-	// Categorias - ULTRA RÁPIDO com fallback inteligente
+	// ======================================
+	// CATEGORIAS DINÂMICAS - SEMPRE DO BANCO
+	// ======================================
 	static async getCategories() {
 		try {
+			// SEMPRE tentar buscar do banco primeiro
 			const data = await dataAPIService.getCategories();
 
-			// Se não conseguir carregar, usar categorias padrão imediatamente
-			return data && data.length > 0 ? data : this.getFallbackCategories();
+			// Se conseguiu buscar do Data API, retornar
+			if (data && Array.isArray(data) && data.length > 0) {
+				return data;
+			}
+
+			// Se Data API não retornou dados, tentar fallback do banco direto
+			console.warn("⚠️ DataAPI categories empty, trying direct database...");
+			return await this.getCategoriesFromDatabase();
 		} catch (error) {
 			console.warn("⚠️ DataAPI failed for categories:", error.message);
 
-			// Sempre retornar categorias padrão em caso de erro
-			return this.getFallbackCategories();
+			// Tentar buscar direto do banco como fallback
+			try {
+				return await this.getCategoriesFromDatabase();
+			} catch (fallbackError) {
+				console.warn("⚠️ Database categories failed:", fallbackError.message);
+
+				// Como último recurso, retornar categorias mínimas apenas se necessário
+				return this.getMinimalFallbackCategories();
+			}
 		}
+	}
+
+	// Buscar categorias direto do banco (fallback)
+	static async getCategoriesFromDatabase() {
+		try {
+			const { data, error } = await supabase
+				.from("categories")
+				.select("*")
+				.order("name");
+
+			if (error) {
+				console.error("❌ Erro ao buscar categorias do banco:", error);
+				throw error;
+			}
+
+			// Se não tem categorias no banco, retornar array vazio
+			if (!data || data.length === 0) {
+				console.warn("⚠️ Nenhuma categoria encontrada no banco de dados");
+				return [];
+			}
+
+			// Cachear resultado para próximas chamadas
+			this.setCachedData("categories-db", data);
+
+			return data;
+		} catch (error) {
+			console.error("❌ getCategoriesFromDatabase error:", error);
+
+			// Tentar cache local como último recurso
+			const cached = this.getCachedData("categories-db");
+			if (cached) {
+				console.warn("⚠️ Usando categorias do cache local");
+				return cached;
+			}
+
+			throw error;
+		}
+	}
+
+	// Fallback MÍNIMO - apenas para casos extremos
+	static getMinimalFallbackCategories() {
+		console.warn(
+			"⚠️ Usando categorias de fallback mínimo - configure categorias no banco!"
+		);
+
+		return [
+			{
+				id: "geral",
+				name: "Geral",
+				description: "Conteúdo geral sobre automobilismo",
+				color: "from-gray-500 to-gray-600",
+				count: 0,
+			},
+		];
 	}
 
 	// Busca de posts - Rápido com cache
@@ -294,8 +362,13 @@ export class PostService {
 			const { data, timestamp } = JSON.parse(cached);
 			const age = Date.now() - timestamp;
 
-			// Cache válido por 10 minutos para fallbacks
-			if (age < 10 * 60 * 1000) {
+			// Cache de categorias válido por 1 hora
+			// Cache de posts válido por 10 minutos
+			const maxAge = key.includes("categories")
+				? 60 * 60 * 1000
+				: 10 * 60 * 1000;
+
+			if (age < maxAge) {
 				return data;
 			}
 
@@ -321,58 +394,7 @@ export class PostService {
 
 	/**
 	 * ======================================
-	 * FALLBACKS ESTÁTICOS INSTANTÂNEOS
-	 * ======================================
-	 */
-
-	static getEmptyFeaturedPosts() {
-		return [];
-	}
-
-	static getFallbackCategories() {
-		return [
-			{
-				id: "f1",
-				name: "Fórmula 1",
-				description: "A elite do automobilismo mundial",
-				color: "from-red-500 to-orange-500",
-			},
-			{
-				id: "nascar",
-				name: "NASCAR",
-				description: "A categoria mais popular dos EUA",
-				color: "from-blue-500 to-cyan-500",
-			},
-			{
-				id: "endurance",
-				name: "Endurance",
-				description: "Corridas de resistência épicas",
-				color: "from-green-500 to-emerald-500",
-			},
-			{
-				id: "drift",
-				name: "Formula Drift",
-				description: "A arte de deslizar com estilo",
-				color: "from-purple-500 to-pink-500",
-			},
-			{
-				id: "tuning",
-				name: "Tuning & Custom",
-				description: "Personalização e modificações",
-				color: "from-yellow-500 to-orange-500",
-			},
-			{
-				id: "engines",
-				name: "Motores",
-				description: "Tecnologia e performance",
-				color: "from-indigo-500 to-purple-500",
-			},
-		];
-	}
-
-	/**
-	 * ======================================
-	 * MÉTODOS ADMINISTRATIVOS - SEM ALTERAÇÃO
+	 * MÉTODOS ADMINISTRATIVOS
 	 * ======================================
 	 */
 
@@ -801,6 +823,7 @@ export class PostService {
 			dataAPI: null,
 			fallback: null,
 			cache: null,
+			categories: null,
 		};
 
 		// Teste Data API
@@ -821,7 +844,7 @@ export class PostService {
 		// Teste fallback
 		try {
 			const start = Date.now();
-			await this.getFallbackCategories();
+			await this.getCategoriesFromDatabase();
 			results.fallback = {
 				status: "healthy",
 				responseTime: Date.now() - start,
@@ -845,6 +868,24 @@ export class PostService {
 			results.cache = {
 				status: "unhealthy",
 				error: error.message,
+			};
+		}
+
+		// Teste categorias dinâmicas
+		try {
+			const start = Date.now();
+			const categories = await this.getCategories();
+			results.categories = {
+				status: "healthy",
+				responseTime: Date.now() - start,
+				count: categories.length,
+				dynamic: true,
+			};
+		} catch (error) {
+			results.categories = {
+				status: "unhealthy",
+				error: error.message,
+				dynamic: false,
 			};
 		}
 
