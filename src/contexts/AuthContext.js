@@ -18,14 +18,6 @@ export const useAuth = () => {
 	return context;
 };
 
-/**
- * AuthProvider INSTANTÂNEO - NUNCA BLOQUEIA DADOS PÚBLICOS
- * - sessionChecked = true IMEDIATAMENTE
- * - Dados públicos NUNCA dependem de auth
- * - Loading assíncrono em background
- * - Zero impacto na UI inicial
- */
-
 export const AuthProvider = ({ children }) => {
 	const [user, setUser] = useState(null);
 	const [profile, setProfile] = useState(null);

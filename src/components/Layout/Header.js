@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useMegaMenuStructure } from "../../hooks/usePostsQuery";
-import SearchModal from "./SearchModal"; // Componente existente mantido
 
 const Header = () => {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -666,10 +665,6 @@ const Header = () => {
 			</nav>
 
 			{/* Search Modal */}
-			<SearchModal
-				isOpen={isSearchOpen}
-				onClose={() => setIsSearchOpen(false)}
-			/>
 		</>
 	);
 };
