@@ -19,7 +19,7 @@ import { useMegaMenuStructure } from "../../hooks/usePostsQuery";
 const Header = () => {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-	const [isSearchOpen, setIsSearchOpen] = useState(false);
+	const [setIsSearchOpen] = useState(false);
 	const [scrollY, setScrollY] = useState(0);
 	const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -173,7 +173,7 @@ const Header = () => {
 	const UserMenu = () => {
 		if (!sessionChecked) {
 			return (
-				<div className="flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50">
+				<div className="flex items-center space-x-4 p-2 rounded-xl bg-gray-800/50">
 					<div className="w-8 h-8 bg-gray-700 rounded-lg animate-pulse"></div>
 					<span className="text-gray-400 text-sm hidden md:block">
 						Verificando...
@@ -188,7 +188,7 @@ const Header = () => {
 
 		if (user && (authLoading || profileLoading)) {
 			return (
-				<div className="flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50">
+				<div className="flex items-center space-x-4 p-2 rounded-xl bg-gray-800/50">
 					<div className="w-8 h-8 bg-gray-700 rounded-lg animate-pulse"></div>
 					<span className="text-gray-400 text-sm hidden md:block">
 						Carregando...
@@ -208,7 +208,7 @@ const Header = () => {
 						setIsUserMenuOpen(!isUserMenuOpen);
 					}}
 					disabled={isLoggingOut}
-					className="user-menu-button flex items-center space-x-2 p-2 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 border border-gray-600/30 cursor-pointer disabled:opacity-50"
+					className="user-menu-button flex items-center space-x-4 p-2 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 transition-all duration-300 border border-gray-600/30 cursor-pointer disabled:opacity-50"
 					style={{ pointerEvents: "auto", zIndex: 10 }}
 				>
 					<UserAvatar />
@@ -341,7 +341,7 @@ const Header = () => {
 									))}
 								</div>
 							) : (
-								<div className="flex items-center justify-center space-x-2">
+								<div className="flex items-center justify-center 4">
 									{Object.entries(megaMenuData).map(([menuKey, menuData]) => (
 										<div
 											key={menuKey}
@@ -483,7 +483,7 @@ const Header = () => {
 																				setActiveMegaMenu(null);
 																				setActiveSubcategory(null);
 																			}}
-																			className={`inline-flex items-center space-x-2 bg-gradient-to-r ${menuData.color} hover:shadow-lg hover:scale-105 text-white px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-md`}
+																			className={`inline-flex items-center space-x-4 bg-gradient-to-r ${menuData.color} hover:shadow-lg hover:scale-105 text-white px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-md`}
 																		>
 																			<span className="whitespace-nowrap">
 																				Ver tudo sobre{" "}
@@ -653,7 +653,7 @@ const Header = () => {
 										setIsMenuOpen(false);
 										setIsSearchOpen(true);
 									}}
-									className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors duration-300"
+									className="flex items-center space-x-4 text-gray-400 hover:text-white transition-colors duration-300"
 								>
 									<Search className="w-5 h-5" />
 									<span>Buscar</span>

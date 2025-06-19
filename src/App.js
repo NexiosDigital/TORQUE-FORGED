@@ -9,9 +9,10 @@ import { ErrorBoundary } from "react-error-boundary";
 // Imports dos componentes principais
 import Layout from "./components/Layout/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
-import AuthProvider from "./contexts/AuthContext";
+import { AuthProvider } from "./contexts/AuthContext";
 import { ModernQueryProvider, cacheUtils } from "./providers/QueryProvider";
 import { useCategories } from "./hooks/usePostsQuery";
+import FlexiblePage from "./components/FlexiblePage";
 
 // Lazy imports para otimização
 const Home = lazy(() =>
@@ -22,9 +23,6 @@ const AllPosts = lazy(() =>
 );
 const PostDetail = lazy(() =>
 	import(/* webpackChunkName: "post-detail" */ "./pages/OptimizedPostDetail")
-);
-const Category = lazy(() =>
-	import(/* webpackChunkName: "category" */ "./pages/Category")
 );
 const About = lazy(() =>
 	import(/* webpackChunkName: "about" */ "./pages/About")
@@ -181,37 +179,6 @@ const toasterConfig = {
 	},
 };
 
-// Componente de rota dinâmica hierárquica
-const HierarchicalRoute = ({ categoryData }) => {
-	return (
-		<Route
-			key={categoryData.id}
-			path={`/${categoryData.slug}`}
-			element={
-				<Layout>
-					<Suspense fallback={<UltraFastLoader page={categoryData.name} />}>
-						<Category />
-					</Suspense>
-				</Layout>
-			}
-		/>
-	);
-};
-
-// Gerador de rotas baseado na hierarquia do banco
-const HierarchicalRouteGenerator = () => {
-	const { data: categories = [], isLoading } = useCategories();
-
-	if (isLoading) {
-		return null; // Rotas serão criadas quando dados carregarem
-	}
-
-	// Gerar rotas para todas as categorias de todos os níveis
-	return categories.map((category) => (
-		<HierarchicalRoute key={category.id} categoryData={category} />
-	));
-};
-
 // Componente principal da aplicação
 function App() {
 	// Preload de cache crítico no app startup
@@ -278,19 +245,7 @@ function App() {
 								}
 							/>
 
-							{/* ===== ROTA GENÉRICA PARA CATEGORIAS ===== */}
-							<Route
-								path="/category/:category"
-								element={
-									<Layout>
-										<Suspense fallback={<UltraFastLoader page="categoria" />}>
-											<Category />
-										</Suspense>
-									</Layout>
-								}
-							/>
-
-							{/* ===== PÁGINAS ESTÁTICAS ===== */}
+							{/* ===== PÁGINAS ESTÁTICAS (ANTES DAS ROTAS GENÉRICAS) ===== */}
 							<Route
 								path="/about"
 								element={
@@ -312,9 +267,6 @@ function App() {
 									</Layout>
 								}
 							/>
-
-							{/* ===== ROTAS HIERÁRQUICAS DINÂMICAS ===== */}
-							<HierarchicalRouteGenerator />
 
 							{/* ===== ROTAS DE USUÁRIO ===== */}
 							<Route
@@ -431,6 +383,16 @@ function App() {
 											</Suspense>
 										</Layout>
 									</ProtectedRoute>
+								}
+							/>
+
+							{/* ===== ROTA GENÉRICA PARA CATEGORIAS (TODAS) ===== */}
+							<Route
+								path="/:categorySlug"
+								element={
+									<Layout>
+										<FlexiblePage />
+									</Layout>
 								}
 							/>
 

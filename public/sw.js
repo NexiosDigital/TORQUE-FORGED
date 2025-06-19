@@ -289,23 +289,6 @@ async function handleFallback(request) {
 			}
 		);
 	}
-
-	// Fallback para imagens
-	if (request.destination === "image") {
-		return new Response(
-			'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="#1f2937"/><text x="200" y="150" text-anchor="middle" font-family="Arial" font-size="16" fill="#9ca3af">Imagem indisponível</text></svg>',
-			{
-				status: 503,
-				headers: { "Content-Type": "image/svg+xml" },
-			}
-		);
-	}
-
-	// Para outros recursos
-	return new Response("Recurso indisponível", {
-		status: 503,
-		statusText: "Service Unavailable",
-	});
 }
 
 // Limpeza automática de cache
