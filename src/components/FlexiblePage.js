@@ -23,7 +23,7 @@ import {
 import CategoryBreadcrumb from "./CategoryBreadcrumb";
 import { ErrorBoundary } from "react-error-boundary";
 
-// PostCard otimizado para hierarquia
+// PostCard otimizado
 const HierarchicalPostCard = React.memo(({ post, index, categoryColor }) => {
 	const { prefetchPost } = usePrefetch();
 
@@ -61,7 +61,7 @@ const HierarchicalPostCard = React.memo(({ post, index, categoryColor }) => {
 							categoryColor || "from-red-600 to-red-500"
 						} text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg`}
 					>
-						{post.category_name}
+						{post.category_name || post.category}
 					</span>
 					{post.trending && (
 						<span className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1">
@@ -101,11 +101,11 @@ const HierarchicalPostCard = React.memo(({ post, index, categoryColor }) => {
 					<div className="flex items-center space-x-3">
 						<div className="flex items-center space-x-1">
 							<User className="w-3 h-3" />
-							<span>{post.author}</span>
+							<span>{post.author || "Autor"}</span>
 						</div>
 						<div className="flex items-center space-x-1">
 							<Clock className="w-3 h-3" />
-							<span>{post.read_time}</span>
+							<span>{post.read_time || "5 min"}</span>
 						</div>
 					</div>
 					<div className="flex items-center space-x-1">
@@ -115,7 +115,7 @@ const HierarchicalPostCard = React.memo(({ post, index, categoryColor }) => {
 				</div>
 
 				{/* Tags se disponível */}
-				{post.tags && post.tags.length > 0 && (
+				{post.tags && Array.isArray(post.tags) && post.tags.length > 0 && (
 					<div className="flex flex-wrap gap-1 mb-4">
 						{post.tags.slice(0, 3).map((tag, tagIndex) => (
 							<span
@@ -166,7 +166,7 @@ const ErrorFallback = ({ error, resetErrorBoundary, section }) => (
 	</div>
 );
 
-// Loading skeleton para categoria
+// Loading skeleton
 const CategorySkeleton = () => (
 	<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 		{/* Hero skeleton */}
@@ -181,11 +181,6 @@ const CategorySkeleton = () => (
 		{/* Content skeleton */}
 		<div className="py-16">
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-				<div className="mb-8">
-					<div className="w-48 h-6 bg-gray-700 rounded-full mb-2"></div>
-					<div className="w-64 h-4 bg-gray-700 rounded-full"></div>
-				</div>
-
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
 					{Array.from({ length: 6 }).map((_, i) => (
 						<div key={`skeleton-${i}`} className="animate-pulse">
@@ -266,30 +261,50 @@ const SubcategoriesGrid = ({
 	);
 };
 
-// Componente principal flexível - 100% dinâmico do banco com hierarquia
+// Componente principal - CORRIGIDO para dados reais
 const FlexiblePage = ({ pageKey, section }) => {
 	const params = useParams();
 
 	// Determinar categorySlug da URL
 	const categorySlug = useMemo(() => {
-		return (
+		const slug =
 			pageKey ||
 			params.brand ||
 			params.section ||
 			params.category ||
 			params.pageKey ||
-			section
-		);
+			params.categorySlug ||
+			section;
+
+		console.log("🔍 FlexiblePage: Slug determinado =", slug);
+		return slug;
 	}, [pageKey, params, section]);
 
-	// Buscar dados da categoria
+	// Buscar dados da categoria - SEMPRE DO BANCO
 	const {
 		data: currentCategory,
 		isLoading: categoryLoading,
 		error: categoryError,
 	} = useCategoryBySlug(categorySlug, {
 		enabled: !!categorySlug,
+		retry: 1,
 	});
+
+	// Debug da busca da categoria
+	React.useEffect(() => {
+		if (categorySlug) {
+			console.log(`🔍 FlexiblePage: Buscando categoria "${categorySlug}"`);
+		}
+		if (currentCategory) {
+			console.log("✅ FlexiblePage: Categoria encontrada:", currentCategory);
+		}
+		if (categoryError) {
+			console.error(
+				"❌ FlexiblePage: Erro ao buscar categoria:",
+				categoryError
+			);
+		}
+	}, [categorySlug, currentCategory, categoryError]);
 
 	// Buscar subcategorias se existirem
 	const { data: subcategories = [], isLoading: subcategoriesLoading } =
@@ -328,11 +343,18 @@ const FlexiblePage = ({ pageKey, section }) => {
 
 	// Loading state
 	if (categoryLoading) {
+		console.log("⏳ FlexiblePage: Carregando categoria...");
 		return <CategorySkeleton />;
 	}
 
 	// Error state - categoria não encontrada
 	if (categoryError || !currentCategory) {
+		console.error("❌ FlexiblePage: Categoria não encontrada ou erro", {
+			slug: categorySlug,
+			error: categoryError?.message,
+			category: currentCategory,
+		});
+
 		return (
 			<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -343,9 +365,12 @@ const FlexiblePage = ({ pageKey, section }) => {
 						<h3 className="text-2xl font-bold text-white mb-4">
 							Categoria "{categorySlug}" não encontrada
 						</h3>
-						<p className="text-gray-400 mb-8">
+						<p className="text-gray-400 mb-4">
 							Esta categoria não existe no sistema ou não está ativa.
 						</p>
+						<div className="text-sm text-gray-500 mb-8">
+							Erro: {categoryError?.message || "Categoria não existe"}
+						</div>
 						<Link
 							to="/"
 							className="inline-flex items-center space-x-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white px-8 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl hover:shadow-red-500/25 hover:scale-105"
@@ -359,9 +384,11 @@ const FlexiblePage = ({ pageKey, section }) => {
 		);
 	}
 
+	console.log("✅ FlexiblePage: Renderizando categoria:", currentCategory.name);
+
 	return (
 		<div className="min-h-screen pt-20 bg-gradient-to-br from-black via-gray-900 to-black">
-			{/* Hero Section - Dados dinâmicos do banco */}
+			{/* Hero Section */}
 			<div
 				className={`relative py-24 bg-gradient-to-r ${
 					currentCategory.color || "from-gray-600 to-gray-500"
@@ -383,7 +410,7 @@ const FlexiblePage = ({ pageKey, section }) => {
 						currentCategory={currentCategory}
 					/>
 
-					{/* Header Content - Dados do banco */}
+					{/* Header Content */}
 					<div className="text-center">
 						<div className="flex items-center justify-center mb-6">
 							<div className="text-6xl mr-4">

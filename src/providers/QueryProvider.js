@@ -1,167 +1,53 @@
 import React, { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// Função para obter dados do bootstrap
-const getBootstrapData = (key) => {
-	if (
-		window.TORQUE_FORGED_BOOTSTRAP?.ready &&
-		window.TORQUE_FORGED_BOOTSTRAP.data[key]
-	) {
-		return window.TORQUE_FORGED_BOOTSTRAP.data[key];
-	}
-	return null;
-};
+/**
+ * QueryProvider SIMPLIFICADO - SEM PLACEHOLDERS
+ * Remove todos os placeholders que interferem nos dados reais
+ */
 
-// Placeholder data functions DINÂMICAS - NUNCA retornam undefined
-const placeholderData = {
-	featuredPosts: () => getBootstrapData("featuredPosts") || [],
-	allPosts: () => getBootstrapData("allPosts") || [],
-
-	// Categorias DINÂMICAS - busca cache local ou usa fallback mínimo
-	categories: () => {
-		// 1. Tentar bootstrap primeiro
-		const bootstrapCategories = getBootstrapData("categories");
-		if (bootstrapCategories && bootstrapCategories.length > 0) {
-			return bootstrapCategories;
-		}
-
-		// 2. Tentar cache local do banco
-		try {
-			const cached = localStorage.getItem("tf-cache-categories-db");
-			if (cached) {
-				const { data, timestamp } = JSON.parse(cached);
-				const age = Date.now() - timestamp;
-
-				// Cache válido por 1 hora
-				if (age < 60 * 60 * 1000 && data && data.length > 0) {
-					return data;
-				}
-			}
-		} catch (error) {
-			// Ignorar erros de cache
-		}
-
-		// 3. Fallback mínimo APENAS se necessário
-		return [
-			{
-				id: "geral",
-				name: "Geral",
-				description: "Conteúdo geral sobre automobilismo",
-				color: "from-gray-500 to-gray-600",
-				count: 0,
-			},
-		];
-	},
-
-	byCategory: (categoryId) => {
-		const allPosts = getBootstrapData("allPosts") || [];
-		return allPosts.filter((post) => post.category === categoryId);
-	},
-
-	postById: (id) => {
-		const allPosts = getBootstrapData("allPosts") || [];
-		return allPosts.find((post) => post.id === parseInt(id)) || null;
-	},
-};
-
-// QueryClient com configurações INSTANTÂNEAS
+// QueryClient com configurações simples e diretas
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			// Cache EXTREMAMENTE agressivo
-			staleTime: 60 * 60 * 1000, // 1 hora - dados nunca ficam stale
-			gcTime: 4 * 60 * 60 * 1000, // 4 horas - manter em memória
+			// Cache moderado - dados frescos sempre que necessário
+			staleTime: 5 * 60 * 1000, // 5 minutos
+			gcTime: 30 * 60 * 1000, // 30 minutos
 
-			// NUNCA refetch - usar sempre cache/placeholder
+			// Sempre buscar dados quando necessário
 			refetchOnWindowFocus: false,
-			refetchOnMount: false,
-			refetchOnReconnect: false,
-			refetchInterval: false,
-			refetchIntervalInBackground: false,
+			refetchOnMount: true,
+			refetchOnReconnect: true,
 
-			// Offline first para carregamento instantâneo
-			networkMode: "offlineFirst",
+			// Retry simples
+			retry: 1,
+			retryDelay: 1000,
 
-			// Zero retry para velocidade máxima
-			retry: false,
-			retryOnMount: false,
-			retryDelay: 0,
+			// Online first - sempre tentar buscar dados frescos
+			networkMode: "online",
 
-			// SEMPRE usar placeholder data
-			placeholderData: (previousData) => previousData,
+			// SEM PLACEHOLDER DATA - sempre buscar dados reais
+			placeholderData: undefined,
+			initialData: undefined,
 
-			// Inicializar com bootstrap data
-			initialData: undefined, // Será definido por query
-			initialDataUpdatedAt: Date.now(),
-
-			// Performance otimizada
+			// Estrutura sharing para performance
 			structuralSharing: true,
 			useErrorBoundary: false,
 		},
 		mutations: {
-			retry: 0,
-			retryDelay: 0,
+			retry: 1,
+			retryDelay: 1000,
 			networkMode: "online",
 			useErrorBoundary: false,
 		},
 	},
 });
 
-// Bootstrap Query Cache com dados pré-carregados DINÂMICOS
-const bootstrapQueryCache = () => {
-	try {
-		// Popular cache com dados do bootstrap
-		const featuredPosts = getBootstrapData("featuredPosts");
-		const allPosts = getBootstrapData("allPosts");
-		const categories = getBootstrapData("categories");
-
-		if (featuredPosts) {
-			queryClient.setQueryData(["public", "posts", "featured"], featuredPosts);
-		}
-
-		if (allPosts) {
-			queryClient.setQueryData(["public", "posts"], allPosts);
-
-			// Popular cache de posts individuais
-			allPosts.forEach((post) => {
-				queryClient.setQueryData(["public", "posts", "detail", post.id], post);
-			});
-		}
-
-		// Categorias DINÂMICAS
-		if (categories && categories.length > 0) {
-			queryClient.setQueryData(["public", "categories"], categories);
-
-			// Popular cache por categoria apenas se há posts para elas
-			categories.forEach((category) => {
-				const categoryPosts = placeholderData.byCategory(category.id);
-				if (categoryPosts.length > 0) {
-					queryClient.setQueryData(
-						["public", "posts", "category", category.id],
-						categoryPosts
-					);
-				}
-			});
-		} else {
-			// Se não há categorias no bootstrap, tentar cache local
-			const localCategories = placeholderData.categories();
-			if (localCategories.length > 0) {
-				queryClient.setQueryData(["public", "categories"], localCategories);
-			}
-		}
-	} catch (error) {
-		console.warn("⚠️ Bootstrap: Query Cache population failed", error);
-	}
-};
-
 // Error Boundary minimalista
-class InstantQueryErrorBoundary extends React.Component {
+class SimpleQueryErrorBoundary extends React.Component {
 	constructor(props) {
 		super(props);
-		this.state = {
-			hasError: false,
-			error: null,
-		};
+		this.state = { hasError: false, error: null };
 	}
 
 	static getDerivedStateFromError(error) {
@@ -169,7 +55,7 @@ class InstantQueryErrorBoundary extends React.Component {
 	}
 
 	componentDidCatch(error, errorInfo) {
-		console.error("🔴 InstantQueryErrorBoundary:", error, errorInfo);
+		console.error("🔴 Query Error Boundary:", error, errorInfo);
 	}
 
 	render() {
@@ -193,11 +79,10 @@ class InstantQueryErrorBoundary extends React.Component {
 							</svg>
 						</div>
 						<h2 className="text-2xl font-bold text-white mb-4">
-							Sistema Temporariamente Indisponível
+							Erro no Carregamento
 						</h2>
 						<p className="text-gray-400 mb-6">
-							Ocorreu um erro inesperado. Recarregue a página para tentar
-							novamente.
+							Ocorreu um erro ao carregar os dados. Recarregue a página.
 						</p>
 						<button
 							onClick={() => window.location.reload()}
@@ -214,96 +99,11 @@ class InstantQueryErrorBoundary extends React.Component {
 	}
 }
 
-// Bootstrap Cache Manager DINÂMICO
-const BootstrapCacheManager = () => {
+// Cache Manager simples
+const SimpleCacheManager = () => {
 	useEffect(() => {
-		// Popular cache imediatamente
-		bootstrapQueryCache();
-
-		// Re-popular se bootstrap data for atualizada
-		const checkForUpdates = () => {
-			if (window.TORQUE_FORGED_BOOTSTRAP?.ready) {
-				bootstrapQueryCache();
-			}
-		};
-
-		// Verificar atualizações a cada 30 segundos
-		const updateInterval = setInterval(checkForUpdates, 30000);
-
-		// Verificar se categorias mudaram no localStorage
-		const checkCategoriesUpdate = () => {
-			try {
-				const cached = localStorage.getItem("tf-cache-categories-db");
-				if (cached) {
-					const { data, timestamp } = JSON.parse(cached);
-					const currentCategories = queryClient.getQueryData([
-						"public",
-						"categories",
-					]);
-
-					// Se cache tem categorias diferentes, atualizar
-					if (
-						data &&
-						data.length > 0 &&
-						(!currentCategories ||
-							JSON.stringify(data) !== JSON.stringify(currentCategories))
-					) {
-						console.log("🔄 Atualizando categorias do cache local");
-						queryClient.setQueryData(["public", "categories"], data);
-					}
-				}
-			} catch (error) {
-				// Ignorar erros
-			}
-		};
-
-		// Verificar categorias a cada 10 segundos
-		const categoriesInterval = setInterval(checkCategoriesUpdate, 10000);
-
-		// Cleanup
-		return () => {
-			clearInterval(updateInterval);
-			clearInterval(categoriesInterval);
-		};
-	}, []);
-
-	return null;
-};
-
-// Preload Critical Data DINÂMICO (background)
-const CriticalDataPreloader = () => {
-	useEffect(() => {
-		// Preload adicional em background após 2 segundos
-		const timer = setTimeout(async () => {
-			try {
-				// Refresh bootstrap data se necessário
-				if (window.TORQUE_FORGED_BOOTSTRAP?.utils?.refresh) {
-					await window.TORQUE_FORGED_BOOTSTRAP.utils.refresh();
-				}
-
-				// Re-popular cache após refresh
-				bootstrapQueryCache();
-			} catch (error) {
-				console.warn("⚠️ Background preload failed:", error);
-			}
-		}, 2000);
-
-		return () => clearTimeout(timer);
-	}, []);
-
-	return null;
-};
-
-// Provider principal INSTANTÂNEO
-export const ModernQueryProvider = ({ children }) => {
-	// Disponibilizar queryClient globalmente
-	useEffect(() => {
+		// Disponibilizar queryClient globalmente para debug
 		window.queryClient = queryClient;
-
-		// Popular cache inicial se ainda não foi feito
-		if (window.TORQUE_FORGED_BOOTSTRAP?.ready) {
-			bootstrapQueryCache();
-		}
 
 		// Cleanup na desmontagem
 		return () => {
@@ -311,161 +111,202 @@ export const ModernQueryProvider = ({ children }) => {
 		};
 	}, []);
 
-	return (
-		<InstantQueryErrorBoundary>
-			<QueryClientProvider client={queryClient}>
-				{children}
-
-				{/* Managers de cache em background */}
-				<BootstrapCacheManager />
-				<CriticalDataPreloader />
-
-				{/* DevTools apenas em desenvolvimento */}
-				{process.env.NODE_ENV === "development" && <DevTools />}
-			</QueryClientProvider>
-		</InstantQueryErrorBoundary>
-	);
+	return null;
 };
 
-// DevTools para desenvolvimento
+// DevTools apenas em desenvolvimento
 const DevTools = () => {
 	useEffect(() => {
-		// Debug info após 5 segundos
-		const timer = setTimeout(() => {
-			const cache = queryClient.getQueryCache();
-			const queries = cache.getAll();
-			const categories = queryClient.getQueryData(["public", "categories"]);
+		if (process.env.NODE_ENV === "development") {
+			// Debug info após alguns segundos
+			const timer = setTimeout(() => {
+				const cache = queryClient.getQueryCache();
+				const queries = cache.getAll();
 
-			console.log("📊 Instant Query Stats (Dynamic Categories):", {
-				total: queries.length,
-				fresh: queries.filter((q) => !q.isStale()).length,
-				stale: queries.filter((q) => q.isStale()).length,
-				hasBootstrap: !!window.TORQUE_FORGED_BOOTSTRAP?.ready,
-				bootstrapKeys: Object.keys(window.TORQUE_FORGED_BOOTSTRAP?.data || {}),
-				categoriesCount: categories ? categories.length : 0,
-				categoriesSource:
-					categories && categories.length > 0
-						? categories[0].id === "geral"
-							? "fallback"
-							: "database"
-						: "none",
-				hasLocalCategoriesCache: !!localStorage.getItem(
-					"tf-cache-categories-db"
-				),
-			});
-		}, 5000);
+				console.log("📊 Query Stats:", {
+					total: queries.length,
+					categories: queries.filter((q) => q.queryKey.includes("categories"))
+						.length,
+					posts: queries.filter((q) => q.queryKey.includes("posts")).length,
+					success: queries.filter((q) => q.state.status === "success").length,
+					error: queries.filter((q) => q.state.status === "error").length,
+					loading: queries.filter((q) => q.state.status === "pending").length,
+				});
+			}, 3000);
 
-		return () => clearTimeout(timer);
+			return () => clearTimeout(timer);
+		}
 	}, []);
 
 	return null;
 };
 
+// Provider principal simplificado
+export const ModernQueryProvider = ({ children }) => {
+	return (
+		<SimpleQueryErrorBoundary>
+			<QueryClientProvider client={queryClient}>
+				{children}
+
+				{/* Cache manager simples */}
+				<SimpleCacheManager />
+
+				{/* DevTools apenas em desenvolvimento */}
+				{process.env.NODE_ENV === "development" && <DevTools />}
+			</QueryClientProvider>
+		</SimpleQueryErrorBoundary>
+	);
+};
+
 // Hook para acessar o queryClient
 export const useQueryClient = () => queryClient;
 
-// Utilities otimizadas para carregamento instantâneo DINÂMICO
+// Utilities simples e diretas
 export const cacheUtils = {
-	// Verificar se dados estão prontos (sempre true com bootstrap)
-	isReady: () => {
-		return window.TORQUE_FORGED_BOOTSTRAP?.ready || false;
-	},
-
-	// Obter dados do bootstrap diretamente
-	getBootstrapData: (key) => {
-		return getBootstrapData(key);
-	},
-
-	// Limpeza total
+	// Limpar tudo
 	clear: () => {
 		queryClient.clear();
-		if (window.TORQUE_FORGED_BOOTSTRAP?.utils?.clearCache) {
-			window.TORQUE_FORGED_BOOTSTRAP.utils.clearCache();
+
+		// Limpar localStorage também
+		try {
+			Object.keys(localStorage).forEach((key) => {
+				if (key.startsWith("tf-cache-")) {
+					localStorage.removeItem(key);
+				}
+			});
+		} catch (error) {
+			// Ignorar erros de localStorage
 		}
+
+		console.log("🗑️ Cache limpo completamente");
 	},
 
-	// Invalidação manual (raramente necessária)
+	// Invalidar todas as queries
 	invalidateAll: () => {
 		queryClient.invalidateQueries();
+		console.log("🔄 Todas as queries invalidadas");
 	},
 
-	// Re-popular cache com bootstrap DINÂMICO
-	repopulate: () => {
-		bootstrapQueryCache();
-	},
+	// Invalidar apenas categorias
+	invalidateCategories: () => {
+		queryClient.invalidateQueries({
+			queryKey: ["public", "categories"],
+		});
+		queryClient.invalidateQueries({
+			queryKey: ["admin", "categories"],
+		});
 
-	// Forçar refresh do bootstrap
-	refreshBootstrap: async () => {
-		if (window.TORQUE_FORGED_BOOTSTRAP?.utils?.refresh) {
-			await window.TORQUE_FORGED_BOOTSTRAP.utils.refresh();
-			bootstrapQueryCache();
-		}
-	},
-
-	// Preload crítico (compatibilidade) DINÂMICO
-	preloadCritical: async () => {
-		bootstrapQueryCache();
-
-		// Refresh bootstrap se necessário
-		if (window.TORQUE_FORGED_BOOTSTRAP?.utils?.refresh) {
-			try {
-				await window.TORQUE_FORGED_BOOTSTRAP.utils.refresh();
-				bootstrapQueryCache();
-			} catch (error) {
-				console.warn("⚠️ Bootstrap refresh failed:", error);
-			}
-		}
-	},
-
-	// Forçar refresh de categorias do banco
-	refreshCategories: async () => {
+		// Limpar cache local de categorias
 		try {
-			// Invalidar cache de categorias
-			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
-
-			// Limpar cache local
 			localStorage.removeItem("tf-cache-categories-db");
-
-			// Recarregar
-			await queryClient.refetchQueries({ queryKey: ["public", "categories"] });
-
-			console.log("🔄 Categorias atualizadas do banco de dados");
 		} catch (error) {
-			console.warn("⚠️ Erro ao atualizar categorias:", error);
+			// Ignorar
 		}
+
+		console.log("🔄 Cache de categorias invalidado");
 	},
 
-	// Estatísticas instantâneas DINÂMICAS
+	// Forçar refetch de categorias
+	refetchCategories: async () => {
+		await queryClient.refetchQueries({
+			queryKey: ["public", "categories"],
+		});
+		console.log("🔄 Categorias recarregadas");
+	},
+
+	// Estatísticas do cache
 	getStats: () => {
 		const cache = queryClient.getQueryCache();
 		const queries = cache.getAll();
-		const categories = queryClient.getQueryData(["public", "categories"]);
 
 		return {
 			total: queries.length,
-			fresh: queries.filter((q) => !q.isStale()).length,
-			stale: queries.filter((q) => q.isStale()).length,
-			error: queries.filter((q) => q.state.status === "error").length,
-			loading: queries.filter((q) => q.state.status === "pending").length,
-			success: queries.filter((q) => q.state.status === "success").length,
-			hasBootstrap: !!window.TORQUE_FORGED_BOOTSTRAP?.ready,
-			bootstrapTimestamp: window.TORQUE_FORGED_BOOTSTRAP?.timestamp,
-			categories: {
-				count: categories ? categories.length : 0,
-				source:
-					categories && categories.length > 0
-						? categories[0].id === "geral"
-							? "fallback"
-							: "database"
-						: "none",
-				hasLocalCache: !!localStorage.getItem("tf-cache-categories-db"),
-				inQueryCache: !!categories,
+			byStatus: {
+				success: queries.filter((q) => q.state.status === "success").length,
+				error: queries.filter((q) => q.state.status === "error").length,
+				loading: queries.filter((q) => q.state.status === "pending").length,
+				idle: queries.filter((q) => q.state.status === "idle").length,
 			},
+			byType: {
+				categories: queries.filter((q) => q.queryKey.includes("categories"))
+					.length,
+				posts: queries.filter((q) => q.queryKey.includes("posts")).length,
+				public: queries.filter((q) => q.queryKey[0] === "public").length,
+				admin: queries.filter((q) => q.queryKey[0] === "admin").length,
+			},
+			errors: queries
+				.filter((q) => q.state.status === "error")
+				.map((q) => ({
+					queryKey: q.queryKey,
+					error: q.state.error?.message,
+				})),
 		};
+	},
+
+	// Debug de uma query específica
+	debugQuery: (queryKey) => {
+		const query = queryClient.getQueryCache().find(queryKey);
+		if (query) {
+			console.log(`🔍 Query Debug [${JSON.stringify(queryKey)}]:`, {
+				status: query.state.status,
+				data: query.state.data,
+				error: query.state.error,
+				lastUpdated: new Date(query.state.dataUpdatedAt).toLocaleString(),
+				stale: query.isStale(),
+			});
+		} else {
+			console.warn(`⚠️ Query não encontrada: ${JSON.stringify(queryKey)}`);
+		}
+	},
+
+	// Forçar estado limpo
+	reset: () => {
+		queryClient.clear();
+		queryClient.getQueryCache().clear();
+		queryClient.getMutationCache().clear();
+
+		// Limpar localStorage
+		try {
+			Object.keys(localStorage).forEach((key) => {
+				if (key.startsWith("tf-cache-") || key.startsWith("sb-")) {
+					localStorage.removeItem(key);
+				}
+			});
+		} catch (error) {
+			// Ignorar
+		}
+
+		console.log("🔄 Sistema completamente resetado");
 	},
 };
 
-// Override do placeholder data para hooks DINÂMICO
-export const instantPlaceholderData = placeholderData;
+// Disponibilizar utils globalmente em desenvolvimento
+if (process.env.NODE_ENV === "development") {
+	window.cacheUtils = cacheUtils;
+
+	console.log(`
+🔧 === CACHE UTILS DISPONÍVEIS ===
+
+// Limpar cache
+cacheUtils.clear()
+
+// Invalidar categorias  
+cacheUtils.invalidateCategories()
+
+// Recarregar categorias
+await cacheUtils.refetchCategories()
+
+// Ver estatísticas
+cacheUtils.getStats()
+
+// Debug query específica
+cacheUtils.debugQuery(["public", "categories"])
+
+// Reset completo
+cacheUtils.reset()
+
+======================================
+	`);
+}
 
 export default ModernQueryProvider;

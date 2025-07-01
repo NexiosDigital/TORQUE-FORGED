@@ -1,21 +1,9 @@
-import {
-	useQuery,
-	useMutation,
-	useQueryClient,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PostService } from "../services/PostService";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
 
-// Importar debug utils em desenvolvimento
-if (process.env.NODE_ENV === "development") {
-	import("../utils/categoriesDebugUtils").catch(() => {
-		// Ignorar se arquivo não existir
-	});
-}
-
-// Query keys INALTERADOS (compatibilidade)
+// Query keys limpos e simples
 export const QUERY_KEYS = {
 	public: {
 		posts: ["public", "posts"],
@@ -30,7 +18,7 @@ export const QUERY_KEYS = {
 			"categories",
 			"level",
 			level,
-			parentId,
+			parentId || "root",
 		],
 		categoryBySlug: (slug) => ["public", "categories", "slug", slug],
 		categoryChildren: (categoryId) => [
@@ -55,165 +43,157 @@ export const QUERY_KEYS = {
 	},
 };
 
-// Funções de placeholder data INTELIGENTES e DINÂMICAS
-const getBootstrapData = (key, fallback = []) => {
-	if (
-		window.TORQUE_FORGED_BOOTSTRAP?.ready &&
-		window.TORQUE_FORGED_BOOTSTRAP.data[key]
-	) {
-		return window.TORQUE_FORGED_BOOTSTRAP.data[key];
-	}
-	return fallback;
-};
-
-const INSTANT_PLACEHOLDERS = {
-	featuredPosts: () => getBootstrapData("featuredPosts", []),
-	allPosts: () => getBootstrapData("allPosts", []),
-
-	// Categorias DINÂMICAS - busca do bootstrap OU usa fallback mínimo
-	categories: () => {
-		const bootstrapCategories = getBootstrapData("categories", []);
-
-		// Se tem categorias do bootstrap, usar essas
-		if (bootstrapCategories.length > 0) {
-			return bootstrapCategories;
-		}
-
-		// Se não tem bootstrap, usar categorias mínimas do cache local
-		try {
-			const cached = localStorage.getItem("tf-cache-categories-db");
-			if (cached) {
-				const { data, timestamp } = JSON.parse(cached);
-				const age = Date.now() - timestamp;
-
-				// Cache válido por 1 hora
-				if (age < 60 * 60 * 1000) {
-					return data;
-				}
-			}
-		} catch (error) {
-			// Ignorar erros de cache
-		}
-
-		// Fallback mínimo apenas se necessário
-		return [
-			{
-				id: "geral",
-				name: "Geral",
-				description: "Conteúdo geral sobre automobilismo",
-				color: "from-gray-500 to-gray-600",
-				count: 0,
-			},
-		];
-	},
-
-	postsByCategory: (categoryId) => {
-		const allPosts = getBootstrapData("allPosts", []);
-		return allPosts.filter((post) => post.category === categoryId);
-	},
-
-	postById: (id) => {
-		const allPosts = getBootstrapData("allPosts", []);
-		const postId = typeof id === "string" ? parseInt(id, 10) : id;
-		return allPosts.find((post) => post.id === postId) || null;
-	},
-	categoriesHierarchy: () =>
-		getBootstrapData("categoriesHierarchy") || [
-			{
-				id: "corridas",
-				name: "Corridas",
-				slug: "corridas",
-				level: 1,
-				color: "from-red-500 to-orange-500",
-				icon: "🏁",
-				parent_id: null,
-				root_category: "corridas",
-			},
-			{
-				id: "f1",
-				name: "Fórmula 1",
-				slug: "f1",
-				level: 2,
-				color: "from-red-600 to-red-500",
-				icon: "🏎️",
-				parent_id: "corridas",
-				root_category: "corridas",
-			},
-		],
-
-	megaMenu: () =>
-		getBootstrapData("megaMenu") || {
-			corridas: {
-				id: "corridas",
-				name: "Corridas",
-				color: "from-red-500 to-orange-500",
-				icon: "🏁",
-				subcategories: {
-					f1: {
-						id: "f1",
-						name: "Fórmula 1",
-						slug: "f1",
-						href: "/f1",
-						items: [],
-					},
-				},
-			},
-		},
-
-	categoryBySlug: (slug) => {
-		const hierarchy = INSTANT_PLACEHOLDERS.categoriesHierarchy();
-		return hierarchy.find((cat) => cat.slug === slug) || null;
-	},
-
-	categoriesByLevel: (level, parentId) => {
-		const hierarchy = INSTANT_PLACEHOLDERS.categoriesHierarchy();
-		return hierarchy.filter(
-			(cat) => cat.level === level && cat.parent_id === parentId
-		);
-	},
-};
-
-// Configurações INSTANTÂNEAS - nunca loading
-const INSTANT_CONFIG = {
-	staleTime: 5 * 60 * 1000, // 5 min
-	gcTime: 4 * 60 * 60 * 1000, // 4 horas
+// Configurações básicas - SEM PLACEHOLDERS que interferem
+const BASIC_CONFIG = {
+	staleTime: 5 * 60 * 1000, // 5 minutos
+	gcTime: 30 * 60 * 1000, // 30 minutos
 	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	refetchOnReconnect: false,
-	refetchInterval: false,
-	networkMode: "offlineFirst",
-	retry: false,
-	// CRÍTICO: sempre usar placeholder data
-	placeholderData: (previousData) => previousData,
+	refetchOnMount: true, // Sempre buscar dados frescos
+	retry: 1,
+	networkMode: "online",
 };
 
 /**
  * ======================================
- * HOOKS PÚBLICOS - CARREGAMENTO INSTANTÂNEO
+ * HOOKS PÚBLICOS - SEMPRE DO BANCO
  * ======================================
  */
 
-// Posts em destaque - SEMPRE instantâneo
+// CATEGORIAS - Hook principal corrigido
+export const useCategories = (options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categories,
+		queryFn: () => {
+			console.log("🔍 useCategories: Buscando categorias...");
+			return PostService.getCategories();
+		},
+		...BASIC_CONFIG,
+		staleTime: 10 * 60 * 1000, // 10 minutos para categorias
+		meta: {
+			errorMessage: "Erro ao carregar categorias",
+		},
+		...options,
+	});
+};
+
+// Categoria por slug - CRÍTICO para roteamento
+export const useCategoryBySlug = (slug, options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoryBySlug(slug),
+		queryFn: () => {
+			console.log(`🔍 useCategoryBySlug: Buscando categoria "${slug}"`);
+			return PostService.getCategoryBySlug(slug);
+		},
+		enabled: !!slug && typeof slug === "string" && slug.length > 0,
+		...BASIC_CONFIG,
+		meta: {
+			errorMessage: `Categoria "${slug}" não encontrada`,
+		},
+		...options,
+	});
+};
+
+// Hierarquia de categorias
+export const useCategoriesHierarchy = (options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoriesHierarchy,
+		queryFn: () => {
+			console.log("🔍 useCategoriesHierarchy: Buscando hierarquia...");
+			return PostService.getCategoriesHierarchy();
+		},
+		...BASIC_CONFIG,
+		staleTime: 15 * 60 * 1000, // 15 minutos para hierarquia
+		meta: {
+			errorMessage: "Erro ao carregar hierarquia de categorias",
+		},
+		...options,
+	});
+};
+
+// Categorias por nível
+export const useCategoriesByLevel = (level, parentId = null, options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoriesByLevel(level, parentId),
+		queryFn: () => {
+			console.log(
+				`🔍 useCategoriesByLevel: Nível ${level}, parent ${parentId}`
+			);
+			return PostService.getCategoriesByLevel(level, parentId);
+		},
+		enabled: typeof level === "number" && level >= 1 && level <= 3,
+		...BASIC_CONFIG,
+		meta: {
+			errorMessage: `Erro ao carregar categorias nível ${level}`,
+		},
+		...options,
+	});
+};
+
+// Filhos de uma categoria
+export const useCategoryChildren = (categoryId, options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoryChildren(categoryId),
+		queryFn: () => {
+			console.log(`🔍 useCategoryChildren: Buscando filhos de "${categoryId}"`);
+			return PostService.getCategoryChildren(categoryId);
+		},
+		enabled: !!categoryId,
+		...BASIC_CONFIG,
+		meta: {
+			errorMessage: `Erro ao carregar subcategorias de ${categoryId}`,
+		},
+		...options,
+	});
+};
+
+// Breadcrumb
+export const useCategoryBreadcrumb = (categoryId, options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.categoryBreadcrumb(categoryId),
+		queryFn: () => {
+			console.log(
+				`🔍 useCategoryBreadcrumb: Gerando breadcrumb para "${categoryId}"`
+			);
+			return PostService.getCategoryBreadcrumb(categoryId);
+		},
+		enabled: !!categoryId,
+		...BASIC_CONFIG,
+		meta: {
+			errorMessage: `Erro ao gerar breadcrumb para ${categoryId}`,
+		},
+		...options,
+	});
+};
+
+// Mega menu
+export const useMegaMenuStructure = (options = {}) => {
+	return useQuery({
+		queryKey: QUERY_KEYS.public.megaMenu,
+		queryFn: () => {
+			console.log("🔍 useMegaMenuStructure: Construindo mega menu...");
+			return PostService.getMegaMenuStructure();
+		},
+		...BASIC_CONFIG,
+		staleTime: 20 * 60 * 1000, // 20 minutos para mega menu
+		meta: {
+			errorMessage: "Erro ao carregar estrutura do mega menu",
+		},
+		...options,
+	});
+};
+
+/**
+ * ======================================
+ * HOOKS DE POSTS
+ * ======================================
+ */
+
+// Posts em destaque
 export const useFeaturedPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.featured,
 		queryFn: () => PostService.getFeaturedPosts(),
-		...INSTANT_CONFIG,
-		enabled: true,
-		// SEMPRE retornar dados mesmo se query falhar
-		placeholderData: () => INSTANT_PLACEHOLDERS.featuredPosts(),
-		// Dados iniciais do bootstrap
-		initialData: () => {
-			const bootstrapData = INSTANT_PLACEHOLDERS.featuredPosts();
-			return bootstrapData.length > 0 ? bootstrapData : undefined;
-		},
-		// Fallback se tudo falhar
-		select: (data) => {
-			if (!data || data.length === 0) {
-				return INSTANT_PLACEHOLDERS.featuredPosts();
-			}
-			return data;
-		},
+		...BASIC_CONFIG,
 		meta: {
 			errorMessage: "Erro ao carregar posts em destaque",
 		},
@@ -221,27 +201,12 @@ export const useFeaturedPosts = (options = {}) => {
 	});
 };
 
-// Todos os posts - SEMPRE instantâneo
+// Todos os posts
 export const useAllPosts = (options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.posts,
 		queryFn: () => PostService.getAllPosts(),
-		...INSTANT_CONFIG,
-		enabled: true,
-		placeholderData: () => INSTANT_PLACEHOLDERS.allPosts(),
-		initialData: () => {
-			const bootstrapData = INSTANT_PLACEHOLDERS.allPosts();
-			return bootstrapData.length > 0 ? bootstrapData : undefined;
-		},
-		select: (data) => {
-			if (!data || data.length === 0) {
-				return INSTANT_PLACEHOLDERS.allPosts();
-			}
-			// Ordenação garantida
-			return data.sort(
-				(a, b) => new Date(b.created_at) - new Date(a.created_at)
-			);
-		},
+		...BASIC_CONFIG,
 		meta: {
 			errorMessage: "Erro ao carregar posts",
 		},
@@ -249,25 +214,18 @@ export const useAllPosts = (options = {}) => {
 	});
 };
 
-// Posts por categoria - SEMPRE instantâneo
+// Posts por categoria
 export const usePostsByCategory = (categoryId, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byCategory(categoryId),
-		queryFn: () => PostService.getPostsByCategory(categoryId),
+		queryFn: () => {
+			console.log(
+				`🔍 usePostsByCategory: Buscando posts da categoria "${categoryId}"`
+			);
+			return PostService.getPostsByCategory(categoryId);
+		},
 		enabled: !!categoryId && typeof categoryId === "string",
-		...INSTANT_CONFIG,
-		placeholderData: () => INSTANT_PLACEHOLDERS.postsByCategory(categoryId),
-		initialData: () => {
-			if (!categoryId) return undefined;
-			const bootstrapData = INSTANT_PLACEHOLDERS.postsByCategory(categoryId);
-			return bootstrapData.length > 0 ? bootstrapData : undefined;
-		},
-		select: (data) => {
-			if (!data || data.length === 0) {
-				return INSTANT_PLACEHOLDERS.postsByCategory(categoryId);
-			}
-			return data;
-		},
+		...BASIC_CONFIG,
 		meta: {
 			errorMessage: `Erro ao carregar posts da categoria ${categoryId}`,
 		},
@@ -275,30 +233,13 @@ export const usePostsByCategory = (categoryId, options = {}) => {
 	});
 };
 
-// Post individual - SEMPRE instantâneo
+// Post individual
 export const usePostById = (id, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.byId(id),
 		queryFn: () => PostService.getPostById(id),
 		enabled: !!id,
-		...INSTANT_CONFIG,
-		placeholderData: () => INSTANT_PLACEHOLDERS.postById(id),
-		initialData: () => {
-			if (!id) return undefined;
-			const bootstrapData = INSTANT_PLACEHOLDERS.postById(id);
-			return bootstrapData || undefined;
-		},
-		select: (data) => {
-			if (!data) {
-				// Se não encontrar, tentar bootstrap novamente
-				const fallback = INSTANT_PLACEHOLDERS.postById(id);
-				if (!fallback) {
-					throw new Error("Post não encontrado");
-				}
-				return fallback;
-			}
-			return data;
-		},
+		...BASIC_CONFIG,
 		meta: {
 			errorMessage: `Erro ao carregar post ${id}`,
 		},
@@ -306,64 +247,14 @@ export const usePostById = (id, options = {}) => {
 	});
 };
 
-// ======================================
-// CATEGORIAS DINÂMICAS - SEMPRE BUSCA DO BANCO
-// ======================================
-export const useCategories = (options = {}) => {
-	return useQuery({
-		queryKey: QUERY_KEYS.public.categories,
-		queryFn: () => PostService.getCategories(),
-		...INSTANT_CONFIG,
-		enabled: true,
-		// Cache mais longo para categorias (1 hora)
-		staleTime: 60 * 60 * 1000,
-		gcTime: 4 * 60 * 60 * 1000,
-
-		// Placeholder dinâmico baseado em cache ou bootstrap
-		placeholderData: () => INSTANT_PLACEHOLDERS.categories(),
-
-		// Dados iniciais do cache ou bootstrap
-		initialData: () => {
-			const bootstrapData = INSTANT_PLACEHOLDERS.categories();
-			return bootstrapData.length > 0 ? bootstrapData : undefined;
-		},
-
-		// Sempre retornar alguma categoria (nunca array vazio)
-		select: (data) => {
-			if (!data || data.length === 0) {
-				console.warn("⚠️ Nenhuma categoria encontrada, usando fallback");
-				return INSTANT_PLACEHOLDERS.categories();
-			}
-			return data;
-		},
-
-		meta: {
-			errorMessage: "Erro ao carregar categorias",
-		},
-
-		// Configurações específicas para categorias
-		refetchOnWindowFocus: false,
-		refetchOnMount: false,
-		retry: (failureCount, error) => {
-			// Permitir retry para categorias (mais crítico)
-			return failureCount < 2;
-		},
-
-		...options,
-	});
-};
-
-// Busca - cache moderado mas sem loading desnecessário
+// Busca de posts
 export const useSearchPosts = (query, options = {}) => {
 	return useQuery({
 		queryKey: QUERY_KEYS.public.search(query),
 		queryFn: () => PostService.searchPosts(query),
 		enabled: !!query && query.length >= 2,
-		staleTime: 5 * 60 * 1000, // 5min para buscas
-		gcTime: 10 * 60 * 1000,
-		refetchOnWindowFocus: false,
-		refetchOnMount: false,
-		placeholderData: () => [], // Lista vazia para buscas
+		...BASIC_CONFIG,
+		staleTime: 2 * 60 * 1000, // 2 minutos para busca
 		meta: {
 			errorMessage: "Erro na busca",
 		},
@@ -373,7 +264,7 @@ export const useSearchPosts = (query, options = {}) => {
 
 /**
  * ======================================
- * HOOKS ADMIN - sem alterações significativas
+ * HOOKS ADMIN
  * ======================================
  */
 
@@ -384,12 +275,7 @@ export const useAllPostsAdmin = (options = {}) => {
 		queryKey: QUERY_KEYS.admin.posts,
 		queryFn: () => PostService.getAllPostsAdmin(),
 		enabled: isAdmin,
-		staleTime: 30 * 60 * 1000,
-		gcTime: 2 * 60 * 60 * 1000,
-		refetchOnWindowFocus: false,
-		refetchOnMount: false,
-		retry: false,
-		placeholderData: (previousData) => previousData,
+		...BASIC_CONFIG,
 		meta: {
 			errorMessage: "Erro ao carregar posts admin",
 		},
@@ -404,12 +290,7 @@ export const usePostByIdAdmin = (id, options = {}) => {
 		queryKey: QUERY_KEYS.admin.byId(id),
 		queryFn: () => PostService.getPostByIdAdmin(id),
 		enabled: !!id && isAdmin,
-		staleTime: 10 * 60 * 1000,
-		gcTime: 2 * 60 * 60 * 1000,
-		refetchOnWindowFocus: false,
-		refetchOnMount: false,
-		retry: false,
-		placeholderData: (previousData) => previousData,
+		...BASIC_CONFIG,
 		meta: {
 			errorMessage: `Erro ao carregar post admin ${id}`,
 		},
@@ -419,59 +300,103 @@ export const usePostByIdAdmin = (id, options = {}) => {
 
 /**
  * ======================================
- * MUTATIONS - com invalidação de categorias
+ * MUTATIONS DE CATEGORIAS
  * ======================================
  */
+
+export const useCreateCategory = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (categoryData) => {
+			console.log(
+				"🔧 useCreateCategory: Criando categoria...",
+				categoryData.name
+			);
+			return PostService.createCategory(categoryData);
+		},
+		onSuccess: (data) => {
+			console.log("✅ Categoria criada:", data.name);
+			toast.success("Categoria criada com sucesso!");
+
+			// Invalidar todas as queries de categorias
+			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
+			queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+		},
+		onError: (error) => {
+			console.error("❌ Erro ao criar categoria:", error);
+			toast.error(`Erro ao criar categoria: ${error.message}`);
+		},
+	});
+};
+
+export const useUpdateCategory = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: ({ id, ...categoryData }) => {
+			console.log("🔧 useUpdateCategory: Atualizando categoria...", id);
+			return PostService.updateCategory(id, categoryData);
+		},
+		onSuccess: (data) => {
+			console.log("✅ Categoria atualizada:", data.name);
+			toast.success("Categoria atualizada com sucesso!");
+
+			// Invalidar todas as queries de categorias
+			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
+			queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+		},
+		onError: (error) => {
+			console.error("❌ Erro ao atualizar categoria:", error);
+			toast.error(`Erro ao atualizar categoria: ${error.message}`);
+		},
+	});
+};
+
+export const useDeleteCategory = () => {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (id) => {
+			console.log("🔧 useDeleteCategory: Deletando categoria...", id);
+			return PostService.deleteCategory(id);
+		},
+		onSuccess: () => {
+			console.log("✅ Categoria deletada");
+			toast.success("Categoria deletada com sucesso!");
+
+			// Invalidar todas as queries de categorias
+			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
+			queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+		},
+		onError: (error) => {
+			console.error("❌ Erro ao deletar categoria:", error);
+			toast.error(`Erro ao deletar categoria: ${error.message}`);
+		},
+	});
+};
+
+/**
+ * ======================================
+ * MUTATIONS DE POSTS (mantidas)
+ * ======================================
+ */
+
 export const useCreatePost = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: async (postData) => {
-			const result = await PostService.createPost(postData);
-			return result;
-		},
-		onMutate: async (newPost) => {
-			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.admin.posts });
-
-			const previousPosts = queryClient.getQueryData(QUERY_KEYS.admin.posts);
-
-			if (previousPosts) {
-				queryClient.setQueryData(QUERY_KEYS.admin.posts, [
-					{
-						...newPost,
-						id: "temp-" + Date.now(),
-						created_at: new Date().toISOString(),
-					},
-					...previousPosts,
-				]);
-			}
-
-			return { previousPosts };
-		},
-		onError: (err, newPost, context) => {
-			if (context?.previousPosts) {
-				queryClient.setQueryData(QUERY_KEYS.admin.posts, context.previousPosts);
-			}
-			toast.error(`Erro ao criar post: ${err.message}`);
-		},
+		mutationFn: (postData) => PostService.createPost(postData),
 		onSuccess: (data) => {
 			toast.success("Post criado com sucesso!");
-
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
-
 			if (data?.published) {
 				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
-
-				if (data.category) {
-					queryClient.invalidateQueries({
-						queryKey: QUERY_KEYS.public.byCategory(data.category),
-					});
-				}
 			}
-
-			// Invalidar categorias se necessário
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.categories });
+		},
+		onError: (error) => {
+			toast.error(`Erro ao criar post: ${error.message}`);
 		},
 	});
 };
@@ -480,58 +405,17 @@ export const useUpdatePost = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: async ({ id, ...postData }) => {
-			const result = await PostService.updatePost(id, postData);
-			return result;
-		},
-		onMutate: async ({ id, ...newData }) => {
-			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.admin.byId(id) });
-
-			const previousPost = queryClient.getQueryData(QUERY_KEYS.admin.byId(id));
-
-			if (previousPost) {
-				queryClient.setQueryData(QUERY_KEYS.admin.byId(id), {
-					...previousPost,
-					...newData,
-					updated_at: new Date().toISOString(),
-				});
-			}
-
-			return { previousPost };
-		},
-		onError: (err, { id }, context) => {
-			if (context?.previousPost) {
-				queryClient.setQueryData(
-					QUERY_KEYS.admin.byId(id),
-					context.previousPost
-				);
-			}
-			toast.error(`Erro ao atualizar post: ${err.message}`);
-		},
+		mutationFn: ({ id, ...postData }) => PostService.updatePost(id, postData),
 		onSuccess: (data) => {
 			toast.success("Post atualizado com sucesso!");
-
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
-
 			if (data?.published) {
 				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 				queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
-
-				if (data.category) {
-					queryClient.invalidateQueries({
-						queryKey: QUERY_KEYS.public.byCategory(data.category),
-					});
-				}
-
-				if (data.id) {
-					queryClient.invalidateQueries({
-						queryKey: QUERY_KEYS.public.byId(data.id),
-					});
-				}
 			}
-
-			// Invalidar categorias se necessário
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.categories });
+		},
+		onError: (error) => {
+			toast.error(`Erro ao atualizar post: ${error.message}`);
 		},
 	});
 };
@@ -540,72 +424,31 @@ export const useDeletePost = () => {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: async (id) => {
-			const result = await PostService.deletePost(id);
-			return result;
-		},
-		onMutate: async (id) => {
-			await queryClient.cancelQueries({ queryKey: QUERY_KEYS.admin.posts });
-
-			const previousPosts = queryClient.getQueryData(QUERY_KEYS.admin.posts);
-
-			if (previousPosts) {
-				queryClient.setQueryData(
-					QUERY_KEYS.admin.posts,
-					previousPosts.filter((post) => post.id !== id)
-				);
-			}
-
-			return { previousPosts };
-		},
-		onError: (err, id, context) => {
-			if (context?.previousPosts) {
-				queryClient.setQueryData(QUERY_KEYS.admin.posts, context.previousPosts);
-			}
-			toast.error(`Erro ao deletar post: ${err.message}`);
-		},
-		onSuccess: (data, variables) => {
+		mutationFn: (id) => PostService.deletePost(id),
+		onSuccess: () => {
 			toast.success("Post deletado com sucesso!");
-
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
 			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
-			queryClient.invalidateQueries({
-				queryKey: ["public", "posts", "category"],
-			});
-
-			queryClient.removeQueries({
-				queryKey: QUERY_KEYS.public.byId(variables),
-			});
-			queryClient.removeQueries({
-				queryKey: QUERY_KEYS.admin.byId(variables),
-			});
-
-			// Invalidar categorias se necessário
-			queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.categories });
+		},
+		onError: (error) => {
+			toast.error(`Erro ao deletar post: ${error.message}`);
 		},
 	});
 };
 
 /**
  * ======================================
- * UTILITIES INSTANTÂNEAS
+ * UTILITIES
  * ======================================
  */
+
 export const usePrefetch = () => {
 	const queryClient = useQueryClient();
 
 	const prefetchPost = (id) => {
 		if (!id) return;
 
-		// Verificar se já tem no bootstrap primeiro
-		const bootstrapPost = INSTANT_PLACEHOLDERS.postById(id);
-		if (bootstrapPost) {
-			queryClient.setQueryData(QUERY_KEYS.public.byId(id), bootstrapPost);
-			return;
-		}
-
-		// Prefetch normal se não tem no bootstrap
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byId(id),
 			queryFn: () => PostService.getPostById(id),
@@ -616,17 +459,6 @@ export const usePrefetch = () => {
 	const prefetchCategory = (categoryId) => {
 		if (!categoryId) return;
 
-		// Verificar bootstrap primeiro
-		const bootstrapPosts = INSTANT_PLACEHOLDERS.postsByCategory(categoryId);
-		if (bootstrapPosts.length > 0) {
-			queryClient.setQueryData(
-				QUERY_KEYS.public.byCategory(categoryId),
-				bootstrapPosts
-			);
-			return;
-		}
-
-		// Prefetch normal
 		queryClient.prefetchQuery({
 			queryKey: QUERY_KEYS.public.byCategory(categoryId),
 			queryFn: () => PostService.getPostsByCategory(categoryId),
@@ -640,62 +472,18 @@ export const usePrefetch = () => {
 export const useCacheUtils = () => {
 	const queryClient = useQueryClient();
 
-	const invalidateAllPosts = () => {
-		queryClient.invalidateQueries({ queryKey: ["posts"] });
-		queryClient.invalidateQueries({ queryKey: ["public"] });
-		queryClient.invalidateQueries({ queryKey: ["admin"] });
+	const refreshCategories = () => {
+		console.log("🔄 Forçando refresh de categorias...");
+		PostService.clearCategoriesCache();
+		queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
+		queryClient.refetchQueries({ queryKey: ["public", "categories"] });
+		toast.success("Categorias atualizadas!");
 	};
 
 	const clearCache = () => {
 		queryClient.clear();
-		// Repopular com bootstrap
-		if (window.TORQUE_FORGED_BOOTSTRAP?.ready) {
-			setTimeout(() => {
-				// Re-popular cache básico
-				const featuredPosts = INSTANT_PLACEHOLDERS.featuredPosts();
-				const allPosts = INSTANT_PLACEHOLDERS.allPosts();
-				const categories = INSTANT_PLACEHOLDERS.categories();
-
-				if (featuredPosts.length > 0) {
-					queryClient.setQueryData(QUERY_KEYS.public.featured, featuredPosts);
-				}
-				if (allPosts.length > 0) {
-					queryClient.setQueryData(QUERY_KEYS.public.posts, allPosts);
-				}
-				if (categories.length > 0) {
-					queryClient.setQueryData(QUERY_KEYS.public.categories, categories);
-				}
-			}, 100);
-		}
+		PostService.clearCategoriesCache();
 		toast.success("Cache limpo com sucesso!");
-	};
-
-	const forceRefreshAll = () => {
-		queryClient.invalidateQueries();
-		queryClient.refetchQueries();
-		toast.success("Dados atualizados!");
-	};
-
-	const refreshPosts = () => {
-		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.posts });
-		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.featured });
-		queryClient.invalidateQueries({
-			queryKey: ["public", "posts", "category"],
-		});
-		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.admin.posts });
-
-		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.posts });
-		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.featured });
-		queryClient.refetchQueries({ queryKey: QUERY_KEYS.admin.posts });
-
-		toast.success("Posts atualizados!");
-	};
-
-	// Método específico para refresh de categorias
-	const refreshCategories = () => {
-		queryClient.invalidateQueries({ queryKey: QUERY_KEYS.public.categories });
-		queryClient.refetchQueries({ queryKey: QUERY_KEYS.public.categories });
-		toast.success("Categorias atualizadas!");
 	};
 
 	const getCacheStats = () => {
@@ -706,256 +494,83 @@ export const useCacheUtils = () => {
 			total: queries.length,
 			public: queries.filter((q) => q.queryKey[0] === "public").length,
 			admin: queries.filter((q) => q.queryKey[0] === "admin").length,
-			errors: queries.filter((q) => q.state.status === "error").length,
-			loading: queries.filter((q) => q.state.status === "pending").length,
+			categories: queries.filter((q) => q.queryKey.includes("categories"))
+				.length,
 			success: queries.filter((q) => q.state.status === "success").length,
-			stale: queries.filter((q) => q.isStale()).length,
-			hasBootstrap: !!window.TORQUE_FORGED_BOOTSTRAP?.ready,
-			categoriesInCache: !!queryClient.getQueryData(
-				QUERY_KEYS.public.categories
-			),
+			error: queries.filter((q) => q.state.status === "error").length,
 		};
 	};
 
 	return {
-		invalidateAllPosts,
+		refreshCategories,
 		clearCache,
 		getCacheStats,
-		forceRefreshAll,
-		refreshPosts,
-		refreshCategories,
 	};
 };
 
-// Suspense hook - dados sempre disponíveis
+/**
+ * ======================================
+ * SUSPENSE HOOKS
+ * ======================================
+ */
+
+// Hook suspense para post individual (compatibilidade)
 export const usePostByIdSuspense = (id) => {
-	return useSuspenseQuery({
-		queryKey: QUERY_KEYS.public.byId(id),
-		queryFn: () => PostService.getPostById(id),
-		staleTime: 60 * 60 * 1000,
-		refetchOnWindowFocus: false,
-		refetchOnMount: false,
+	const { data, error, isLoading } = usePostById(id, {
+		suspense: false, // React Query suspense não é mais recomendado
 	});
+
+	// Se está carregando, lançar uma promise para suspense
+	if (isLoading) {
+		throw PostService.getPostById(id);
+	}
+
+	// Se tem erro, lançar erro
+	if (error) {
+		throw error;
+	}
+
+	return data;
 };
 
-// Hook de preload crítico (agora com categorias dinâmicas)
-export const usePreloadCriticalData = () => {
-	const queryClient = useQueryClient();
+/**
+ * ======================================
+ * DEBUG HOOKS
+ * ======================================
+ */
 
-	const preloadAll = async () => {
-		// Com bootstrap, isto é quase instantâneo
-		const promises = [
-			queryClient.prefetchQuery({
-				queryKey: QUERY_KEYS.public.featured,
-				queryFn: () => PostService.getFeaturedPosts(),
-				staleTime: 45 * 60 * 1000,
-			}),
-			queryClient.prefetchQuery({
-				queryKey: QUERY_KEYS.public.posts,
-				queryFn: () => PostService.getAllPosts(),
-				staleTime: 30 * 60 * 1000,
-			}),
-			queryClient.prefetchQuery({
-				queryKey: QUERY_KEYS.public.categories,
-				queryFn: () => PostService.getCategories(),
-				staleTime: 2 * 60 * 60 * 1000, // 2 horas para categorias
-			}),
-		];
-
-		try {
-			await Promise.allSettled(promises);
-			console.log(
-				"🚀 Critical data preloaded successfully (including dynamic categories)"
-			);
-		} catch (error) {
-			console.warn("⚠️ Preload failed:", error);
-		}
+export const useDebugCategories = () => {
+	return {
+		debugCategories: () => PostService.debugCategories(),
+		testRouting: (slug) => PostService.testCategoryRouting(slug),
+		clearCache: () => PostService.clearCategoriesCache(),
 	};
-
-	return { preloadAll };
-};
-
-export const useCategoriesHierarchy = (options = {}) => {
-	return useQuery({
-		queryKey: QUERY_KEYS.public.categoriesHierarchy,
-		queryFn: () => PostService.getCategoriesHierarchy(),
-		...INSTANT_CONFIG,
-		placeholderData: () => INSTANT_PLACEHOLDERS.categoriesHierarchy(),
-		initialData: () => {
-			const bootstrapData = INSTANT_PLACEHOLDERS.categoriesHierarchy();
-			return bootstrapData.length > 0 ? bootstrapData : undefined;
-		},
-		select: (data) => {
-			if (!data || data.length === 0) {
-				return INSTANT_PLACEHOLDERS.categoriesHierarchy();
-			}
-			return data;
-		},
-		meta: {
-			errorMessage: "Erro ao carregar hierarquia de categorias",
-		},
-		...options,
-	});
-};
-
-export const useCategoriesByLevel = (level, parentId = null, options = {}) => {
-	return useQuery({
-		queryKey: QUERY_KEYS.public.categoriesByLevel(level, parentId),
-		queryFn: () => PostService.getCategoriesByLevel(level, parentId),
-		enabled: typeof level === "number" && level >= 1 && level <= 3,
-		...INSTANT_CONFIG,
-		placeholderData: () => [],
-		select: (data) => data || [],
-		meta: {
-			errorMessage: `Erro ao carregar categorias nível ${level}`,
-		},
-		...options,
-	});
-};
-
-export const useCategoryBySlug = (slug, options = {}) => {
-	return useQuery({
-		queryKey: QUERY_KEYS.public.categoryBySlug(slug),
-		queryFn: () => PostService.getCategoryBySlug(slug),
-		enabled: !!slug && typeof slug === "string",
-		...INSTANT_CONFIG,
-		placeholderData: () => null,
-		select: (data) => data || null,
-		meta: {
-			errorMessage: `Categoria "${slug}" não encontrada`,
-		},
-		...options,
-	});
-};
-
-export const useCategoryChildren = (categoryId, options = {}) => {
-	return useQuery({
-		queryKey: QUERY_KEYS.public.categoryChildren(categoryId),
-		queryFn: () => PostService.getCategoryChildren(categoryId),
-		enabled: !!categoryId,
-		...INSTANT_CONFIG,
-		placeholderData: () => [],
-		select: (data) => data || [],
-		meta: {
-			errorMessage: `Erro ao carregar subcategorias de ${categoryId}`,
-		},
-		...options,
-	});
-};
-
-export const useCategoryBreadcrumb = (categoryId, options = {}) => {
-	return useQuery({
-		queryKey: QUERY_KEYS.public.categoryBreadcrumb(categoryId),
-		queryFn: () => PostService.getCategoryBreadcrumb(categoryId),
-		enabled: !!categoryId,
-		...INSTANT_CONFIG,
-		placeholderData: () => [],
-		select: (data) => data || [],
-		meta: {
-			errorMessage: `Erro ao gerar breadcrumb para ${categoryId}`,
-		},
-		...options,
-	});
-};
-
-export const useMegaMenuStructure = (options = {}) => {
-	return useQuery({
-		queryKey: QUERY_KEYS.public.megaMenu,
-		queryFn: () => PostService.getMegaMenuStructure(),
-		...INSTANT_CONFIG,
-		placeholderData: () => INSTANT_PLACEHOLDERS.megaMenu(),
-		initialData: () => {
-			const bootstrapData = INSTANT_PLACEHOLDERS.megaMenu();
-			return Object.keys(bootstrapData).length > 0 ? bootstrapData : undefined;
-		},
-		select: (data) => {
-			if (!data || Object.keys(data).length === 0) {
-				return INSTANT_PLACEHOLDERS.megaMenu();
-			}
-			return data;
-		},
-		meta: {
-			errorMessage: "Erro ao carregar estrutura do mega menu",
-		},
-		...options,
-	});
-};
-
-// Hooks admin para categorias
-export const useCreateCategory = () => {
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		mutationFn: (categoryData) => PostService.createCategory(categoryData),
-		onSuccess: () => {
-			toast.success("Categoria criada com sucesso!");
-			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
-			queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
-		},
-		onError: (error) => {
-			toast.error(`Erro ao criar categoria: ${error.message}`);
-		},
-	});
-};
-
-export const useUpdateCategory = () => {
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		mutationFn: ({ id, ...categoryData }) =>
-			PostService.updateCategory(id, categoryData),
-		onSuccess: () => {
-			toast.success("Categoria atualizada com sucesso!");
-			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
-			queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
-		},
-		onError: (error) => {
-			toast.error(`Erro ao atualizar categoria: ${error.message}`);
-		},
-	});
-};
-
-export const useDeleteCategory = () => {
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		mutationFn: (id) => PostService.deleteCategory(id),
-		onSuccess: () => {
-			toast.success("Categoria deletada com sucesso!");
-			queryClient.invalidateQueries({ queryKey: ["public", "categories"] });
-			queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
-		},
-		onError: (error) => {
-			toast.error(`Erro ao deletar categoria: ${error.message}`);
-		},
-	});
 };
 
 export default {
+	useCategories,
+	useCategoryBySlug,
+	useCategoriesHierarchy,
+	useCategoriesByLevel,
+	useCategoryChildren,
+	useCategoryBreadcrumb,
+	useMegaMenuStructure,
 	useFeaturedPosts,
 	useAllPosts,
 	usePostsByCategory,
 	usePostById,
 	usePostByIdSuspense,
 	useSearchPosts,
-	useCategories,
 	useAllPostsAdmin,
 	usePostByIdAdmin,
+	useCreateCategory,
+	useUpdateCategory,
+	useDeleteCategory,
 	useCreatePost,
 	useUpdatePost,
 	useDeletePost,
 	usePrefetch,
 	useCacheUtils,
-	usePreloadCriticalData,
+	useDebugCategories,
 	QUERY_KEYS,
-	INSTANT_PLACEHOLDERS,
-	useCategoriesHierarchy,
-	useCategoriesByLevel,
-	useCategoryBySlug,
-	useCategoryChildren,
-	useCategoryBreadcrumb,
-	useMegaMenuStructure,
-	useCreateCategory,
-	useUpdateCategory,
-	useDeleteCategory,
 };

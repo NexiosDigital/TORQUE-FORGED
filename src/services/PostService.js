@@ -1,147 +1,62 @@
 import { supabase } from "../lib/supabase";
-import { dataAPIService } from "./DataAPIService";
 import { ImageUploadService } from "./ImageUploadService";
 
 /**
- * PostService - VERSÃO ULTRA OTIMIZADA com CATEGORIAS DINÂMICAS
- * - Busca SEMPRE do banco de dados para categorias
- * - Cache inteligente mas sempre atualizado
- * - Fallbacks mínimos e realistas
+ * PostService CORRIGIDO - SEMPRE BUSCAR CATEGORIAS DO BANCO
+ * Remove fallbacks e placeholders que interferem nos dados reais
  */
 
 export class PostService {
 	/**
 	 * ======================================
-	 * MÉTODOS PÚBLICOS - DATA API ULTRA RÁPIDA
+	 * CATEGORIAS - SEMPRE DO BANCO DE DADOS
 	 * ======================================
 	 */
 
-	// Posts em destaque - ULTRA RÁPIDO com cache em camadas
-	static async getFeaturedPosts() {
+	// Buscar TODAS as categorias do banco - SEM FALLBACKS
+	static async getCategories() {
 		try {
-			// Tentar Data API primeiro (cache HTTP + memory cache)
-			const data = await dataAPIService.getFeaturedPosts();
+			console.log("🔍 Buscando categorias do banco de dados...");
 
-			// Otimização de URLs para performance máxima
-			return (data || []).map((post) => ({
-				...post,
-				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
-			}));
-		} catch (error) {
-			console.warn("⚠️ DataAPI failed, trying fallback:", error.message);
+			const { data, error } = await supabase
+				.from("categories")
+				.select("*")
+				.order("level, sort_order, name");
 
-			// Fallback instantâneo para dados em cache ou estáticos
-			try {
-				return this.getFeaturedPostsFallback();
-			} catch (fallbackError) {
-				console.warn(
-					"⚠️ Fallback failed, returning empty:",
-					fallbackError.message
+			if (error) {
+				console.error("❌ Erro ao buscar categorias:", error);
+				throw error;
+			}
+
+			console.log(`✅ Encontradas ${data?.length || 0} categorias no banco`);
+
+			// Limpar cache local se dados mudaram
+			if (data && data.length > 0) {
+				localStorage.setItem(
+					"tf-cache-categories-db",
+					JSON.stringify({
+						data,
+						timestamp: Date.now(),
+					})
 				);
-				return [];
 			}
-		}
-	}
 
-	// Todos os posts - ULTRA RÁPIDO
-	static async getAllPosts() {
-		try {
-			const data = await dataAPIService.getAllPosts();
-
-			return (data || []).map((post) => ({
-				...post,
-				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
-			}));
+			return data || [];
 		} catch (error) {
-			console.warn("⚠️ DataAPI failed for all posts:", error.message);
-
-			try {
-				return this.getAllPostsFallback();
-			} catch (fallbackError) {
-				console.warn("⚠️ All posts fallback failed:", fallbackError.message);
-				return [];
-			}
+			console.error("❌ Erro crítico ao buscar categorias:", error);
+			throw error;
 		}
 	}
 
-	// Posts por categoria - ULTRA RÁPIDO
-	static async getPostsByCategory(categoryId) {
-		if (!categoryId) {
-			throw new Error("Category ID é obrigatório");
-		}
-
-		try {
-			const data = await dataAPIService.getPostsByCategory(categoryId);
-
-			return (data || []).map((post) => ({
-				...post,
-				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
-			}));
-		} catch (error) {
-			console.warn(
-				`⚠️ DataAPI failed for category ${categoryId}:`,
-				error.message
-			);
-
-			try {
-				return this.getPostsByCategoryFallback(categoryId);
-			} catch (fallbackError) {
-				console.warn(
-					`⚠️ Category ${categoryId} fallback failed:`,
-					fallbackError.message
-				);
-				return [];
-			}
-		}
-	}
-
-	// Post individual - ULTRA RÁPIDO
-	static async getPostById(id) {
-		if (!id) {
-			throw new Error("Post ID é obrigatório");
-		}
-
-		try {
-			const postId = typeof id === "string" ? parseInt(id, 10) : id;
-
-			if (isNaN(postId)) {
-				throw new Error(`ID inválido: ${id}`);
-			}
-
-			const data = await dataAPIService.getPostById(postId);
-
-			// Otimizar URL da imagem para tamanho maior (detalhes do post)
-			return {
-				...data,
-				image_url: this.getOptimizedImageUrl(
-					data.image_path,
-					data.image_url,
-					"1920x1080"
-				),
-			};
-		} catch (error) {
-			console.warn(`⚠️ DataAPI failed for post ${id}:`, error.message);
-
-			if (error.message === "Post não encontrado") {
-				throw error; // Re-throw 404 errors
-			}
-
-			try {
-				return this.getPostByIdFallback(id);
-			} catch (fallbackError) {
-				console.warn(`⚠️ Post ${id} fallback failed:`, fallbackError.message);
-				throw new Error("Post não encontrado");
-			}
-		}
-	}
-
-	// Buscar categorias por slug (para roteamento)
+	// Buscar categoria por slug - DIRETO DO BANCO
 	static async getCategoryBySlug(slug) {
 		if (!slug) {
 			throw new Error("Slug é obrigatório");
 		}
 
 		try {
+			console.log(`🔍 Buscando categoria com slug: "${slug}"`);
+
 			const { data, error } = await supabase
 				.from("categories")
 				.select("*")
@@ -151,50 +66,63 @@ export class PostService {
 
 			if (error) {
 				if (error.code === "PGRST116") {
-					throw new Error("Categoria não encontrada");
+					console.warn(`⚠️ Categoria não encontrada: "${slug}"`);
+					throw new Error(`Categoria "${slug}" não encontrada`);
 				}
+				console.error("❌ Erro ao buscar categoria por slug:", error);
 				throw error;
 			}
 
+			console.log(`✅ Categoria encontrada: ${data.name} (${data.slug})`);
 			return data;
 		} catch (error) {
-			console.warn(
-				`⚠️ Categoria com slug "${slug}" não encontrada:`,
-				error.message
-			);
+			console.error(`❌ Erro ao buscar categoria "${slug}":`, error);
 			throw error;
 		}
 	}
 
-	// Buscar hierarquia completa das categorias
+	// Buscar hierarquia completa - DIRETO DO BANCO
 	static async getCategoriesHierarchy() {
 		try {
-			const data = await dataAPIService.getCategoriesHierarchy();
-			return data || [];
-		} catch (error) {
-			console.warn(
-				"⚠️ Erro ao carregar hierarquia, usando fallback:",
-				error.message
-			);
+			console.log("🔍 Buscando hierarquia de categorias...");
 
-			// Fallback para query direta
-			const { data, error: dbError } = await supabase
+			// Primeiro tentar view otimizada
+			let { data, error } = await supabase
 				.from("categories_hierarchy")
 				.select("*")
-				.eq("is_active", true);
+				.eq("is_active", true)
+				.order("level, sort_order, name");
 
-			if (dbError) {
-				console.error("❌ Fallback também falhou:", dbError);
-				return this.getFallbackCategoriesHierarchy();
+			// Se view não existir, usar tabela normal
+			if (error && error.code === "42P01") {
+				console.warn(
+					"⚠️ View categories_hierarchy não existe, usando tabela normal"
+				);
+				({ data, error } = await supabase
+					.from("categories")
+					.select("*")
+					.eq("is_active", true)
+					.order("level, sort_order, name"));
 			}
 
+			if (error) {
+				console.error("❌ Erro ao buscar hierarquia:", error);
+				throw error;
+			}
+
+			console.log(`✅ Hierarquia carregada: ${data?.length || 0} categorias`);
 			return data || [];
+		} catch (error) {
+			console.error("❌ Erro crítico na hierarquia:", error);
+			throw error;
 		}
 	}
 
 	// Buscar categorias por nível
 	static async getCategoriesByLevel(level, parentId = null) {
 		try {
+			console.log(`🔍 Buscando categorias nível ${level}, parent: ${parentId}`);
+
 			let query = supabase
 				.from("categories")
 				.select("*")
@@ -207,16 +135,20 @@ export class PostService {
 				query = query.is("parent_id", null);
 			}
 
-			const { data, error } = await query.order("sort_order");
+			const { data, error } = await query.order("sort_order, name");
 
-			if (error) throw error;
+			if (error) {
+				console.error(`❌ Erro ao buscar categorias nível ${level}:`, error);
+				throw error;
+			}
+
+			console.log(
+				`✅ Encontradas ${data?.length || 0} categorias nível ${level}`
+			);
 			return data || [];
 		} catch (error) {
-			console.warn(
-				`⚠️ Erro ao carregar categorias nível ${level}:`,
-				error.message
-			);
-			return [];
+			console.error(`❌ Erro crítico nível ${level}:`, error);
+			throw error;
 		}
 	}
 
@@ -225,17 +157,26 @@ export class PostService {
 		if (!categoryId) return [];
 
 		try {
-			const { data, error } = await supabase.rpc("get_category_children", {
-				category_id: categoryId,
-			});
+			console.log(`🔍 Buscando filhos da categoria: ${categoryId}`);
 
-			if (error) throw error;
+			const { data, error } = await supabase
+				.from("categories")
+				.select("*")
+				.eq("parent_id", categoryId)
+				.eq("is_active", true)
+				.order("sort_order, name");
+
+			if (error) {
+				console.error(`❌ Erro ao buscar filhos de ${categoryId}:`, error);
+				throw error;
+			}
+
+			console.log(
+				`✅ Encontrados ${data?.length || 0} filhos para ${categoryId}`
+			);
 			return data || [];
 		} catch (error) {
-			console.warn(
-				`⚠️ Erro ao carregar filhos de ${categoryId}:`,
-				error.message
-			);
+			console.error(`❌ Erro crítico filhos ${categoryId}:`, error);
 			return [];
 		}
 	}
@@ -245,6 +186,8 @@ export class PostService {
 		if (!categoryId) return [];
 
 		try {
+			console.log(`🔍 Gerando breadcrumb para: ${categoryId}`);
+
 			const breadcrumb = [];
 			let currentId = categoryId;
 
@@ -255,148 +198,288 @@ export class PostService {
 					.eq("id", currentId)
 					.single();
 
-				if (error || !data) break;
+				if (error || !data) {
+					console.warn(
+						`⚠️ Categoria não encontrada no breadcrumb: ${currentId}`
+					);
+					break;
+				}
 
 				breadcrumb.unshift(data);
 				currentId = data.parent_id;
 			}
 
+			console.log(`✅ Breadcrumb gerado: ${breadcrumb.length} níveis`);
 			return breadcrumb;
 		} catch (error) {
-			console.warn(
-				`⚠️ Erro ao gerar breadcrumb para ${categoryId}:`,
-				error.message
+			console.error(`❌ Erro no breadcrumb ${categoryId}:`, error);
+			return [];
+		}
+	}
+
+	// Estrutura do mega menu - DIRETO DO BANCO
+	static async getMegaMenuStructure() {
+		try {
+			console.log("🔍 Construindo estrutura do mega menu...");
+
+			// Buscar todas as categorias ativas
+			const { data: categories, error } = await supabase
+				.from("categories")
+				.select("*")
+				.eq("is_active", true)
+				.order("level, sort_order, name");
+
+			if (error) {
+				console.error("❌ Erro ao buscar categorias para mega menu:", error);
+				throw error;
+			}
+
+			// Construir estrutura hierárquica
+			const result = {};
+
+			// Primeiro, adicionar categorias nível 1
+			categories
+				.filter((cat) => cat.level === 1)
+				.forEach((cat) => {
+					result[cat.id] = {
+						id: cat.id,
+						name: cat.name,
+						color: cat.color || "from-gray-500 to-gray-400",
+						icon: cat.icon || "📁",
+						subcategories: {},
+					};
+				});
+
+			// Depois, adicionar subcategorias nível 2
+			categories
+				.filter((cat) => cat.level === 2 && cat.parent_id)
+				.forEach((cat) => {
+					if (result[cat.parent_id]) {
+						result[cat.parent_id].subcategories[cat.id] = {
+							id: cat.id,
+							name: cat.name,
+							slug: cat.slug,
+							href: `/${cat.slug}`,
+							items: [],
+						};
+					}
+				});
+
+			// Finalmente, adicionar sub-subcategorias nível 3
+			categories
+				.filter((cat) => cat.level === 3 && cat.parent_id)
+				.forEach((cat) => {
+					// Encontrar categoria pai nível 2
+					const parentLevel2 = categories.find((c) => c.id === cat.parent_id);
+					if (parentLevel2 && parentLevel2.parent_id) {
+						const grandparent = result[parentLevel2.parent_id];
+						if (grandparent && grandparent.subcategories[parentLevel2.id]) {
+							grandparent.subcategories[parentLevel2.id].items.push({
+								id: cat.id,
+								name: cat.name,
+								slug: cat.slug,
+								href: `/${cat.slug}`,
+							});
+						}
+					}
+				});
+
+			console.log(
+				`✅ Mega menu estruturado: ${
+					Object.keys(result).length
+				} categorias principais`
+			);
+			return result;
+		} catch (error) {
+			console.error("❌ Erro crítico no mega menu:", error);
+			throw error;
+		}
+	}
+
+	/**
+	 * ======================================
+	 * POSTS - MÉTODOS SIMPLES
+	 * ======================================
+	 */
+
+	// Posts em destaque
+	static async getFeaturedPosts() {
+		try {
+			const { data, error } = await supabase
+				.from("posts")
+				.select("*")
+				.eq("published", true)
+				.eq("trending", true)
+				.order("created_at", { ascending: false })
+				.limit(6);
+
+			if (error) throw error;
+
+			return (data || []).map((post) => ({
+				...post,
+				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+			}));
+		} catch (error) {
+			console.error("❌ Erro ao buscar posts em destaque:", error);
+			return [];
+		}
+	}
+
+	// Todos os posts
+	static async getAllPosts() {
+		try {
+			const { data, error } = await supabase
+				.from("posts")
+				.select("*")
+				.eq("published", true)
+				.order("created_at", { ascending: false });
+
+			if (error) throw error;
+
+			return (data || []).map((post) => ({
+				...post,
+				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+			}));
+		} catch (error) {
+			console.error("❌ Erro ao buscar todos os posts:", error);
+			return [];
+		}
+	}
+
+	// Posts por categoria
+	static async getPostsByCategory(categoryId) {
+		if (!categoryId) return [];
+
+		try {
+			console.log(`🔍 Buscando posts da categoria: ${categoryId}`);
+
+			const { data, error } = await supabase
+				.from("posts")
+				.select("*")
+				.eq("published", true)
+				.eq("category", categoryId)
+				.order("created_at", { ascending: false });
+
+			if (error) throw error;
+
+			console.log(
+				`✅ Encontrados ${data?.length || 0} posts para categoria ${categoryId}`
+			);
+
+			return (data || []).map((post) => ({
+				...post,
+				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+			}));
+		} catch (error) {
+			console.error(
+				`❌ Erro ao buscar posts da categoria ${categoryId}:`,
+				error
 			);
 			return [];
 		}
 	}
 
-	// Buscar estrutura do mega menu otimizada
-	static async getMegaMenuStructure() {
+	// Post individual
+	static async getPostById(id) {
+		if (!id) throw new Error("Post ID é obrigatório");
+
+		try {
+			const postId = typeof id === "string" ? parseInt(id, 10) : id;
+
+			if (isNaN(postId)) {
+				throw new Error(`ID inválido: ${id}`);
+			}
+
+			const { data, error } = await supabase
+				.from("posts")
+				.select("*")
+				.eq("id", postId)
+				.eq("published", true)
+				.single();
+
+			if (error) {
+				if (error.code === "PGRST116") {
+					throw new Error("Post não encontrado");
+				}
+				throw error;
+			}
+
+			return {
+				...data,
+				image_url: this.getOptimizedImageUrl(
+					data.image_path,
+					data.image_url,
+					"1920x1080"
+				),
+			};
+		} catch (error) {
+			console.error(`❌ Erro ao buscar post ${id}:`, error);
+			throw error;
+		}
+	}
+
+	// Buscar posts
+	static async searchPosts(query) {
+		if (!query || query.length < 2) return [];
+
 		try {
 			const { data, error } = await supabase
-				.from("mega_menu_structure")
-				.select("*");
+				.from("posts")
+				.select("*")
+				.eq("published", true)
+				.or(
+					`title.ilike.%${query}%,excerpt.ilike.%${query}%,content.ilike.%${query}%`
+				)
+				.order("created_at", { ascending: false })
+				.limit(20);
 
 			if (error) throw error;
 
-			// Transformar em estrutura hierárquica
-			const result = {};
-
-			data.forEach((row) => {
-				// Nível 1 - Categoria principal
-				if (!result[row.category_id]) {
-					result[row.category_id] = {
-						id: row.category_id,
-						name: row.category_name,
-						color: row.category_color,
-						icon: row.category_icon,
-						subcategories: {},
-					};
-				}
-
-				// Nível 2 - Subcategoria
-				if (
-					row.subcategory_id &&
-					!result[row.category_id].subcategories[row.subcategory_id]
-				) {
-					result[row.category_id].subcategories[row.subcategory_id] = {
-						id: row.subcategory_id,
-						name: row.subcategory_name,
-						slug: row.subcategory_slug,
-						href: `/${row.subcategory_slug}`,
-						items: [],
-					};
-				}
-
-				// Nível 3 - Sub-subcategoria
-				if (row.subsubcategory_id) {
-					result[row.category_id].subcategories[row.subcategory_id].items.push({
-						id: row.subsubcategory_id,
-						name: row.subsubcategory_name,
-						slug: row.subsubcategory_slug,
-						href: `/${row.subsubcategory_slug}`,
-					});
-				}
-			});
-
-			return result;
+			return (data || []).map((post) => ({
+				...post,
+				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
+			}));
 		} catch (error) {
-			console.warn("⚠️ Erro ao carregar mega menu:", error.message);
-			return this.getFallbackMegaMenu();
+			console.error("❌ Erro na busca:", error);
+			return [];
 		}
 	}
 
 	/**
 	 * ======================================
-	 * FALLBACKS HIERÁRQUICOS
+	 * MÉTODOS ADMIN - SEM ALTERAÇÕES
 	 * ======================================
 	 */
 
-	static getFallbackCategoriesHierarchy() {
-		return [
-			{
-				id: "corridas",
-				name: "Corridas",
-				slug: "corridas",
-				level: 1,
-				color: "from-red-500 to-orange-500",
-				icon: "🏁",
-				parent_id: null,
-			},
-			{
-				id: "f1",
-				name: "Fórmula 1",
-				slug: "f1",
-				level: 2,
-				color: "from-red-600 to-red-500",
-				icon: "🏎️",
-				parent_id: "corridas",
-			},
-			// ... mais categorias fallback conforme necessário
-		];
+	static async verifyAuthenticatedAdmin() {
+		try {
+			const {
+				data: { user },
+				error: authError,
+			} = await supabase.auth.getUser();
+
+			if (authError || !user) {
+				throw new Error("Usuário não autenticado");
+			}
+
+			const { data: profile, error: profileError } = await supabase
+				.from("user_profiles")
+				.select("role")
+				.eq("id", user.id)
+				.single();
+
+			if (profileError || profile?.role !== "admin") {
+				throw new Error("Usuário não tem permissões de administrador");
+			}
+
+			return { user, profile };
+		} catch (error) {
+			console.error("❌ Erro de autenticação admin:", error);
+			throw error;
+		}
 	}
 
-	static getFallbackMegaMenu() {
-		return {
-			corridas: {
-				id: "corridas",
-				name: "Corridas",
-				color: "from-red-500 to-orange-500",
-				icon: "🏁",
-				subcategories: {
-					f1: {
-						id: "f1",
-						name: "Fórmula 1",
-						slug: "f1",
-						href: "/f1",
-						items: [
-							{
-								id: "f1-equipes",
-								name: "Equipes",
-								slug: "f1-equipes",
-								href: "/f1-equipes",
-							},
-							{
-								id: "f1-pilotos",
-								name: "Pilotos",
-								slug: "f1-pilotos",
-								href: "/f1-pilotos",
-							},
-						],
-					},
-				},
-			},
-		};
-	}
-
-	/**
-	 * ======================================
-	 * MÉTODOS ADMIN PARA CATEGORIAS
-	 * ======================================
-	 */
-
-	// Criar nova categoria
+	// Criar categoria
 	static async createCategory(categoryData) {
 		try {
 			await this.verifyAuthenticatedAdmin();
@@ -427,14 +510,14 @@ export class PostService {
 
 			if (error) {
 				console.error("❌ Erro ao criar categoria:", error);
-				throw this.handleRLSError(error);
+				throw error;
 			}
 
-			// Invalidar cache
-			await this.invalidatePublicCache();
+			// Limpar cache
+			this.clearCategoriesCache();
 			return data;
 		} catch (error) {
-			console.error("❌ PostService.createCategory error:", error);
+			console.error("❌ createCategory error:", error);
 			throw error;
 		}
 	}
@@ -468,13 +551,13 @@ export class PostService {
 
 			if (error) {
 				console.error("❌ Erro ao atualizar categoria:", error);
-				throw this.handleRLSError(error);
+				throw error;
 			}
 
-			await this.invalidatePublicCache();
+			this.clearCategoriesCache();
 			return data;
 		} catch (error) {
-			console.error("❌ PostService.updateCategory error:", error);
+			console.error("❌ updateCategory error:", error);
 			throw error;
 		}
 	}
@@ -508,352 +591,144 @@ export class PostService {
 
 			if (error) {
 				console.error("❌ Erro ao deletar categoria:", error);
-				throw this.handleRLSError(error);
+				throw error;
 			}
 
-			await this.invalidatePublicCache();
+			this.clearCategoriesCache();
 		} catch (error) {
-			console.error("❌ PostService.deleteCategory error:", error);
+			console.error("❌ deleteCategory error:", error);
 			throw error;
 		}
 	}
 
-	// Reordenar categorias
-	static async reorderCategories(updates) {
-		try {
-			await this.verifyAuthenticatedAdmin();
+	/**
+	 * ======================================
+	 * UTILITIES
+	 * ======================================
+	 */
 
-			const promises = updates.map(({ id, sort_order }) =>
-				supabase
-					.from("categories")
-					.update({ sort_order, updated_at: new Date().toISOString() })
-					.eq("id", id)
-			);
-
-			await Promise.all(promises);
-			await this.invalidatePublicCache();
-		} catch (error) {
-			console.error("❌ PostService.reorderCategories error:", error);
-			throw error;
+	static getOptimizedImageUrl(imagePath, originalUrl, size = "800x600") {
+		if (imagePath && ImageUploadService?.getOptimizedImageUrl) {
+			return ImageUploadService.getOptimizedImageUrl(imagePath, size);
 		}
+
+		if (originalUrl) {
+			return originalUrl;
+		}
+
+		return "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
 	}
 
-	// Helper para gerar ID de categoria
-	static generateCategoryId(name) {
-		return name
+	static generateSlug(title) {
+		if (!title) return `item-${Date.now()}`;
+
+		return title
 			.toLowerCase()
 			.normalize("NFD")
 			.replace(/[\u0300-\u036f]/g, "")
 			.replace(/[^a-z0-9\s-]/g, "")
 			.replace(/\s+/g, "-")
 			.replace(/-+/g, "-")
-			.trim()
-			.slice(0, 50);
+			.trim();
 	}
 
-	// ======================================
-	// CATEGORIAS DINÂMICAS - SEMPRE DO BANCO
-	// ======================================
-	static async getCategories() {
+	static generateCategoryId(name) {
+		return this.generateSlug(name).slice(0, 50);
+	}
+
+	static clearCategoriesCache() {
 		try {
-			// SEMPRE tentar buscar do banco primeiro
-			const data = await dataAPIService.getCategories();
+			// Limpar cache local
+			localStorage.removeItem("tf-cache-categories-db");
 
-			// Se conseguiu buscar do Data API, retornar
-			if (data && Array.isArray(data) && data.length > 0) {
-				return data;
+			// Limpar cache do query client se disponível
+			if (window.queryClient) {
+				window.queryClient.invalidateQueries({
+					queryKey: ["public", "categories"],
+				});
+				window.queryClient.invalidateQueries({
+					queryKey: ["admin", "categories"],
+				});
 			}
 
-			// Se Data API não retornou dados, tentar fallback do banco direto
-			console.warn("⚠️ DataAPI categories empty, trying direct database...");
-			return await this.getCategoriesFromDatabase();
+			console.log("🗑️ Cache de categorias limpo");
 		} catch (error) {
-			console.warn("⚠️ DataAPI failed for categories:", error.message);
-
-			// Tentar buscar direto do banco como fallback
-			try {
-				return await this.getCategoriesFromDatabase();
-			} catch (fallbackError) {
-				console.warn("⚠️ Database categories failed:", fallbackError.message);
-
-				// Como último recurso, retornar categorias mínimas apenas se necessário
-				return this.getMinimalFallbackCategories();
-			}
-		}
-	}
-
-	// Buscar categorias direto do banco (fallback)
-	static async getCategoriesFromDatabase() {
-		try {
-			const { data, error } = await supabase
-				.from("categories")
-				.select("*")
-				.order("name");
-
-			if (error) {
-				console.error("❌ Erro ao buscar categorias do banco:", error);
-				throw error;
-			}
-
-			// Se não tem categorias no banco, retornar array vazio
-			if (!data || data.length === 0) {
-				console.warn("⚠️ Nenhuma categoria encontrada no banco de dados");
-				return [];
-			}
-
-			// Cachear resultado para próximas chamadas
-			this.setCachedData("categories-db", data);
-
-			return data;
-		} catch (error) {
-			console.error("❌ getCategoriesFromDatabase error:", error);
-
-			// Tentar cache local como último recurso
-			const cached = this.getCachedData("categories-db");
-			if (cached) {
-				console.warn("⚠️ Usando categorias do cache local");
-				return cached;
-			}
-
-			throw error;
-		}
-	}
-
-	// Fallback MÍNIMO - apenas para casos extremos
-	static getMinimalFallbackCategories() {
-		console.warn(
-			"⚠️ Usando categorias de fallback mínimo - configure categorias no banco!"
-		);
-
-		return [
-			{
-				id: "geral",
-				name: "Geral",
-				description: "Conteúdo geral sobre automobilismo",
-				color: "from-gray-500 to-gray-600",
-				count: 0,
-			},
-		];
-	}
-
-	// Busca de posts - Rápido com cache
-	static async searchPosts(query) {
-		if (!query || query.length < 2) {
-			return [];
-		}
-
-		try {
-			const data = await dataAPIService.searchPosts(query);
-
-			return (data || []).map((post) => ({
-				...post,
-				image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
-			}));
-		} catch (error) {
-			console.warn("⚠️ Search failed:", error.message);
-			return [];
+			console.warn("⚠️ Erro ao limpar cache:", error);
 		}
 	}
 
 	/**
 	 * ======================================
-	 * FALLBACKS ULTRA RÁPIDOS (cache local ou SDK)
+	 * DEBUG E DIAGNÓSTICO
 	 * ======================================
 	 */
 
-	static async getFeaturedPostsFallback() {
-		// Tentar cache do navegador primeiro
-		const cached = this.getCachedData("featured-posts");
-		if (cached) return cached;
+	static async debugCategories() {
+		console.log("🔍 === DEBUG CATEGORIAS ===");
 
-		// SDK como último recurso
-		const { data, error } = await supabase
-			.from("posts")
-			.select("*")
-			.eq("published", true)
-			.eq("trending", true)
-			.order("created_at", { ascending: false })
-			.limit(6);
-
-		if (error) throw error;
-
-		const optimized = (data || []).map((post) => ({
-			...post,
-			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
-		}));
-
-		// Cachear resultado
-		this.setCachedData("featured-posts", optimized);
-		return optimized;
-	}
-
-	static async getAllPostsFallback() {
-		const cached = this.getCachedData("all-posts");
-		if (cached) return cached;
-
-		const { data, error } = await supabase
-			.from("posts")
-			.select("*")
-			.eq("published", true)
-			.order("created_at", { ascending: false });
-
-		if (error) throw error;
-
-		const optimized = (data || []).map((post) => ({
-			...post,
-			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
-		}));
-
-		this.setCachedData("all-posts", optimized);
-		return optimized;
-	}
-
-	static async getPostsByCategoryFallback(categoryId) {
-		const cacheKey = `category-${categoryId}`;
-		const cached = this.getCachedData(cacheKey);
-		if (cached) return cached;
-
-		const { data, error } = await supabase
-			.from("posts")
-			.select("*")
-			.eq("published", true)
-			.eq("category", categoryId)
-			.order("created_at", { ascending: false });
-
-		if (error) throw error;
-
-		const optimized = (data || []).map((post) => ({
-			...post,
-			image_url: this.getOptimizedImageUrl(post.image_path, post.image_url),
-		}));
-
-		this.setCachedData(cacheKey, optimized);
-		return optimized;
-	}
-
-	static async getPostByIdFallback(id) {
-		const postId = typeof id === "string" ? parseInt(id, 10) : id;
-		const cacheKey = `post-${postId}`;
-		const cached = this.getCachedData(cacheKey);
-		if (cached) return cached;
-
-		const { data, error } = await supabase
-			.from("posts")
-			.select("*")
-			.eq("id", postId)
-			.eq("published", true)
-			.single();
-
-		if (error) {
-			if (error.code === "PGRST116") {
-				throw new Error("Post não encontrado");
-			}
-			throw error;
-		}
-
-		const optimized = {
-			...data,
-			image_url: this.getOptimizedImageUrl(
-				data.image_path,
-				data.image_url,
-				"1920x1080"
-			),
-		};
-
-		this.setCachedData(cacheKey, optimized);
-		return optimized;
-	}
-
-	/**
-	 * ======================================
-	 * CACHE LOCAL ULTRA RÁPIDO
-	 * ======================================
-	 */
-
-	static getCachedData(key) {
 		try {
-			const cached = localStorage.getItem(`tf-cache-${key}`);
-			if (!cached) return null;
+			const categories = await this.getCategories();
+			console.log(`✅ Total de categorias encontradas: ${categories.length}`);
 
-			const { data, timestamp } = JSON.parse(cached);
-			const age = Date.now() - timestamp;
-
-			// Cache de categorias válido por 1 hora
-			// Cache de posts válido por 10 minutos
-			const maxAge = key.includes("categories")
-				? 60 * 60 * 1000
-				: 10 * 60 * 1000;
-
-			if (age < maxAge) {
-				return data;
-			}
-
-			// Cache expirado
-			localStorage.removeItem(`tf-cache-${key}`);
-			return null;
-		} catch (error) {
-			return null;
-		}
-	}
-
-	static setCachedData(key, data) {
-		try {
-			const item = {
-				data,
-				timestamp: Date.now(),
-			};
-			localStorage.setItem(`tf-cache-${key}`, JSON.stringify(item));
-		} catch (error) {
-			// Ignorar erros de localStorage
-		}
-	}
-
-	/**
-	 * ======================================
-	 * MÉTODOS ADMINISTRATIVOS
-	 * ======================================
-	 */
-
-	static async verifyAuthenticatedAdmin() {
-		try {
-			const {
-				data: { user },
-				error: authError,
-			} = await supabase.auth.getUser();
-
-			if (authError) {
-				console.error("❌ Erro de autenticação:", authError);
-				throw new Error("Erro de autenticação: " + authError.message);
-			}
-
-			if (!user) {
-				throw new Error("Usuário não autenticado");
-			}
-
-			const { data: profile, error: profileError } = await supabase
-				.from("user_profiles")
-				.select("role")
-				.eq("id", user.id)
-				.single();
-
-			if (profileError) {
-				console.error("❌ Erro ao buscar perfil:", profileError);
-				throw new Error(
-					"Erro ao verificar permissões: " + profileError.message
+			if (categories.length > 0) {
+				console.table(
+					categories.map((c) => ({
+						id: c.id,
+						name: c.name,
+						slug: c.slug,
+						level: c.level,
+						parent_id: c.parent_id,
+						is_active: c.is_active,
+					}))
 				);
 			}
 
-			if (!profile || profile.role !== "admin") {
-				throw new Error("Usuário não tem permissões de administrador");
-			}
-
-			return { user, profile };
+			return {
+				success: true,
+				count: categories.length,
+				categories: categories.map((c) => ({
+					id: c.id,
+					name: c.name,
+					slug: c.slug,
+				})),
+			};
 		} catch (error) {
-			console.error("❌ verifyAuthenticatedAdmin error:", error);
-			throw error;
+			console.error("❌ Debug failed:", error);
+			return {
+				success: false,
+				error: error.message,
+			};
 		}
 	}
 
+	static async testCategoryRouting(slug) {
+		console.log(`🧪 Testando roteamento para slug: "${slug}"`);
+
+		try {
+			const category = await this.getCategoryBySlug(slug);
+			const children = await this.getCategoryChildren(category.id);
+			const posts = await this.getPostsByCategory(category.id);
+
+			console.log(`✅ Categoria encontrada: ${category.name}`);
+			console.log(`✅ Filhos: ${children.length}`);
+			console.log(`✅ Posts: ${posts.length}`);
+
+			return {
+				success: true,
+				category,
+				children,
+				posts,
+			};
+		} catch (error) {
+			console.error(`❌ Teste falhou para "${slug}":`, error);
+			return {
+				success: false,
+				error: error.message,
+			};
+		}
+	}
+
+	// Métodos admin para posts (mantendo compatibilidade)
 	static async getAllPostsAdmin() {
 		try {
 			await this.verifyAuthenticatedAdmin();
@@ -865,7 +740,7 @@ export class PostService {
 
 			if (error) {
 				console.error("❌ getAllPostsAdmin error:", error);
-				throw this.handleRLSError(error);
+				throw error;
 			}
 
 			return data || [];
@@ -900,7 +775,7 @@ export class PostService {
 					throw new Error("Post não encontrado");
 				}
 				console.error(`❌ getPostByIdAdmin(${postId}) error:`, error);
-				throw this.handleRLSError(error);
+				throw error;
 			}
 
 			return data;
@@ -910,6 +785,7 @@ export class PostService {
 		}
 	}
 
+	// Métodos de posts admin (create, update, delete)
 	static async createPost(postData) {
 		try {
 			await this.verifyAuthenticatedAdmin();
@@ -948,10 +824,6 @@ export class PostService {
 				updated_at: new Date().toISOString(),
 			};
 
-			if (!dataToInsert.image_url) {
-				throw new Error("CRÍTICO: image_url não foi definida");
-			}
-
 			const { data, error } = await supabase
 				.from("posts")
 				.insert([dataToInsert])
@@ -960,17 +832,10 @@ export class PostService {
 
 			if (error) {
 				console.error("❌ Erro na inserção:", error);
-				throw this.handleRLSError(error);
+				throw error;
 			}
 
-			// Invalidar cache
-			try {
-				await this.invalidatePublicCache();
-				this.clearLocalCache();
-			} catch (cacheError) {
-				console.warn("⚠️ Erro ao invalidar cache:", cacheError);
-			}
-
+			this.clearCategoriesCache();
 			return data;
 		} catch (error) {
 			console.error("❌ PostService.createPost error:", error);
@@ -996,12 +861,6 @@ export class PostService {
 				throw new Error("Imagem de capa é obrigatória");
 			}
 
-			const { data: currentPost } = await supabase
-				.from("posts")
-				.select("image_path")
-				.eq("id", postId)
-				.single();
-
 			const dataToUpdate = {
 				title: postData.title,
 				slug: postData.slug,
@@ -1019,10 +878,6 @@ export class PostService {
 				updated_at: new Date().toISOString(),
 			};
 
-			if (!dataToUpdate.image_url) {
-				throw new Error("CRÍTICO: image_url não foi definida para atualização");
-			}
-
 			const { data, error } = await supabase
 				.from("posts")
 				.update(dataToUpdate)
@@ -1032,21 +887,10 @@ export class PostService {
 
 			if (error) {
 				console.error("❌ updatePost error:", error);
-				throw this.handleRLSError(error);
+				throw error;
 			}
 
-			if (
-				currentPost?.image_path &&
-				currentPost.image_path !== postData.image_path &&
-				postData.image_path
-			) {
-				this.scheduleImageCleanup(currentPost.image_path);
-			}
-
-			// Invalidar cache
-			await this.invalidatePublicCache();
-			this.clearLocalCache();
-
+			this.clearCategoriesCache();
 			return data;
 		} catch (error) {
 			console.error("❌ PostService.updatePost error:", error);
@@ -1060,251 +904,17 @@ export class PostService {
 
 			await this.verifyAuthenticatedAdmin();
 
-			const { data: postToDelete } = await supabase
-				.from("posts")
-				.select("image_path")
-				.eq("id", postId)
-				.single();
-
 			const { error } = await supabase.from("posts").delete().eq("id", postId);
 
 			if (error) {
 				console.error("❌ deletePost error:", error);
-				throw this.handleRLSError(error);
+				throw error;
 			}
 
-			if (postToDelete?.image_path) {
-				this.scheduleImageCleanup(postToDelete.image_path);
-			}
-
-			// Invalidar cache
-			await this.invalidatePublicCache();
-			this.clearLocalCache();
+			this.clearCategoriesCache();
 		} catch (error) {
 			console.error("❌ PostService.deletePost error:", error);
 			throw error;
 		}
-	}
-
-	/**
-	 * ======================================
-	 * UTILITIES OTIMIZADAS
-	 * ======================================
-	 */
-
-	static getOptimizedImageUrl(imagePath, originalUrl, size = "800x600") {
-		if (imagePath) {
-			return ImageUploadService.getOptimizedImageUrl(imagePath, size);
-		}
-
-		if (originalUrl) {
-			return originalUrl;
-		}
-
-		return "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=600&fit=crop";
-	}
-
-	static generateSlug(title) {
-		if (!title) return `post-${Date.now()}`;
-
-		return title
-			.toLowerCase()
-			.normalize("NFD")
-			.replace(/[\u0300-\u036f]/g, "")
-			.replace(/[^a-z0-9\s-]/g, "")
-			.replace(/\s+/g, "-")
-			.replace(/-+/g, "-")
-			.trim();
-	}
-
-	static scheduleImageCleanup(imagePath) {
-		if (!imagePath) return;
-
-		setTimeout(async () => {
-			try {
-				await ImageUploadService.removePostImage(imagePath);
-			} catch (error) {
-				console.warn("⚠️ Erro ao remover imagem antiga:", error);
-			}
-		}, 5 * 60 * 1000);
-	}
-
-	static async invalidatePublicCache() {
-		try {
-			await Promise.all([
-				dataAPIService.invalidateCache("/posts"),
-				dataAPIService.invalidateCache("/categories"),
-			]);
-		} catch (error) {
-			console.warn("Cache invalidation failed:", error);
-		}
-	}
-
-	static clearLocalCache() {
-		try {
-			Object.keys(localStorage).forEach((key) => {
-				if (key.startsWith("tf-cache-")) {
-					localStorage.removeItem(key);
-				}
-			});
-		} catch (error) {
-			// Ignorar erros de localStorage
-		}
-	}
-
-	static handleRLSError(error) {
-		console.error("🔍 Analisando erro RLS:", error);
-
-		if (
-			error.code === "42501" ||
-			error.message?.includes("permission denied")
-		) {
-			return new Error(
-				"Erro de permissão: Verifique se você está logado como administrador"
-			);
-		}
-
-		if (
-			error.code === "PGRST301" ||
-			error.message?.includes("policy") ||
-			error.message?.includes("RLS")
-		) {
-			return new Error(
-				"Política de segurança: Suas permissões não permitem esta operação"
-			);
-		}
-
-		if (error.code === "PGRST302" || error.message?.includes("JWT")) {
-			return new Error("Sessão expirada: Faça login novamente para continuar");
-		}
-
-		if (error.message?.includes("duplicate") || error.code === "23505") {
-			return new Error("Já existe um post com este slug");
-		}
-
-		if (error.message?.includes("null value") || error.code === "23502") {
-			return new Error("Alguns campos obrigatórios não foram preenchidos");
-		}
-
-		if (error.message?.includes("foreign key") || error.code === "23503") {
-			return new Error("Categoria inválida selecionada");
-		}
-
-		return new Error(`Erro no banco de dados: ${error.message}`);
-	}
-
-	/**
-	 * ======================================
-	 * PRELOAD E WARMUP para carregamento instantâneo
-	 * ======================================
-	 */
-
-	static async preloadCriticalData() {
-		try {
-			console.log("🚀 Preloading critical data...");
-
-			const promises = [
-				this.getFeaturedPosts(),
-				this.getAllPosts(),
-				this.getCategories(),
-			];
-
-			const results = await Promise.allSettled(promises);
-
-			const successful = results.filter((r) => r.status === "fulfilled").length;
-			console.log(`✅ Preloaded ${successful}/3 critical data sets`);
-
-			return {
-				success: true,
-				loaded: successful,
-				total: 3,
-			};
-		} catch (error) {
-			return {
-				success: false,
-				error: error.message,
-			};
-		}
-	}
-
-	/**
-	 * ======================================
-	 * DEBUG E DIAGNÓSTICO
-	 * ======================================
-	 */
-
-	static async runDiagnostics() {
-		const results = {
-			timestamp: new Date().toISOString(),
-			dataAPI: null,
-			fallback: null,
-			cache: null,
-			categories: null,
-		};
-
-		// Teste Data API
-		try {
-			const start = Date.now();
-			await dataAPIService.healthCheck();
-			results.dataAPI = {
-				status: "healthy",
-				responseTime: Date.now() - start,
-			};
-		} catch (error) {
-			results.dataAPI = {
-				status: "unhealthy",
-				error: error.message,
-			};
-		}
-
-		// Teste fallback
-		try {
-			const start = Date.now();
-			await this.getCategoriesFromDatabase();
-			results.fallback = {
-				status: "healthy",
-				responseTime: Date.now() - start,
-			};
-		} catch (error) {
-			results.fallback = {
-				status: "unhealthy",
-				error: error.message,
-			};
-		}
-
-		// Teste cache local
-		try {
-			this.setCachedData("test", { timestamp: Date.now() });
-			const cached = this.getCachedData("test");
-			results.cache = {
-				status: cached ? "healthy" : "unhealthy",
-				working: !!cached,
-			};
-		} catch (error) {
-			results.cache = {
-				status: "unhealthy",
-				error: error.message,
-			};
-		}
-
-		// Teste categorias dinâmicas
-		try {
-			const start = Date.now();
-			const categories = await this.getCategories();
-			results.categories = {
-				status: "healthy",
-				responseTime: Date.now() - start,
-				count: categories.length,
-				dynamic: true,
-			};
-		} catch (error) {
-			results.categories = {
-				status: "unhealthy",
-				error: error.message,
-				dynamic: false,
-			};
-		}
-
-		return results;
 	}
 }

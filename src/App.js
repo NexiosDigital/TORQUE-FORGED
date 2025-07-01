@@ -1,8 +1,4 @@
-// =====================================================
-// CONFIGURAÇÃO DE ROTAS HIERÁRQUICAS - App.js CORRIGIDO
-// =====================================================
-
-import React, { Suspense, lazy, useEffect, useMemo } from "react";
+import React, { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { ErrorBoundary } from "react-error-boundary";
 
@@ -10,8 +6,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import Layout from "./components/Layout/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
-import { ModernQueryProvider, cacheUtils } from "./providers/QueryProvider";
-import { useCategories } from "./hooks/usePostsQuery";
+import { ModernQueryProvider } from "./providers/QueryProvider";
 import FlexiblePage from "./components/FlexiblePage";
 
 // Lazy imports para otimização
@@ -53,8 +48,8 @@ const CategoryEditor = lazy(() =>
 	)
 );
 
-// Componente de Loading Ultra-Rápido
-const UltraFastLoader = ({ page }) => (
+// Componente de Loading simplificado
+const SimpleLoader = ({ page }) => (
 	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 		<div className="text-center">
 			<div className="relative mb-8">
@@ -76,12 +71,11 @@ const UltraFastLoader = ({ page }) => (
 				<div className="absolute inset-0 w-16 h-16 bg-gradient-to-r from-red-600 to-red-500 rounded-2xl mx-auto animate-ping opacity-20"></div>
 			</div>
 			<h2 className="text-xl font-bold text-white mb-2">Carregando {page}</h2>
-			<p className="text-gray-400">Aguarde um momento...</p>
 		</div>
 	</div>
 );
 
-// Componente de Error Boundary para a aplicação
+// Error Boundary simplificado
 const AppErrorBoundary = ({ error, resetErrorBoundary }) => (
 	<div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
 		<div className="text-center p-8 max-w-md mx-auto">
@@ -124,71 +118,16 @@ const AppErrorBoundary = ({ error, resetErrorBoundary }) => (
 	</div>
 );
 
-// Componente para preload de dados críticos
-const CriticalDataPreloader = () => {
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			cacheUtils.preloadCritical();
-		}, 50);
-		return () => clearTimeout(timer);
-	}, []);
-
-	return null;
-};
-
-// Componente para carregar Service Worker
-const ServiceWorkerLoader = () => {
-	useEffect(() => {
-		if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
-			const timer = setTimeout(async () => {
-				try {
-					await navigator.serviceWorker.register("/sw.js");
-				} catch (error) {
-					console.warn("ServiceWorker registration failed:", error);
-				}
-			}, 3000);
-			return () => clearTimeout(timer);
-		}
-	}, []);
-
-	return null;
-};
-
-// Configuração do Toaster
-const toasterConfig = {
-	position: "top-right",
-	toastOptions: {
-		duration: 4000,
-		style: {
-			background: "rgb(31 41 55)",
-			color: "rgb(243 244 246)",
-			border: "1px solid rgb(75 85 99)",
-		},
-		success: {
-			iconTheme: {
-				primary: "rgb(34 197 94)",
-				secondary: "rgb(31 41 55)",
-			},
-		},
-		error: {
-			iconTheme: {
-				primary: "rgb(239 68 68)",
-				secondary: "rgb(31 41 55)",
-			},
-		},
-	},
-};
+// Debug helper
+if (process.env.NODE_ENV === "development") {
+	// Disponibilizar comandos de debug globalmente
+	import("./utils/debugCategories").catch(() => {
+		console.log("⚠️ Debug categories não encontrado");
+	});
+}
 
 // Componente principal da aplicação
 function App() {
-	// Preload de cache crítico no app startup
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			cacheUtils.preloadCritical();
-		}, 50);
-		return () => clearTimeout(timer);
-	}, []);
-
 	return (
 		<ErrorBoundary
 			FallbackComponent={AppErrorBoundary}
@@ -196,25 +135,29 @@ function App() {
 				console.error("🔴 App Error Boundary:", error, errorInfo);
 			}}
 			onReset={() => {
-				cacheUtils.clear();
+				// Limpar cache em caso de erro
+				try {
+					if (window.queryClient) {
+						window.queryClient.clear();
+					}
+					localStorage.removeItem("tf-cache-categories-db");
+				} catch (e) {
+					// Ignore
+				}
 				window.location.reload();
 			}}
 		>
 			<AuthProvider>
 				<ModernQueryProvider>
 					<div className="App">
-						{/* Preloaders em background */}
-						<CriticalDataPreloader />
-						<ServiceWorkerLoader />
-
-						{/* Sistema de rotas HIERÁRQUICO */}
+						{/* Sistema de rotas CORRIGIDO */}
 						<Routes>
 							{/* ===== ROTAS PRINCIPAIS ===== */}
 							<Route
 								path="/"
 								element={
 									<Layout>
-										<Suspense fallback={<UltraFastLoader page="homepage" />}>
+										<Suspense fallback={<SimpleLoader page="homepage" />}>
 											<Home />
 										</Suspense>
 									</Layout>
@@ -225,9 +168,7 @@ function App() {
 								path="/posts"
 								element={
 									<Layout>
-										<Suspense
-											fallback={<UltraFastLoader page="todos os posts" />}
-										>
+										<Suspense fallback={<SimpleLoader page="todos os posts" />}>
 											<AllPosts />
 										</Suspense>
 									</Layout>
@@ -238,19 +179,19 @@ function App() {
 								path="/post/:id"
 								element={
 									<Layout>
-										<Suspense fallback={<UltraFastLoader page="post" />}>
+										<Suspense fallback={<SimpleLoader page="post" />}>
 											<PostDetail />
 										</Suspense>
 									</Layout>
 								}
 							/>
 
-							{/* ===== PÁGINAS ESTÁTICAS (ANTES DAS ROTAS GENÉRICAS) ===== */}
+							{/* ===== PÁGINAS ESTÁTICAS ===== */}
 							<Route
 								path="/about"
 								element={
 									<Layout>
-										<Suspense fallback={<UltraFastLoader page="sobre nós" />}>
+										<Suspense fallback={<SimpleLoader page="sobre nós" />}>
 											<About />
 										</Suspense>
 									</Layout>
@@ -261,7 +202,7 @@ function App() {
 								path="/contact"
 								element={
 									<Layout>
-										<Suspense fallback={<UltraFastLoader page="contato" />}>
+										<Suspense fallback={<SimpleLoader page="contato" />}>
 											<Contact />
 										</Suspense>
 									</Layout>
@@ -274,7 +215,7 @@ function App() {
 								element={
 									<ProtectedRoute>
 										<Layout>
-											<Suspense fallback={<UltraFastLoader page="perfil" />}>
+											<Suspense fallback={<SimpleLoader page="perfil" />}>
 												<Profile />
 											</Suspense>
 										</Layout>
@@ -286,7 +227,7 @@ function App() {
 							<Route
 								path="/login"
 								element={
-									<Suspense fallback={<UltraFastLoader page="login admin" />}>
+									<Suspense fallback={<SimpleLoader page="login admin" />}>
 										<AdminLogin />
 									</Suspense>
 								}
@@ -299,7 +240,7 @@ function App() {
 									<ProtectedRoute requireAdmin={true}>
 										<Layout>
 											<Suspense
-												fallback={<UltraFastLoader page="dashboard admin" />}
+												fallback={<SimpleLoader page="dashboard admin" />}
 											>
 												<AdminDashboard />
 											</Suspense>
@@ -314,7 +255,7 @@ function App() {
 									<ProtectedRoute requireAdmin={true}>
 										<Layout>
 											<Suspense
-												fallback={<UltraFastLoader page="editor de post" />}
+												fallback={<SimpleLoader page="editor de post" />}
 											>
 												<PostEditor />
 											</Suspense>
@@ -329,7 +270,7 @@ function App() {
 									<ProtectedRoute requireAdmin={true}>
 										<Layout>
 											<Suspense
-												fallback={<UltraFastLoader page="editor de post" />}
+												fallback={<SimpleLoader page="editor de post" />}
 											>
 												<PostEditor />
 											</Suspense>
@@ -345,9 +286,7 @@ function App() {
 									<ProtectedRoute requireAdmin={true}>
 										<Layout>
 											<Suspense
-												fallback={
-													<UltraFastLoader page="gerenciar categorias" />
-												}
+												fallback={<SimpleLoader page="gerenciar categorias" />}
 											>
 												<CategoryManager />
 											</Suspense>
@@ -362,7 +301,7 @@ function App() {
 									<ProtectedRoute requireAdmin={true}>
 										<Layout>
 											<Suspense
-												fallback={<UltraFastLoader page="nova categoria" />}
+												fallback={<SimpleLoader page="nova categoria" />}
 											>
 												<CategoryEditor />
 											</Suspense>
@@ -377,7 +316,7 @@ function App() {
 									<ProtectedRoute requireAdmin={true}>
 										<Layout>
 											<Suspense
-												fallback={<UltraFastLoader page="editar categoria" />}
+												fallback={<SimpleLoader page="editar categoria" />}
 											>
 												<CategoryEditor />
 											</Suspense>
@@ -386,12 +325,14 @@ function App() {
 								}
 							/>
 
-							{/* ===== ROTA GENÉRICA PARA CATEGORIAS (TODAS) ===== */}
+							{/* ===== ROTA GENÉRICA PARA CATEGORIAS (CORRIGIDA) ===== */}
 							<Route
 								path="/:categorySlug"
 								element={
 									<Layout>
-										<FlexiblePage />
+										<Suspense fallback={<SimpleLoader page="categoria" />}>
+											<FlexiblePage />
+										</Suspense>
 									</Layout>
 								}
 							/>
@@ -439,6 +380,24 @@ function App() {
 														Ir para Home
 													</button>
 												</div>
+
+												{/* Debug info em desenvolvimento */}
+												{process.env.NODE_ENV === "development" && (
+													<div className="mt-8 p-4 bg-gray-900/50 rounded-lg text-left">
+														<h3 className="text-white font-bold mb-2">
+															Debug Info:
+														</h3>
+														<p className="text-xs text-gray-400">
+															URL: {window.location.pathname}
+														</p>
+														<p className="text-xs text-gray-400">
+															Para testar categorias, abra o console e use:
+														</p>
+														<code className="text-xs text-green-400 block mt-2">
+															await debugCategories.diagnosis()
+														</code>
+													</div>
+												)}
 											</div>
 										</div>
 									</Layout>
@@ -451,101 +410,5 @@ function App() {
 		</ErrorBoundary>
 	);
 }
-
-// =====================================================
-// HELPERS PARA MIGRAÇÃO GRADUAL
-// =====================================================
-
-// Hook para verificar se uma rota existe na hierarquia
-export const useRouteExists = (slug) => {
-	const { data: categories = [] } = useCategories();
-
-	return useMemo(() => {
-		return categories.some((cat) => cat.slug === slug);
-	}, [categories, slug]);
-};
-
-// Componente para redirects de URLs antigas
-const LegacyRouteRedirect = ({ from, to }) => {
-	useEffect(() => {
-		const currentPath = window.location.pathname;
-		if (currentPath === from) {
-			window.history.replaceState(null, null, to);
-		}
-	}, [from, to]);
-
-	return null;
-};
-
-// =====================================================
-// CONFIGURAÇÃO DE REDIRECTS PARA MANTER COMPATIBILIDADE
-// =====================================================
-
-// Adicionar no App.js se necessário manter URLs antigas
-const LegacyRedirects = () => (
-	<>
-		{/* Exemplos de redirects se URLs mudarem */}
-		<LegacyRouteRedirect from="/formula-1" to="/f1" />
-		<LegacyRouteRedirect from="/motores" to="/engines" />
-		<LegacyRouteRedirect from="/tecnologia/motors" to="/tecnologia/motores" />
-		{/* Adicionar mais redirects conforme necessário */}
-	</>
-);
-
-// =====================================================
-// METADATA MANAGER PARA SEO HIERÁRQUICO
-// =====================================================
-
-const CategoryMetadataManager = () => {
-	const { data: categories = [] } = useCategories();
-
-	useEffect(() => {
-		// Preload metadata para categorias principais
-		categories
-			.filter((cat) => cat.level === 1)
-			.forEach((category) => {
-				// Preload crítico de SEO data
-				if (category.meta_title) {
-					const link = document.createElement("link");
-					link.rel = "prefetch";
-					link.href = `/${category.slug}`;
-					document.head.appendChild(link);
-				}
-			});
-	}, [categories]);
-
-	return null;
-};
-
-// =====================================================
-// SITEMAP GENERATOR AUTOMÁTICO
-// =====================================================
-
-const SitemapManager = () => {
-	const { data: categories = [] } = useCategories();
-
-	useEffect(() => {
-		// Gerar sitemap dinâmico para todas as categorias
-		const generateSitemap = () => {
-			const urls = categories.map((cat) => ({
-				url: `/${cat.slug}`,
-				lastmod: cat.updated_at,
-				priority: cat.level === 1 ? "0.9" : cat.level === 2 ? "0.7" : "0.5",
-				changefreq: cat.level === 1 ? "weekly" : "monthly",
-			}));
-
-			// Enviar para API de sitemap se necessário
-			if (process.env.NODE_ENV === "production") {
-				console.log("📄 Sitemap gerado com", urls.length, "URLs");
-			}
-		};
-
-		if (categories.length > 0) {
-			generateSitemap();
-		}
-	}, [categories]);
-
-	return null;
-};
 
 export default App;
